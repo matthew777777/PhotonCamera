@@ -34,7 +34,7 @@ public class GLPreview extends GLSurfaceView {
         handler = new Handler(Looper.getMainLooper());
         mRenderer = new MainRenderer(this);
 
-        setEGLContextClientVersion(2);
+        setEGLContextClientVersion(3);
         setRenderer(mRenderer);
         setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
     }
@@ -141,6 +141,10 @@ public class GLPreview extends GLSurfaceView {
     public void setMirror(boolean mirror) {
         mRenderer.setMirror(mirror);
         requestRender();
+    }
+
+    public void setHistogramCallback(MainRenderer.HistogramCallback callback) {
+        mRenderer.setHistogramCallback(callback);
     }
 
     boolean available = false;
