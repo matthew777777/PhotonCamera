@@ -149,6 +149,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     private SettingsBarEntryProvider settingsBarEntryProvider;
     private ManualModeConsole manualModeConsole;
     public float displayAspectRatio;
+    private final AtomicBoolean histogramProcessing = new AtomicBoolean(false);
     private HorizonIndicatorView mHorizonIndicatorView;
     private final AtomicBoolean histogramProcessing = new AtomicBoolean(false);
 
