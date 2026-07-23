@@ -260,6 +260,10 @@ final class CameraUIController implements CameraUIEventsListener,
                         // Update HDR class to use the new bracketing mode
                         IsoExpoSelector.HDR = (Integer) value > 0;
                         break;
+                    case HISTOGRAM:
+                        PreferenceKeys.setShowHistogram(value.equals(1));
+                        cameraFragment.invalidateSurfaceView();
+                        break;
 
                 }
                 cameraFragment.cameraFragmentBinding.layoutTopbar.invalidateAll();
