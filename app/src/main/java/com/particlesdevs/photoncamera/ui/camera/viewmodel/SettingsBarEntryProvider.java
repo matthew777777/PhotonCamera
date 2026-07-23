@@ -45,6 +45,7 @@ public class SettingsBarEntryProvider extends ViewModel {
     private final SettingsBarEntryModel saveRawEntry = SettingsBarEntryModel.newEntry(R.id.saveraw_entry_layout, R.string.raw_string, SettingType.RAW);
     private final SettingsBarEntryModel batterySaverEntry = SettingsBarEntryModel.newEntry(R.id.batterysaver_entry_layout, R.string.energy_saving, SettingType.BATTERY_SAVER);
     private final SettingsBarEntryModel bracketingEntry = SettingsBarEntryModel.newEntry(R.id.bracketing_entry_layout, R.string.exposure_bracketing, SettingType.BRACKETING);
+    private final SettingsBarEntryModel histogramEntry = SettingsBarEntryModel.newEntry(R.id.histogram_entry_layout, R.string.histogram, SettingType.HISTOGRAM);
     private final List<SettingsBarEntryModel> allEntries = new ArrayList<>(8);
 
     public SettingsBarEntryProvider() {
@@ -58,6 +59,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         allEntries.add(gridEntry);
         allEntries.add(batterySaverEntry);
         allEntries.add(bracketingEntry);
+        allEntries.add(histogramEntry);
     }
 
     public void createEntries() {
@@ -71,6 +73,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         createGridEntry();
         createBatterySaverEntry();
         createBracketingEntry();
+        createHistogramEntry();
         updateAllEntries();
     }
 
@@ -85,6 +88,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         updateEntry(saveRawEntry, PreferenceKeys.isSaveRaw());
         updateEntry(batterySaverEntry, PreferenceKeys.isBatterySaverOn());
         updateEntry(bracketingEntry, PreferenceKeys.getBracketingMode());
+        updateEntry(histogramEntry, PreferenceKeys.isShowHistogramOn());
     }
 
     public void addObserver(Observer<TopBarSettingsData<?, ?>> observer) {
@@ -175,6 +179,13 @@ public class SettingsBarEntryProvider extends ViewModel {
                 SettingsBarButtonModel.newButtonModel(R.id.grid_44_button, R.drawable.ic_grid_on, R.string.four_x4, 2, gridEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.grid_gr_button, R.drawable.ic_grid_on, R.string.golden_ratio, 3, gridEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.grid_dt_button, R.drawable.ic_grid_on, R.string.diag_triangle, 4, gridEntry)
+        );
+    }
+
+    private void createHistogramEntry() {
+        histogramEntry.addSettingsBarButtonModels(
+                SettingsBarButtonModel.newButtonModel(R.id.histogram_off_button, R.drawable.ic_histogram, R.string.off, 0, histogramEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.histogram_on_button, R.drawable.ic_histogram, R.string.on, 1, histogramEntry)
         );
     }
 

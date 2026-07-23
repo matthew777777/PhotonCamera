@@ -10,6 +10,7 @@
     <bool name="pref_show_watermark_default">true</bool>
     <bool name="pref_show_afdata_default">false</bool>
     <bool name="pref_show_roundedge_default">true</bool>
+    <bool name="pref_show_histogram_default">false</bool>
     <bool name="pref_system_nr_default">false</bool>
     <bool name="pref_disable_align_default">false</bool>
     <bool name="pref_hdrx_nr_default">true</bool>
