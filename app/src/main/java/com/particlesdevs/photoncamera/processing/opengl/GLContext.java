@@ -40,7 +40,14 @@ public class GLContext implements AutoCloseable {
 
     public GLContext(int surfaceWidth, int surfaceHeight) {
         createContext(surfaceWidth,surfaceHeight);
+    }
 
+    public GLContext(boolean external) {
+        if (external) {
+            mProgram = new GLProg();
+        } else {
+            createContext(1, 1);
+        }
     }
     public void createContext(int surfaceWidth, int surfaceHeight){
         int[] major = new int[2];

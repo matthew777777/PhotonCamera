@@ -10,5 +10,6 @@ public enum SettingType {
     EIS,
     RAW,
     BATTERY_SAVER,
-    BRACKETING
+    BRACKETING,
+    HISTOGRAM
 }

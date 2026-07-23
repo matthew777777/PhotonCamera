@@ -19,11 +19,15 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
     private final Paint whitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint textPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
     private final Paint rectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint histogramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint histogramBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     public boolean isCanvasDrawn = false;
     private RectF afRectToDraw = new RectF();
     private RectF aeRectToDraw = new RectF();
     private String debugText = null;
+    private int[] histogramData;
+    private int rotationDegrees;
 
     public SurfaceViewOverViewfinder(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -45,13 +49,77 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
 
         rectPaint.setStyle(Paint.Style.STROKE);
         rectPaint.setStrokeWidth(3);
+
+        histogramPaint.setColor(Color.WHITE);
+        histogramPaint.setStyle(Paint.Style.FILL);
+
+        histogramBackgroundPaint.setARGB(100, 0, 0, 0);
+        histogramBackgroundPaint.setStyle(Paint.Style.FILL);
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        drawGrid(canvas);
-        drawRoundEdges(canvas);
+        // We use drawOnCanvas via refresh() instead of onDraw
+        // to avoid double rendering on the surface.
+    }
+
+    private void drawHistogram(Canvas canvas) {
+        if (!PreferenceKeys.isShowHistogramOn() || histogramData == null) return;
+
+        int w = canvas.getWidth();
+        int h = canvas.getHeight();
+
+        int histWidth = 256;
+        int histHeight = 100;
+        int margin = 20;
+
+        float left, top;
+
+        // Determine position based on rotation to keep it at the "visual" top-left
+        switch (rotationDegrees) {
+            case -90: // Landscape Left (Home button left)
+                left = w - histWidth - margin;
+                top = margin;
+                break;
+            case 90: // Landscape Right (Home button right)
+                left = margin;
+                top = h - histHeight - margin;
+                break;
+            case 180: // Reverse Portrait
+                left = w - histWidth - margin;
+                top = h - histHeight - margin;
+                break;
+            case 0:
+            default: // Portrait
+                left = margin;
+                top = margin;
+                break;
+        }
+
+        canvas.save();
+        // Use positive rotationDegrees to match visual orientation
+        canvas.rotate(rotationDegrees, left + histWidth / 2f, top + histHeight / 2f);
+
+        canvas.drawRect(left, top, left + histWidth, top + histHeight, histogramBackgroundPaint);
+
+        float max = 0;
+        // Ignore the very first and last bins as they often have spikes (pure black/white)
+        for (int i = 1; i < histogramData.length - 1; i++) {
+            if (histogramData[i] > max) max = histogramData[i];
+        }
+
+        if (max > 0) {
+            Path histPath = new Path();
+            histPath.moveTo(left, top + histHeight);
+            for (int i = 0; i < histogramData.length; i++) {
+                float barHeight = Math.min(histHeight, (histogramData[i] / max) * histHeight);
+                histPath.lineTo(left + i, top + histHeight - barHeight);
+            }
+            histPath.lineTo(left + histWidth, top + histHeight);
+            histPath.close();
+            canvas.drawPath(histPath, histogramPaint);
+        }
+        canvas.restore();
     }
 
     private void drawGrid(Canvas canvas) {
@@ -123,11 +191,13 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
 
     private void drawRoundEdges(Canvas canvas) {
         if (PreferenceKeys.isRoundEdgeOn()) {
+            canvas.save();
             path.reset();
             path.addRoundRect(new RectF(canvas.getClipBounds()), 40, 40, Path.Direction.CW);
             path.setFillType(Path.FillType.INVERSE_EVEN_ODD);
             canvas.clipPath(path);
             canvas.drawColor(Color.BLACK);
+            canvas.restore();
         }
     }
 
@@ -143,6 +213,14 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
         this.debugText = debugText;
     }
 
+    public void setHistogramData(int[] data) {
+        this.histogramData = data;
+    }
+
+    public void setRotation(int degrees) {
+        this.rotationDegrees = degrees;
+    }
+
     public void refresh() {
         drawOnCanvas(mHolder);
     }
@@ -154,6 +232,9 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
                 Log.e(TAG, "Canvas is null");
             } else {
                 canvas.drawColor(0, PorterDuff.Mode.CLEAR);//Clears the canvas
+                drawGrid(canvas);
+                drawRoundEdges(canvas);
+                drawHistogram(canvas);
                 drawAFRect(canvas);
                 drawAERect(canvas);
                 drawAFDebugText(canvas);
@@ -166,21 +247,31 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
     }
 
     public void clear() {
+        afRectToDraw = null;
+        aeRectToDraw = null;
+        debugText = null;
+        // Don't nullify histogramData here to prevent flickering
         try {
             Canvas canvas = mHolder.lockHardwareCanvas();
-            if (canvas == null) {
-                Log.e(TAG, "Canvas is null");
-            } else {
-                canvas.drawColor(0, PorterDuff.Mode.CLEAR);//Clears the canvas
+            if (canvas != null) {
+                canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+                mHolder.unlockCanvasAndPost(canvas);
+            }
+            // Clear twice to handle double buffering
+            canvas = mHolder.lockHardwareCanvas();
+            if (canvas != null) {
+                canvas.drawColor(0, PorterDuff.Mode.CLEAR);
                 mHolder.unlockCanvasAndPost(canvas);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-        afRectToDraw = null;
-        aeRectToDraw = null;
-        debugText = null;
         isCanvasDrawn = false;
+    }
+
+    public void forceClear() {
+        histogramData = null;
+        clear();
     }
 
     private void drawAFDebugText(Canvas canvas) {
