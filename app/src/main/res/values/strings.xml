@@ -144,6 +144,14 @@
     <string name="options">Options</string>
     <string name="session_on_configure_failed">System session configuration failed try changing preview format</string>
     
+    <!-- Metering mode strings -->
+    <string name="ae_metering">Metering Mode</string>
+    <string name="ae_metering_off">Off</string>
+    <string name="ae_metering_center">Center Weighted</string>
+    <string name="ae_metering_average">Frame Average</string>
+    <string name="ae_metering_spot">Spot Metering</string>
+    <string name="pref_ae_metering_key" translatable="false">pref_ae_metering_mode_key</string>
+
     <!-- Bracketing mode strings -->
     <string name="exposure_bracketing">Exposure Bracketing</string>
     <string name="bracketing_off">Off (1x)</string>

@@ -264,6 +264,10 @@ final class CameraUIController implements CameraUIEventsListener,
                         PreferenceKeys.setShowHistogram(value.equals(1));
                         cameraFragment.invalidateSurfaceView();
                         break;
+                    case AE_METERING:
+                        PreferenceKeys.setAeMetering((Integer) value);
+                        cameraFragment.captureController.applyAeMetering();
+                        break;
 
                 }
                 cameraFragment.cameraFragmentBinding.layoutTopbar.invalidateAll();
