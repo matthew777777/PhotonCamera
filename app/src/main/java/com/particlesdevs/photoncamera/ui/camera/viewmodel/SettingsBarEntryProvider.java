@@ -46,6 +46,7 @@ public class SettingsBarEntryProvider extends ViewModel {
     private final SettingsBarEntryModel batterySaverEntry = SettingsBarEntryModel.newEntry(R.id.batterysaver_entry_layout, R.string.energy_saving, SettingType.BATTERY_SAVER);
     private final SettingsBarEntryModel bracketingEntry = SettingsBarEntryModel.newEntry(R.id.bracketing_entry_layout, R.string.exposure_bracketing, SettingType.BRACKETING);
     private final SettingsBarEntryModel histogramEntry = SettingsBarEntryModel.newEntry(R.id.histogram_entry_layout, R.string.histogram, SettingType.HISTOGRAM);
+    private final SettingsBarEntryModel aeMeteringEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_entry_layout, R.string.ae_metering, SettingType.AE_METERING);
     private final List<SettingsBarEntryModel> allEntries = new ArrayList<>(8);
 
     public SettingsBarEntryProvider() {
@@ -60,6 +61,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         allEntries.add(batterySaverEntry);
         allEntries.add(bracketingEntry);
         allEntries.add(histogramEntry);
+        allEntries.add(aeMeteringEntry);
     }
 
     public void createEntries() {
@@ -74,6 +76,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         createBatterySaverEntry();
         createBracketingEntry();
         createHistogramEntry();
+        createAeMeteringEntry();
         updateAllEntries();
     }
 
@@ -89,6 +92,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         updateEntry(batterySaverEntry, PreferenceKeys.isBatterySaverOn());
         updateEntry(bracketingEntry, PreferenceKeys.getBracketingMode());
         updateEntry(histogramEntry, PreferenceKeys.isShowHistogramOn());
+        updateEntry(aeMeteringEntry, PreferenceKeys.getAeMetering());
     }
 
     public void addObserver(Observer<TopBarSettingsData<?, ?>> observer) {
@@ -186,6 +190,15 @@ public class SettingsBarEntryProvider extends ViewModel {
         histogramEntry.addSettingsBarButtonModels(
                 SettingsBarButtonModel.newButtonModel(R.id.histogram_off_button, R.drawable.ic_histogram, R.string.off, 0, histogramEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.histogram_on_button, R.drawable.ic_histogram, R.string.on, 1, histogramEntry)
+        );
+    }
+
+    private void createAeMeteringEntry() {
+        aeMeteringEntry.addSettingsBarButtonModels(
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_off_button, R.drawable.ic_exposure, R.string.ae_metering_off, -1, aeMeteringEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_center_button, R.drawable.ic_exposure, R.string.ae_metering_center, 0, aeMeteringEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_average_button, R.drawable.ic_exposure, R.string.ae_metering_average, 1, aeMeteringEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_spot_button, R.drawable.ic_exposure, R.string.ae_metering_spot, 2, aeMeteringEntry)
         );
     }
 
