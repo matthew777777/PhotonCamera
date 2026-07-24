@@ -76,6 +76,14 @@ public class IsoExpoSelector {
         double compensation = Math.pow(2.0,PhotonCamera.getSettings().exposureCompensation);
         pair.normalizeiso100();
         pair.ExpoCompensateLower(1.0/compensation);
+
+        // Apply Shutter-Priority AE Curve (HDR+ E behavior)
+        long handheldLimit = PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT
+                ? HANDHELD_NIGHT_LIMIT : HANDHELD_PHOTO_LIMIT;
+        long maxExposure = useTripod ? TRIPOD_LIMIT : handheldLimit;
+
+        pair.applyShutterPriorityCurve(maxExposure);
+
         if (PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT)
         {
             mpy1 = 7000.0;
@@ -194,7 +202,6 @@ public class IsoExpoSelector {
         if (pair.exposure < ExposureIndex.sec / 90 && PhotonCamera.getSettings().eisPhoto) {
             //HDR = true;
         }
-
         if(step != -1) {
             if (step == 0) pairs.clear();
             if (pairs.size() < patternSize) {
