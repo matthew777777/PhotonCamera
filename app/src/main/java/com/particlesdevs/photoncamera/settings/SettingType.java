@@ -11,5 +11,6 @@ public enum SettingType {
     RAW,
     BATTERY_SAVER,
     BRACKETING,
-    HISTOGRAM
+    HISTOGRAM,
+    AE_METERING
 }
