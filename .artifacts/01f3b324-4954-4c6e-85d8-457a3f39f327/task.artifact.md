@@ -1,0 +1,9 @@
+- [x] Update `strings.xml` with AE Metering strings.
+- [x] Update `ids.xml` with new UI IDs.
+- [x] Update `SettingType.java` to include `AE_METERING`.
+- [x] Update `PreferenceKeys.java` with the new key and accessor methods.
+- [x] Update `SettingsBarEntryProvider.java` to create and update the new setting entry.
+- [x] Update `CameraUIController.java` to handle setting changes.
+- [x] Update `CaptureController.java` to apply the setting to the camera.
+- [x] Update `VendorTagUtils.java` to define the vendor key and apply it.
+- [x] Verify the changes.
