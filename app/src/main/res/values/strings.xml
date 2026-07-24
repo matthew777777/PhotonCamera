@@ -145,7 +145,7 @@
     <string name="session_on_configure_failed">System session configuration failed try changing preview format</string>
     
     <!-- Metering mode strings -->
-    <string name="ae_metering">Metering Mode</string>
+    <string name="ae_metering">MTK Metering</string>
     <string name="ae_metering_off">Off</string>
     <string name="ae_metering_center">Center Weighted</string>
     <string name="ae_metering_average">Frame Average</string>
