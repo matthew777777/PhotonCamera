@@ -8,7 +8,6 @@ Android Camera that uses Enhanced Image Processing
 [![Telegram - ENG](https://img.shields.io/badge/Telegram-ENG-blue)](https://t.me/PhotonCameraEN)
 [![Telegram - RU](https://img.shields.io/badge/Telegram-RU-blue)](https://t.me/PhotonCamera)
 
-[<img height="80" src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it at IzzyOnDroid">](https://apt.izzysoft.de/packages/com.particlesdevs.photoncamera)
 
 ## Screenshots
 

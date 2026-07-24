@@ -1,0 +1,7 @@
+- [x] Implement Shutter-Priority AE Curve in `IsoExpoSelector.java`
+    - [x] Add constants for handheld/tripod limits
+    - [x] Implement `applyShutterPriorityCurve` in `ExpoPair`
+    - [x] Update `GenerateExpoPair` to use the new curve
+    - [x] Clean up legacy reduction logic
+- [x] Verify implementation with logging
+- [ ] Cleanup unused methods in `IsoExpoSelector` (Optional)
