@@ -71,6 +71,7 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.CAMERA_MODE, resources.getString(R.string.pref_camera_mode_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_COUNTDOWN_TIMER, 0);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_BRACKETING_MODE, 0); // Default to disable bracketing
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_METERING, -1); // Default to Off
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, resources.getString(R.string.pref_video_resolution_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_DOWNSCALE_4X, false);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_WRITE_ZIP, true);
@@ -381,6 +382,14 @@ public class PreferenceKeys {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_BRACKETING_MODE, value);
     }
 
+    public static int getAeMetering() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_AE_METERING);
+    }
+
+    public static void setAeMetering(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_AE_METERING, value);
+    }
+
     public static void setCameraID(String value) {
         preferenceKeys.settingsManager.set(Key.CAMERAS_PREFERENCE_FILE_NAME.mValue, Key.CAMERA_ID, value);
     }
@@ -485,6 +494,7 @@ public class PreferenceKeys {
         KEY_HIDE_GALLERY_ICON(R.string.pref_hide_gallery_icon_key),
         KEY_AF_MODE(R.string.pref_af_mode_key),
         KEY_AE_MODE(R.string.pref_ae_mode_key),
+        KEY_AE_METERING(R.string.pref_ae_metering_key),
         KEY_BRACKETING_MODE(R.string.pref_bracketing_key),
         KEY_COUNTDOWN_TIMER(R.string.pref_countdown_timer_key),
         /**
