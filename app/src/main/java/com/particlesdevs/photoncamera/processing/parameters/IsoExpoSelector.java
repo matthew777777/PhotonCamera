@@ -22,10 +22,29 @@ public class IsoExpoSelector {
     public static ArrayList<ExpoPair> fullpairs = new ArrayList<>();
     public static long lastSelectedExposure = 0;
 
-    // Shutter-Priority AE Curve Constants (Google Camera style)
-    private static final long HANDHELD_PHOTO_LIMIT = ExposureIndex.sec / 15; // 1/15s
-    private static final long HANDHELD_NIGHT_LIMIT = ExposureIndex.sec / 8;  // 1/8s
-    private static final long TRIPOD_LIMIT = ExposureIndex.sec;              // 1s
+    // ---- Shutter-Priority / Dynamic Low-Light AE Curve (HDR+ Enhanced style) ----
+    // Instead of letting stock 3A pick a fast shutter + high ISO, we keep the SAME
+    // total exposure the platform metered (exposure_time * iso is still a valid
+    // brightness target) and re-split it: push shutter time up first - more real
+    // photons land on the sensor per frame, which is a genuine shot-noise SNR win
+    // even at identical brightness - and only fall back to ISO once a per-frame
+    // time cap is hit. That cap is not one fixed number: it slides between a
+    // "start extending here" value and a darker-scene "ceiling" as metered scene
+    // darkness increases (see ExpoPair#applyShutterPriorityCurve), so behavior
+    // changes smoothly with light level instead of jumping between presets.
+    //
+    // These are tuned starting points, not measured hardware limits - adjust to taste.
+    private static final int MIN_ISO_NORMALIZED = 100; // floor we always try first (ISO-100 basis)
+    private static final double CAP_RAMP_STOPS = 4.0;  // stops of extra darkness to slide *_START -> *_END
+
+    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 15; // 1/15s
+    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 8;  // 1/8s
+
+    private static final long NIGHT_HANDHELD_CAP_START = ExposureIndex.sec / 8;  // 1/8s
+    private static final long NIGHT_HANDHELD_CAP_END   = ExposureIndex.sec / 3;  // 1/3s
+
+    private static final long TRIPOD_CAP_START = ExposureIndex.sec / 4;          // 1/4s
+    private static final long TRIPOD_CAP_END   = ExposureIndex.sec * 2;          // 2s
 
     public static void setExpo(CaptureRequest.Builder builder, int step, CaptureController captureController) {
         Log.v(TAG, "InputParams: " +
@@ -49,13 +68,6 @@ public class IsoExpoSelector {
         double compensation = Math.pow(2.0,PhotonCamera.getSettings().exposureCompensation);
         pair.normalizeiso100();
         pair.ExpoCompensateLower(1.0/compensation);
-
-        // Apply Shutter-Priority AE Curve (HDR+ E behavior)
-        long handheldLimit = PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT 
-                ? HANDHELD_NIGHT_LIMIT : HANDHELD_PHOTO_LIMIT;
-        long maxExposure = useTripod ? TRIPOD_LIMIT : handheldLimit;
-        
-        pair.applyShutterPriorityCurve(maxExposure);
 
         if (PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT)
         {
@@ -84,6 +96,23 @@ public class IsoExpoSelector {
             pair.denormalizeSystem();
             return pair;
         }
+
+        // Shutter-Priority / Dynamic Low-Light AE Curve - PHOTO and NIGHT only.
+        // MOTION/RAWVIDEO already returned above, so framerate-sensitive capture is
+        // never affected. Tripod overrides mode when active since it removes the
+        // handshake concern that motivates the (shorter) handheld ceilings below.
+        long capStart, capEnd;
+        if (useTripod) {
+            capStart = TRIPOD_CAP_START;
+            capEnd = TRIPOD_CAP_END;
+        } else if (PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT) {
+            capStart = NIGHT_HANDHELD_CAP_START;
+            capEnd = NIGHT_HANDHELD_CAP_END;
+        } else {
+            capStart = PHOTO_HANDHELD_CAP_START;
+            capEnd = PHOTO_HANDHELD_CAP_END;
+        }
+        pair.applyShutterPriorityCurve(capStart, capEnd, CAP_RAMP_STOPS);
 
         if (pair.normalizedIso() >= 12700.0/mpy1) {
             pair.ReduceIso();
@@ -305,30 +334,70 @@ public class IsoExpoSelector {
         }
 
         /**
-         * Redistributes total exposure energy using a Shutter-Priority strategy.
-         * Prioritizes increasing exposure time up to maxExposure before increasing ISO.
+         * Shutter-Priority / Dynamic Low-Light AE curve (HDR+ Enhanced style).
+         *
+         * Keeps the platform's own metered brightness target (exposure * iso stays
+         * constant) but re-splits it between shutter time and ISO gain: ISO is tried
+         * at its minimum first, and only raised once the per-frame shutter time would
+         * need to exceed a cap. That cap itself is not fixed - it slides from capStart
+         * up to capEnd as the metered scene gets darker (rampStops controls how many
+         * stops of extra darkness the full slide takes), which is what makes this a
+         * *dynamic* low-light strategy rather than a single handheld/night/tripod
+         * threshold switch. The per-mode+tripod shutter ceiling is never exceeded,
+         * even in extreme edge cases (e.g. large +exposure compensation in near-total
+         * darkness) - if max ISO still isn't enough at that point, the frame comes out
+         * a little short of the requested brightness rather than surprising the user
+         * with a handheld shot far slower than the active mode calls for.
+         *
+         * @param capStart  per-frame shutter time where we start extending past minimum ISO
+         * @param capEnd    per-frame shutter time ceiling in the darkest scenes
+         * @param rampStops how many stops darker than capStart's "just enough" point it
+         *                  takes to reach capEnd
          */
-        public void applyShutterPriorityCurve(long maxExposure) {
-            double totalExposureEnergy = (double) exposure * iso;
-            
-            // Step 1: Set ISO to minimum to prioritize photon capture quality
-            // Note: 100 is the base for normalized ISO (corresponds to sensor's isolow)
-            iso = 100; 
-            
-            // Step 2: Calculate required exposure time at minimum ISO
+        public void applyShutterPriorityCurve(long capStart, long capEnd, double rampStops) {
+            double totalExposureEnergy = (double) exposure * iso; // proxy for scene darkness: bigger = darker
+
+            // Energy capStart can already deliver at minimum ISO - past this point,
+            // minimum ISO alone is no longer enough to hit the metered brightness.
+            double energyAtCapStart = (double) capStart * MIN_ISO_NORMALIZED;
+
+            long dynamicCap;
+            if (totalExposureEnergy <= energyAtCapStart) {
+                dynamicCap = capStart; // plenty of light, no need to extend the shutter at all
+            } else {
+                double stopsPastStart = log2(totalExposureEnergy / energyAtCapStart);
+                double t = Math.max(0.0, Math.min(1.0, stopsPastStart / rampStops));
+                dynamicCap = (long) (capStart * Math.pow((double) capEnd / capStart, t)); // geometric slide
+            }
+
+            // Shutter-priority allocation within the dynamic cap.
+            iso = MIN_ISO_NORMALIZED;
             exposure = (long) (totalExposureEnergy / iso);
-            
-            // Step 3: If calculated exposure exceeds limit, cap it and increase ISO
-            if (exposure > maxExposure) {
-                exposure = Math.min(maxExposure, exposurehigh);
+            if (exposure > dynamicCap) {
+                exposure = Math.min(dynamicCap, exposurehigh);
                 iso = (int) (totalExposureEnergy / exposure);
             }
-            
-            // Final safety normalization
-            normalize();
-            Log.v("IsoExpoSelector", "Applied Curve: Energy=" + (long)totalExposureEnergy + 
-                " -> Result: Exp=" + ExposureIndex.sec2string(ExposureIndex.time2sec(exposure)) + 
-                " ISO=" + iso);
+
+            // Safety clamp, done by hand in normalized-ISO-100 units. Deliberately NOT
+            // calling normalize()/normalizeISO() here: those assign the raw isohigh
+            // bound straight into this normalized field, which only happens to be
+            // unit-correct when the sensor's isolow is exactly 100. Also deliberately
+            // NOT extending exposure past dynamicCap to chase the ISO ceiling further -
+            // see the shortfall note above.
+            double isoHighNormalized = isohigh * (100.0 / isolow);
+            if (iso > isoHighNormalized) iso = (int) isoHighNormalized;
+            if (iso < MIN_ISO_NORMALIZED) iso = MIN_ISO_NORMALIZED;
+            if (exposure > exposurehigh) exposure = exposurehigh;
+            if (exposure < exposurelow) exposure = exposurelow;
+
+            Log.v(TAG, "ShutterPriorityCurve: energy=" + (long) totalExposureEnergy +
+                    " dynamicCap=" + ExposureIndex.sec2string(ExposureIndex.time2sec(dynamicCap)) +
+                    " -> exposure=" + ExposureIndex.sec2string(ExposureIndex.time2sec(exposure)) +
+                    " iso=" + iso);
+        }
+
+        private static double log2(double x) {
+            return Math.log(x) / Math.log(2.0);
         }
 
         public void ExpoCompensateLowerExpo(double k) {
