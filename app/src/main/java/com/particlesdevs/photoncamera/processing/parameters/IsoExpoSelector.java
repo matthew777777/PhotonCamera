@@ -1,9 +1,12 @@
 package com.particlesdevs.photoncamera.processing.parameters;
 
+import android.graphics.Rect;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
 import com.particlesdevs.photoncamera.util.Log;
 import android.util.Range;
+import android.util.SizeF;
 
 import com.particlesdevs.photoncamera.api.CameraMode;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
@@ -11,6 +14,7 @@ import com.particlesdevs.photoncamera.capture.CaptureController;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 public class IsoExpoSelector {
     public static final int baseFrame = 1;
@@ -112,6 +116,11 @@ public class IsoExpoSelector {
             capStart = PHOTO_HANDHELD_CAP_START;
             capEnd = PHOTO_HANDHELD_CAP_END;
         }
+
+        double dynamicFactor = getDynamicScalingFactor();
+        capStart = (long) (capStart * dynamicFactor);
+        capEnd = (long) (capEnd * dynamicFactor);
+
         pair.applyShutterPriorityCurve(capStart, capEnd, CAP_RAMP_STOPS);
 
         if (pair.normalizedIso() >= 12700.0/mpy1) {
@@ -235,6 +244,58 @@ public class IsoExpoSelector {
         else {
             return (long) ((Range) (key)).getLower();
         }
+    }
+
+    private static double getDynamicScalingFactor() {
+        // 1. Focal Length Scaling
+        double focalLength35mm = 24.0;
+        CameraCharacteristics characteristics = CaptureController.mCameraCharacteristics;
+        if (characteristics != null) {
+            float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+            SizeF sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+            if (focalLengths != null && focalLengths.length > 0 && sensorSize != null) {
+                // Approximate 35mm equivalent: (36mm / sensorWidth) * focalLength
+                focalLength35mm = (36.0f / sensorSize.getWidth()) * focalLengths[0];
+            }
+        }
+
+        // Digital zoom factor
+        float zoom = 1.0f;
+        CaptureResult result = CaptureController.mPreviewCaptureResult;
+        if (result != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                Float zoomRatio = result.get(CaptureResult.CONTROL_ZOOM_RATIO);
+                if (zoomRatio != null) zoom = zoomRatio;
+            } else {
+                Rect crop = result.get(CaptureResult.SCALER_CROP_REGION);
+                Rect activeArray = characteristics != null ? characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) : null;
+                if (crop != null && activeArray != null && crop.width() > 0) {
+                    zoom = (float) activeArray.width() / crop.width();
+                }
+            }
+        }
+        double effectiveFocalLength = focalLength35mm * zoom;
+        // Reciprocal rule baseline (24mm wide). Longer focal length -> smaller factor -> faster shutter.
+        double focalFactor = 24.0 / Math.max(effectiveFocalLength, 10.0);
+
+        // 2. Stability Scaling (only if not on a tripod)
+        double stabilityFactor = 1.0;
+        if (!useTripod && PhotonCamera.getGyro() != null) {
+            int shakiness = PhotonCamera.getGyro().getFilteredShakiness();
+            if (shakiness > 0) {
+                // Steady hands (shakiness ~25) -> up to 4x factor.
+                // Shaky hands (shakiness ~400) -> down to 0.25x factor.
+                stabilityFactor = 100.0 / Math.max(shakiness, 25);
+            }
+        }
+
+        double combined = focalFactor * stabilityFactor;
+        // Clamp total scaling to [0.2x, 2.5x] range to avoid extreme/impossible shutter speeds.
+        double finalFactor = Math.max(0.2, Math.min(combined, 2.5));
+        Log.v(TAG, "Dynamic AE Factor: " + String.format(Locale.US, "%.2f", finalFactor) + 
+                " (Focal=" + String.format(Locale.US, "%.2f", effectiveFocalLength) + "mm, " +
+                "Stability=" + (PhotonCamera.getGyro() != null ? PhotonCamera.getGyro().getFilteredShakiness() : "N/A") + ")");
+        return finalFactor;
     }
 
 
