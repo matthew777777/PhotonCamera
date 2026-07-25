@@ -41,8 +41,8 @@ public class IsoExpoSelector {
     private static final int MIN_ISO_NORMALIZED = 100; // floor we always try first (ISO-100 basis)
     private static final double CAP_RAMP_STOPS = 4.0;  // stops of extra darkness to slide *_START -> *_END
 
-    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 15; // 1/15s
-    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 8;  // 1/8s
+    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 30; // 1/30s
+    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 15;  // 1/15s
 
     private static final long NIGHT_HANDHELD_CAP_START = ExposureIndex.sec / 8;  // 1/8s
     private static final long NIGHT_HANDHELD_CAP_END   = ExposureIndex.sec / 3;  // 1/3s
