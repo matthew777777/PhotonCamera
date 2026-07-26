@@ -42,8 +42,8 @@ public class IsoExpoSelector {
     private static final double CAP_RAMP_STOPS = 4.0;  // stops of extra darkness to slide *_START -> *_END
     private static final double CLEAN_ISO_STEP_FACTOR = 2.0; // hardware analog gain stages are conventionally doublings of the base ISO
 
-    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 30; // 1/30s
-    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 15; // 1/15s
+    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 15; // 1/15s
+    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 8; // 1/8s
 
     private static final long MOTION_HANDHELD_CAP_START = ExposureIndex.sec / 250; // 1/250s
     private static final long MOTION_HANDHELD_CAP_END   = ExposureIndex.sec / 125; // 1/125s
