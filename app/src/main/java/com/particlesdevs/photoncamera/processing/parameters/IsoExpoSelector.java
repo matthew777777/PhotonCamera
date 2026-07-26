@@ -453,7 +453,17 @@ public class IsoExpoSelector {
             if (isoMinToFit <= MIN_ISO_NORMALIZED) {
                 iso = MIN_ISO_NORMALIZED; // plenty of light, minimum ISO alone already fits under the cap
             } else {
-                iso = (int) snapToCleanIso(isoMinToFit);
+                long cleanIso = snapToCleanIso(isoMinToFit);
+                double shutterAtCleanIso = totalExposureEnergy / cleanIso;
+                
+                // If snapping up to a "clean" hardware gain stage would drop our shutter time
+                // by more than 5% below the cap, prioritize the photon collection (shutter duration)
+                // and use the exact ISO required instead.
+                if (shutterAtCleanIso < effectiveCap * 0.95) {
+                    iso = (int) Math.ceil(isoMinToFit);
+                } else {
+                    iso = (int) cleanIso;
+                }
             }
             exposure = (long) (totalExposureEnergy / iso);
 
