@@ -42,8 +42,8 @@ public class IsoExpoSelector {
     private static final double CAP_RAMP_STOPS = 4.0;  // stops of extra darkness to slide *_START -> *_END
     private static final double CLEAN_ISO_STEP_FACTOR = 2.0; // hardware analog gain stages are conventionally doublings of the base ISO
 
-    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 30; // 1/30s
-    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 15; // 1/15s
+    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 15; // 1/15s
+    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 8; // 1/8s
 
     private static final long MOTION_HANDHELD_CAP_START = ExposureIndex.sec / 250; // 1/250s
     private static final long MOTION_HANDHELD_CAP_END   = ExposureIndex.sec / 125; // 1/125s
@@ -470,6 +470,7 @@ public class IsoExpoSelector {
 
             // Smallest (continuous) ISO that still hits the metered brightness within effectiveCap.
             double isoMinToFit = totalExposureEnergy / effectiveCap;
+            long effectiveCap = Math.min(dynamicCap, exposurehigh); // never ask for more than the sensor allows either
 
             if (isoMinToFit <= MIN_ISO_NORMALIZED) {
                 iso = MIN_ISO_NORMALIZED; // plenty of light, minimum ISO alone already fits under the cap
@@ -485,6 +486,14 @@ public class IsoExpoSelector {
                 } else {
                     iso = (int) cleanIso;
                 }
+            }
+            // Smallest (continuous) ISO that still hits the metered brightness within effectiveCap.
+            double isoMinToFit = totalExposureEnergy / effectiveCap;
+
+            if (isoMinToFit <= MIN_ISO_NORMALIZED) {
+                iso = MIN_ISO_NORMALIZED; // plenty of light, minimum ISO alone already fits under the cap
+            } else {
+                iso = (int) snapToCleanIso(isoMinToFit);
             }
             exposure = (long) (totalExposureEnergy / iso);
 
