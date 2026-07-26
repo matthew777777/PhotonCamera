@@ -40,9 +40,10 @@ public class IsoExpoSelector {
     // These are tuned starting points, not measured hardware limits - adjust to taste.
     private static final int MIN_ISO_NORMALIZED = 100; // floor we always try first (ISO-100 basis)
     private static final double CAP_RAMP_STOPS = 4.0;  // stops of extra darkness to slide *_START -> *_END
+    private static final double CLEAN_ISO_STEP_FACTOR = 2.0; // hardware analog gain stages are conventionally doublings of the base ISO
 
-    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 30; // 1/30s
-    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 15;  // 1/15s
+    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 15; // 1/15s
+    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 8;  // 1/8s
 
     private static final long NIGHT_HANDHELD_CAP_START = ExposureIndex.sec / 8;  // 1/8s
     private static final long NIGHT_HANDHELD_CAP_END   = ExposureIndex.sec / 3;  // 1/3s
@@ -410,6 +411,15 @@ public class IsoExpoSelector {
          * a little short of the requested brightness rather than surprising the user
          * with a handheld shot far slower than the active mode calls for.
          *
+         * When ISO does need to rise above minimum, it's snapped to the nearest "clean"
+         * hardware gain point at or above the bare minimum required - see
+         * {@link #snapToCleanIso} - rather than left at whatever continuous value the
+         * arithmetic produces, since an off-grid ISO is frequently not pure analog gain
+         * on the sensor and reads noisier than a clean stage for no benefit. The trade-off
+         * is a slightly shorter exposure than the theoretical maximum (a clean rung is
+         * never below the continuous optimum, only ever a bit above it), in exchange for
+         * a real, hardware-backed SNR win at whatever ISO we actually land on.
+         *
          * @param capStart  per-frame shutter time where we start extending past minimum ISO
          * @param capEnd    per-frame shutter time ceiling in the darkest scenes
          * @param rampStops how many stops darker than capStart's "just enough" point it
@@ -430,31 +440,64 @@ public class IsoExpoSelector {
                 double t = Math.max(0.0, Math.min(1.0, stopsPastStart / rampStops));
                 dynamicCap = (long) (capStart * Math.pow((double) capEnd / capStart, t)); // geometric slide
             }
+            long effectiveCap = Math.min(dynamicCap, exposurehigh); // never ask for more than the sensor allows either
 
-            // Shutter-priority allocation within the dynamic cap.
-            iso = MIN_ISO_NORMALIZED;
-            exposure = (long) (totalExposureEnergy / iso);
-            if (exposure > dynamicCap) {
-                exposure = Math.min(dynamicCap, exposurehigh);
-                iso = (int) (totalExposureEnergy / exposure);
+            // Smallest (continuous) ISO that still hits the metered brightness within effectiveCap.
+            double isoMinToFit = totalExposureEnergy / effectiveCap;
+
+            if (isoMinToFit <= MIN_ISO_NORMALIZED) {
+                iso = MIN_ISO_NORMALIZED; // plenty of light, minimum ISO alone already fits under the cap
+            } else {
+                iso = (int) snapToCleanIso(isoMinToFit);
             }
+            exposure = (long) (totalExposureEnergy / iso);
 
             // Safety clamp, done by hand in normalized-ISO-100 units. Deliberately NOT
-            // calling normalize()/normalizeISO() here: those assign the raw isohigh
-            // bound straight into this normalized field, which only happens to be
-            // unit-correct when the sensor's isolow is exactly 100. Also deliberately
-            // NOT extending exposure past dynamicCap to chase the ISO ceiling further -
-            // see the shortfall note above.
-            double isoHighNormalized = isohigh * (100.0 / isolow);
-            if (iso > isoHighNormalized) iso = (int) isoHighNormalized;
-            if (iso < MIN_ISO_NORMALIZED) iso = MIN_ISO_NORMALIZED;
-            if (exposure > exposurehigh) exposure = exposurehigh;
+            // calling normalize()/normalizeISO() here: those assign the raw isohigh bound
+            // straight into this normalized field, which only happens to be unit-correct
+            // when the sensor's isolow is exactly 100. Bounding exposure by effectiveCap
+            // (not just exposurehigh) keeps the "never exceed the policy cap" guarantee
+            // even when snapToCleanIso has to fall back to the sensor's true ISO ceiling.
+            if (exposure > effectiveCap) exposure = effectiveCap;
             if (exposure < exposurelow) exposure = exposurelow;
+            double isoHighNormalized = isohigh * (100.0 / isolow);
+            if (iso > isoHighNormalized) iso = (int) Math.round(isoHighNormalized);
+            if (iso < MIN_ISO_NORMALIZED) iso = MIN_ISO_NORMALIZED;
 
             Log.v(TAG, "ShutterPriorityCurve: energy=" + (long) totalExposureEnergy +
                     " dynamicCap=" + ExposureIndex.sec2string(ExposureIndex.time2sec(dynamicCap)) +
                     " -> exposure=" + ExposureIndex.sec2string(ExposureIndex.time2sec(exposure)) +
                     " iso=" + iso);
+        }
+
+        /**
+         * Snaps up to the nearest ISO the sensor can realize as a clean hardware gain
+         * step at or above {@code isoMinToFit} (normalized ISO-100 basis): the base ISO
+         * doubled some number of times, plus the sensor's own reported max-pure-analog
+         * gain point ({@code isoanalog} / SENSOR_MAX_ANALOG_SENSITIVITY) inserted as an
+         * extra rung even when it doesn't fall on a doubling, since that boundary is
+         * real hardware data rather than an assumption about gain-stage spacing.
+         * Falls back to the sensor's true ISO ceiling if nothing smaller fits.
+         */
+        private long snapToCleanIso(double isoMinToFit) {
+            double isoHighNormalized = isohigh * (100.0 / isolow);
+            double isoAnalogNormalized = isoanalog * (100.0 / isolow);
+
+            double[] ladder = new double[16];
+            int n = 0;
+            for (double rung = MIN_ISO_NORMALIZED; rung <= isoHighNormalized && n < 14; rung *= CLEAN_ISO_STEP_FACTOR) {
+                ladder[n++] = rung;
+            }
+            if (isoAnalogNormalized > MIN_ISO_NORMALIZED && isoAnalogNormalized < isoHighNormalized) {
+                ladder[n++] = isoAnalogNormalized;
+            }
+            ladder[n++] = isoHighNormalized; // true sensor ceiling, always available as a last resort
+            java.util.Arrays.sort(ladder, 0, n);
+
+            for (int i = 0; i < n; i++) {
+                if (ladder[i] >= isoMinToFit) return Math.round(ladder[i]);
+            }
+            return Math.round(isoHighNormalized);
         }
 
         private static double log2(double x) {
