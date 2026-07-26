@@ -42,8 +42,8 @@ public class IsoExpoSelector {
     private static final double CAP_RAMP_STOPS = 4.0;  // stops of extra darkness to slide *_START -> *_END
     private static final double CLEAN_ISO_STEP_FACTOR = 2.0; // hardware analog gain stages are conventionally doublings of the base ISO
 
-    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 15; // 1/15s
-    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 8;  // 1/8s
+    private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 30; // 1/30s
+    private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 15; // 1/15s
 
     private static final long NIGHT_HANDHELD_CAP_START = ExposureIndex.sec / 8;  // 1/8s
     private static final long NIGHT_HANDHELD_CAP_END   = ExposureIndex.sec / 3;  // 1/3s
@@ -121,6 +121,11 @@ public class IsoExpoSelector {
         double dynamicFactor = getDynamicScalingFactor();
         capStart = (long) (capStart * dynamicFactor);
         capEnd = (long) (capEnd * dynamicFactor);
+
+        if (PhotonCamera.getSettings().selectedMode == CameraMode.PHOTO && !useTripod) {
+            capEnd = Math.min(capEnd, ExposureIndex.sec / 15);
+            capStart = Math.min(capStart, capEnd);
+        }
 
         pair.applyShutterPriorityCurve(capStart, capEnd, CAP_RAMP_STOPS);
 
