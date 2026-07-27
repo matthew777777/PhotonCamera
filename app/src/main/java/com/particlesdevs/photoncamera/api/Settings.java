@@ -41,6 +41,12 @@ public class Settings {
     public int fpsMode;
     public int alignAlgorithm;
 
+    public int videoEncoder;
+    public int videoBitDepth;
+    public int videoBitrateMode;
+    public int videoNRMode;
+    public int videoEdgeMode;
+
     public int colorMethod;
     public int focusPeak;
     public int previewFormat;
@@ -86,6 +92,11 @@ public class Settings {
         fpsMode = PreferenceKeys.getFpsMode();
         hdrxNR = PreferenceKeys.isHdrxNrOn();
         alignAlgorithm = PreferenceKeys.getAlignMethodValue();
+        videoEncoder = PreferenceKeys.getVideoEncoder();
+        videoBitDepth = PreferenceKeys.getVideoBitDepth();
+        videoBitrateMode = PreferenceKeys.getVideoBitrateMode();
+        videoNRMode = PreferenceKeys.getVideoNRMode();
+        videoEdgeMode = PreferenceKeys.getVideoEdgeMode();
         colorMethod = PreferenceKeys.getColorMethodValue();
         focusPeak = PreferenceKeys.getFocusPeakValue();
         previewFormat = PreferenceKeys.getPreviewFormatValue();
