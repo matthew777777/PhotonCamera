@@ -143,4 +143,59 @@
         <item>1920x1080</item>
         <item>1280x720</item>
     </string-array>
+
+    <string-array name="video_encoder_entries">
+        <item>H.264</item>
+        <item>HEVC (H.265)</item>
+    </string-array>
+    <string-array name="video_encoder_entryvalues">
+        <item>2</item>
+        <item>5</item>
+    </string-array>
+
+    <string-array name="video_bit_depth_entries">
+        <item>8-bit</item>
+        <item>10-bit (HDR)</item>
+    </string-array>
+    <string-array name="video_bit_depth_entryvalues">
+        <item>8</item>
+        <item>10</item>
+    </string-array>
+
+    <string-array name="video_bitrate_mode_entries">
+        <item>Auto</item>
+        <item>High / Max</item>
+        <item>Medium</item>
+        <item>Low</item>
+    </string-array>
+    <string-array name="video_bitrate_mode_entryvalues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+
+    <string-array name="video_nr_mode_entries">
+        <item>Off</item>
+        <item>Fast</item>
+        <item>High Quality</item>
+        <item>Minimal</item>
+    </string-array>
+    <string-array name="video_nr_mode_entryvalues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+
+    <string-array name="video_edge_mode_entries">
+        <item>Off</item>
+        <item>Fast</item>
+        <item>High Quality</item>
+    </string-array>
+    <string-array name="video_edge_mode_entryvalues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
 </resources>
