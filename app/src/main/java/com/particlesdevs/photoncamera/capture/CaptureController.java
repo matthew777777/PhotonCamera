@@ -2344,7 +2344,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
     public void applyAeMetering() {
         if (mPreviewRequestBuilder == null) return;
-        VendorTagUtils.builderSessionApply(mPreviewRequestBuilder, false, useMaximumResolutionKey);
+        VendorTagUtils.builderSessionApply(mPreviewRequestBuilder, false, useMaximumResolutionKey, physicalID);
         rebuildPreviewBuilder();
     }
 

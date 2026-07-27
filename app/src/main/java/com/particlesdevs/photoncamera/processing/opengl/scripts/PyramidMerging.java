@@ -30,6 +30,7 @@ import static com.particlesdevs.photoncamera.processing.processor.ProcessorBase.
 
 public class PyramidMerging extends GLOneScript {
     public Parameters parameters;
+    public com.particlesdevs.photoncamera.api.CameraMode cameraMode;
     ArrayList<ImageFrame> images;
     //ByteBuffer alignment;
     GLProg glProg;
@@ -627,6 +628,8 @@ public class PyramidMerging extends GLOneScript {
             glProg.setVar("rawHalf", rawHalf);
             glProg.setVar("whiteLevel", (float) (parameters.whiteLevel));
             glProg.setVar("whitePoint", parameters.whitePoint);
+            int motionModeVal = (cameraMode != null && cameraMode == com.particlesdevs.photoncamera.api.CameraMode.MOTION) ? 1 : 0;
+            glProg.setVar("isMotionMode", motionModeVal);
             glProg.setVar("blackLevel", blackLevel);
             glProg.setVar("minLevel",minLevel);
             glProg.setVar("exposure", exposure);
