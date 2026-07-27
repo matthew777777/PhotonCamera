@@ -36,11 +36,15 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.ColorSpaceTransform;
+import android.hardware.camera2.params.DynamicRangeProfiles;
 import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.OutputConfiguration;
 import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.CamcorderProfile;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.media.ImageReader;
 import android.media.MediaRecorder;
 import android.net.Uri;
@@ -1482,11 +1486,25 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             List<Surface> surfaces = configureSurfaces(isBurstSession);
             Log.d(TAG, "createCameraPreviewSession() surfaces:" + Arrays.toString(surfaces.toArray()));
             ArrayList<OutputConfiguration> outputConfigurations = new ArrayList<>();
+            int bitDepth = PreferenceKeys.getVideoBitDepth();
             for (Surface surfacei : surfaces) {
                 var config = new OutputConfiguration(surfacei);
                 if(!Objects.equals(physicalID, logicalID) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P){
                     config.setPhysicalCameraId(physicalID);
                 }
+                
+                // Set 10-bit dynamic range profile for video surfaces if supported
+                if (mIsRecordingVideo && bitDepth == 10 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    // Check if this surface is the MediaRecorder surface
+                    if (mMediaRecorder != null && surfacei == mMediaRecorder.getSurface()) {
+                        DynamicRangeProfiles profiles = mCameraCharacteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_DYNAMIC_RANGE_PROFILES);
+                        if (profiles != null && profiles.getSupportedProfiles().contains(DynamicRangeProfiles.HLG10)) {
+                            config.setDynamicRangeProfile(DynamicRangeProfiles.HLG10);
+                            Log.d(TAG, "Setting HLG10 dynamic range profile for video");
+                        }
+                    }
+                }
+                
                 outputConfigurations.add(config);
             }
 
@@ -1632,6 +1650,12 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (PreferenceKeys.isEisPhotoOn()) {
                 mPreviewRequestBuilder.set(CONTROL_VIDEO_STABILIZATION_MODE, CONTROL_VIDEO_STABILIZATION_MODE_ON);
             }
+            
+            // Apply Noise Reduction and Edge Mode for Video
+            int nrMode = PreferenceKeys.getVideoNRMode();
+            int edgeMode = PreferenceKeys.getVideoEdgeMode();
+            mPreviewRequestBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE, nrMode);
+            mPreviewRequestBuilder.set(CaptureRequest.EDGE_MODE, edgeMode);
         }
         mPreviewMeteringAE = mPreviewRequestBuilder.get(CONTROL_AE_REGIONS);
         mPreviewAEMode = mPreviewRequestBuilder.get(CONTROL_AE_MODE);
@@ -2414,6 +2438,26 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         return CamcorderProfile.get(cameraId, CamcorderProfile.QUALITY_HIGH);
     }
 
+    private int getMaxBitrate(String mime) {
+        try {
+            MediaCodecList list = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+            for (MediaCodecInfo info : list.getCodecInfos()) {
+                if (!info.isEncoder()) continue;
+                for (String type : info.getSupportedTypes()) {
+                    if (type.equalsIgnoreCase(mime)) {
+                        MediaCodecInfo.CodecCapabilities caps = info.getCapabilitiesForType(type);
+                        if (caps != null && caps.getVideoCapabilities() != null) {
+                            return caps.getVideoCapabilities().getBitrateRange().getUpper();
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error querying max bitrate: " + e.getMessage());
+        }
+        return 0;
+    }
+
     private void setUpMediaRecorder() {
         mMediaRecorder.reset();
         mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
@@ -2424,10 +2468,56 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         int cameraIdInt;
         try { cameraIdInt = Integer.parseInt(cameraIdStr); } catch (NumberFormatException e) { cameraIdInt = 0; }
         CamcorderProfile profile = resolveVideoProfile(cameraIdInt, PreferenceKeys.getVideoResolution());
+        
+        int encoder = PreferenceKeys.getVideoEncoder();
+        int bitDepth = PreferenceKeys.getVideoBitDepth();
+        int bitrateMode = PreferenceKeys.getVideoBitrateMode();
+
         mMediaRecorder.setVideoFrameRate(profile.videoFrameRate);
         mMediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
-        mMediaRecorder.setVideoEncodingBitRate(profile.videoBitRate);
-        mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+        
+        // Bitrate calculation
+        int bitrate = profile.videoBitRate;
+        String mime = (encoder == MediaRecorder.VideoEncoder.HEVC) ? MediaFormat.MIMETYPE_VIDEO_HEVC : MediaFormat.MIMETYPE_VIDEO_AVC;
+        int maxBitrate = getMaxBitrate(mime);
+        
+        switch (bitrateMode) {
+            case 1: // High / Max
+                // Use a high percentage of max if max is reasonable, otherwise use profile * 2
+                bitrate = Math.min(maxBitrate, (int) (profile.videoBitRate * 2.0));
+                if (bitrate == 0) bitrate = profile.videoBitRate * 2;
+                break;
+            case 2: // Medium
+                bitrate = (int) (profile.videoBitRate * 0.75);
+                break;
+            case 3: // Low
+                bitrate = (int) (profile.videoBitRate * 0.5);
+                break;
+            case 0: // Auto
+            default:
+                break;
+        }
+        
+        mMediaRecorder.setVideoEncodingBitRate(bitrate);
+        mMediaRecorder.setVideoEncoder(encoder);
+        
+        // 10-bit HEVC support (API 33+)
+        if (bitDepth == 10 && encoder == MediaRecorder.VideoEncoder.HEVC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                // For 10-bit we often need to set the profile.
+                // MediaRecorder.setVideoProfile was added in API 33
+                // However, setVideoEncoder(HEVC) might not be enough for 10-bit without explicit profile.
+                // In Camera2, we might also need to set the dynamic range profile on OutputConfiguration.
+                // But for MediaRecorder, we try to set the profile if possible.
+                // mMediaRecorder.setVideoProfile(MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10); // This doesn't exist on MediaRecorder
+                // Instead, we use setVideoEncodingProfileLevel
+                mMediaRecorder.setVideoEncodingProfileLevel(MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10, 
+                        MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel1);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to set 10-bit HEVC profile: " + e.getMessage());
+            }
+        }
+
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         mMediaRecorder.setAudioEncodingBitRate(profile.audioBitRate);
         mMediaRecorder.setAudioSamplingRate(profile.audioSampleRate);
@@ -2437,7 +2527,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US);
         String dateText = dateFormat.format(currentDate);
         File dir = new File(Environment.getExternalStorageDirectory() + "//DCIM//Camera//");
-        vid = new File(dir.getAbsolutePath(), "VID_" + dateText + ".mp4");
+        vid = new File(dir.getAbsolutePath(), "VID_" + dateText + (encoder == MediaRecorder.VideoEncoder.HEVC ? "_HEVC" : "") + (bitDepth == 10 ? "_10bit" : "") + ".mp4");
         try {
             vid.createNewFile();
         } catch (IOException e) {
@@ -2446,10 +2536,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         mMediaRecorder.setOutputFile(vid.getAbsolutePath());
         try {
             mMediaRecorder.prepare();
-            Log.d(TAG, "video record start");
+            Log.d(TAG, "video record start with encoder:" + encoder + " bitDepth:" + bitDepth + " bitrate:" + bitrate);
 
         } catch (Exception e) {
-            Log.d(TAG, "video record failed");
+            Log.e(TAG, "video record prepare failed: " + Log.getStackTraceString(e));
         }
     }
 

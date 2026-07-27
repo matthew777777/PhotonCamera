@@ -18,6 +18,7 @@ uniform vec4 blackLevel;
 uniform float exposure;
 uniform float exposureLow;
 uniform bool createDiff;
+uniform bool isMotionMode;
 uniform float noiseS;
 uniform float noiseO;
 uniform ivec2 border;
@@ -119,12 +120,10 @@ void main() {
         //vec4 bayerPrev = getBayerVec(alignPrev * TILE, alterTexture);
         vec4 w1 = (abs(bayerAlter*vec4(exposure) - bayerBase));
         vec4 w2 = (abs(bayerNone*vec4(exposure) - bayerBase));
-        //vec4 w3 = (abs(bayerPrev*vec4(exposure) - bayerBase));
-        /*if(dot(w3,vec4(0.25)) < dot(w2,vec4(0.25))) {
-            bayerNone = mix(bayerPrev, bayerNone, clamp(w3/(w2+w3+0.0001),vec4(0.0),vec4(1.0)));
-            w2 = w3;
-        }*/
-        bayerAlter = mix(bayerNone, bayerAlter, smoothstep(w2/(w1+w2),vec4(0.48),vec4(0.51)));
+
+        float edge0 = isMotionMode ? 0.495 : 0.48;
+        float edge1 = isMotionMode ? 0.505 : 0.51;
+        bayerAlter = mix(bayerNone, bayerAlter, smoothstep(w2/(w1+w2),vec4(edge0),vec4(edge1)));
 
         //vec4 hp2 = imageLoad(hotPixTexture, aligned * TILE);
         //bayerAlter = bayerAlter * vec4(1.0-hp2) + imageLoad(avrTexture, aligned * TILE) * hp2;
