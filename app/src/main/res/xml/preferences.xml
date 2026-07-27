@@ -130,6 +130,51 @@
                 android:entries="@array/video_resolution_entries"
                 android:entryValues="@array/video_resolution_entryvalues"
                 android:defaultValue="@string/pref_video_resolution_default"/>
+        <ListPreference
+                android:layout="@layout/preference_with_margin"
+                android:key="@string/pref_video_encoder_key"
+                android:title="@string/video_encoder"
+                app:useSimpleSummaryProvider="true"
+                android:icon="@drawable/ic_tune_black_24dp"
+                android:entries="@array/video_encoder_entries"
+                android:entryValues="@array/video_encoder_entryvalues"
+                android:defaultValue="2"/>
+        <ListPreference
+                android:layout="@layout/preference_with_margin"
+                android:key="@string/pref_video_bit_depth_key"
+                android:title="@string/video_bit_depth"
+                app:useSimpleSummaryProvider="true"
+                android:icon="@drawable/ic_tune_black_24dp"
+                android:entries="@array/video_bit_depth_entries"
+                android:entryValues="@array/video_bit_depth_entryvalues"
+                android:defaultValue="8"/>
+        <ListPreference
+                android:layout="@layout/preference_with_margin"
+                android:key="@string/pref_video_bitrate_mode_key"
+                android:title="@string/video_bitrate_mode"
+                app:useSimpleSummaryProvider="true"
+                android:icon="@drawable/ic_tune_black_24dp"
+                android:entries="@array/video_bitrate_mode_entries"
+                android:entryValues="@array/video_bitrate_mode_entryvalues"
+                android:defaultValue="0"/>
+        <ListPreference
+                android:layout="@layout/preference_with_margin"
+                android:key="@string/pref_video_nr_mode_key"
+                android:title="@string/video_nr_mode"
+                app:useSimpleSummaryProvider="true"
+                android:icon="@drawable/ic_tune_black_24dp"
+                android:entries="@array/video_nr_mode_entries"
+                android:entryValues="@array/video_nr_mode_entryvalues"
+                android:defaultValue="0"/>
+        <ListPreference
+                android:layout="@layout/preference_with_margin"
+                android:key="@string/pref_video_edge_mode_key"
+                android:title="@string/video_edge_mode"
+                app:useSimpleSummaryProvider="true"
+                android:icon="@drawable/ic_tune_black_24dp"
+                android:entries="@array/video_edge_mode_entries"
+                android:entryValues="@array/video_edge_mode_entryvalues"
+                android:defaultValue="0"/>
     </PreferenceCategory>
     <PreferenceCategory
             android:layout="@layout/preference_category_layout"

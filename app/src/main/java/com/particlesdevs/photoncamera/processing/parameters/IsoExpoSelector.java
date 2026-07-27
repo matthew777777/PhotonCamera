@@ -45,6 +45,9 @@ public class IsoExpoSelector {
     private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 30; // 1/30s
     private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 15; // 1/15s
 
+    private static final long MOTION_HANDHELD_CAP_START = ExposureIndex.sec / 250; // 1/250s
+    private static final long MOTION_HANDHELD_CAP_END   = ExposureIndex.sec / 125; // 1/125s
+
     private static final long NIGHT_HANDHELD_CAP_START = ExposureIndex.sec / 8;  // 1/8s
     private static final long NIGHT_HANDHELD_CAP_END   = ExposureIndex.sec / 3;  // 1/3s
 
@@ -96,7 +99,7 @@ public class IsoExpoSelector {
             }*/
             mpy1 = 3000.0;
         }
-        if(PhotonCamera.getSettings().selectedMode == CameraMode.MOTION || PhotonCamera.getSettings().selectedMode == CameraMode.RAWVIDEO){
+        if(PhotonCamera.getSettings().selectedMode == CameraMode.RAWVIDEO){
             //mpy1 = 0.0;
             pair.denormalizeSystem();
             return pair;
@@ -113,6 +116,9 @@ public class IsoExpoSelector {
         } else if (PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT) {
             capStart = NIGHT_HANDHELD_CAP_START;
             capEnd = NIGHT_HANDHELD_CAP_END;
+        } else if (PhotonCamera.getSettings().selectedMode == CameraMode.MOTION) {
+            capStart = MOTION_HANDHELD_CAP_START;
+            capEnd = MOTION_HANDHELD_CAP_END;
         } else {
             capStart = PHOTO_HANDHELD_CAP_START;
             capEnd = PHOTO_HANDHELD_CAP_END;
@@ -124,6 +130,10 @@ public class IsoExpoSelector {
 
         if (PhotonCamera.getSettings().selectedMode == CameraMode.PHOTO && !useTripod) {
             capEnd = Math.min(capEnd, ExposureIndex.sec / 15);
+            capStart = Math.min(capStart, capEnd);
+        }
+        if (PhotonCamera.getSettings().selectedMode == CameraMode.MOTION && !useTripod) {
+            capEnd = Math.min(capEnd, ExposureIndex.sec / 60);
             capStart = Math.min(capStart, capEnd);
         }
 
@@ -292,6 +302,11 @@ public class IsoExpoSelector {
                 // Steady hands (shakiness ~25) -> up to 4x factor.
                 // Shaky hands (shakiness ~400) -> down to 0.25x factor.
                 stabilityFactor = 100.0 / Math.max(shakiness, 25);
+                
+                // For Motion mode, we must be conservative to avoid subject blur.
+                if (PhotonCamera.getSettings().selectedMode == CameraMode.MOTION) {
+                    stabilityFactor = Math.min(stabilityFactor, 1.2);
+                }
             }
         }
 

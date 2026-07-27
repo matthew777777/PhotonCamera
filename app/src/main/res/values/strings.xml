@@ -172,7 +172,19 @@
     <string name="video_res_4k" translatable="false">3840x2160 (4K)</string>
     <string name="video_res_fhd" translatable="false">1920x1080 (Full HD)</string>
     <string name="video_res_hd" translatable="false">1280x720 (HD)</string>
-    
+
+    <string name="pref_video_encoder_key" translatable="false">pref_video_encoder_key</string>
+    <string name="pref_video_bit_depth_key" translatable="false">pref_video_bit_depth_key</string>
+    <string name="pref_video_bitrate_mode_key" translatable="false">pref_video_bitrate_mode_key</string>
+    <string name="pref_video_nr_mode_key" translatable="false">pref_video_nr_mode_key</string>
+    <string name="pref_video_edge_mode_key" translatable="false">pref_video_edge_mode_key</string>
+
+    <string name="video_encoder">Video Encoder</string>
+    <string name="video_bit_depth">Video Bit Depth</string>
+    <string name="video_bitrate_mode">Video Bitrate Mode</string>
+    <string name="video_nr_mode">Video Noise Reduction</string>
+    <string name="video_edge_mode">Video Edge Mode</string>
+
     <!-- Storage Access Framework folder picker -->
     <string name="select_dcim_folder_hint">Select the DCIM folder for saving photos</string>
 
