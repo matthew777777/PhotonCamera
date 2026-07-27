@@ -98,6 +98,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CameraFragment extends Fragment implements BaseActivity.BackPressedListener {
     public static final int REQUEST_CAMERA_PERMISSION = 1;
@@ -149,6 +150,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     private ManualModeConsole manualModeConsole;
     public float displayAspectRatio;
     private HorizonIndicatorView mHorizonIndicatorView;
+    private final AtomicBoolean histogramProcessing = new AtomicBoolean(false);
 
     public CameraFragment() {
         Log.v(TAG, "fragment created");
@@ -240,6 +242,28 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
             mHorizonIndicatorView.setVisible(PreferenceKeys.isHorizonOn());
         }
         initSettingsBar();
+        textureView.setHistogramCallback(rgbaData -> {
+            if (surfaceView != null && !histogramProcessing.get()) {
+                histogramProcessing.set(true);
+                processExecutorService.execute(() -> {
+                    int[] hist = new int[256];
+                    for (int i = 0; i < rgbaData.length; i += 4) {
+                        int r = rgbaData[i] & 0xFF;
+                        int g = rgbaData[i + 1] & 0xFF;
+                        int b = rgbaData[i + 2] & 0xFF;
+                        // Luminance: 0.299R + 0.587G + 0.114B
+                        int lum = (int) (0.299f * r + 0.587f * g + 0.114f * b);
+                        hist[lum & 0xFF]++;
+                    }
+                    surfaceView.post(() -> {
+                        surfaceView.setHistogramData(hist);
+                        surfaceView.setRotation(cameraFragmentViewModel.getCameraFragmentModel().getOrientation());
+                        surfaceView.refresh();
+                        histogramProcessing.set(false);
+                    });
+                });
+            }
+        });
     }
 
     private void initSettingsBar() {
@@ -333,6 +357,9 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         endPlayer.release();
         mSwipe.SwipeDown();
         manualModeConsole.onPause();
+        if (surfaceView != null) {
+            surfaceView.forceClear();
+        }
         super.onPause();
     }
 
@@ -427,7 +454,9 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
                 surfaceView.setDebugText(Logger.createTextFrom(stringMap));
                 surfaceView.refresh();
             } else {
-                if (surfaceView.isCanvasDrawn) {
+                if (PreferenceKeys.isShowHistogramOn() || PreferenceKeys.getGridValue() != 0 || PreferenceKeys.isRoundEdgeOn()) {
+                    surfaceView.refresh();
+                } else if (surfaceView.isCanvasDrawn) {
                     surfaceView.clear();
                 }
             }
@@ -604,7 +633,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
     public void invalidateSurfaceView() {
         if (surfaceView != null) {
-            surfaceView.invalidate();
+            surfaceView.refresh();
         }
     }
 

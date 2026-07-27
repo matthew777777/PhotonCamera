@@ -262,6 +262,7 @@ public class HdrxProcessor extends ProcessorBase {
         if(images.size() > 1) {
             PyramidMerging pyramidMerging = new PyramidMerging(new Point(width, height), images);
             pyramidMerging.parameters = processingParameters;
+            pyramidMerging.cameraMode = cameraMode;
             pyramidMerging.Run();
             pyramidMerging.close();
             output = pyramidMerging.Output;

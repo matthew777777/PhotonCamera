@@ -65,6 +65,12 @@ public class VendorTagUtils {
             if (isSupported(builder, mode_index)) {
                 builder.set(mode_index, 0);
             }*/
+            var aeMeteringMode = new CaptureRequest.Key<>("com.mediatek.3afeature.aeMeteringMode", Byte.class);
+            int meteringVal = com.particlesdevs.photoncamera.settings.PreferenceKeys.getAeMetering();
+            if (meteringVal != -1 && isSupported(builder, aeMeteringMode)) {
+                Log.d(TAG, "aeMeteringMode is supported, setting to " + meteringVal);
+                builder.set(aeMeteringMode, (byte) meteringVal);
+            }
         } catch (Exception e){
             Log.w(TAG, "Error applying vendor tags to CaptureRequest.Builder", e);
         }
