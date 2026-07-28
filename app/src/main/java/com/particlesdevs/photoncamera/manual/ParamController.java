@@ -42,6 +42,7 @@ public class ParamController implements Observer {
     public int EV = 0;
     public long SHUTTER = -1;
     public float FOCUS = -1;
+    public double WB = ManualParamModel.WB_AUTO;
     private static final String TAG = "ParamController";
     private final CaptureController captureController;
     private ManualParamModel manualParamModel;
@@ -113,6 +114,26 @@ public class ParamController implements Observer {
         captureController.rebuildPreviewBuilder();
     }
 
+    public void setWB(double wbValue) {
+        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+        if (builder == null) {
+            Log.w(TAG, "setWB(): mPreviewRequestBuilder is null");
+            return;
+        }
+        if (wbValue == ManualParamModel.WB_AUTO) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
+        } else if (wbValue == ManualParamModel.WB_DAYLIGHT) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT);
+        } else if (wbValue == ManualParamModel.WB_CLOUDY) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT);
+        } else if (wbValue == ManualParamModel.WB_TUNGSTEN) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT);
+        } else if (wbValue == ManualParamModel.WB_FLUORESCENT) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT);
+        }
+        captureController.rebuildPreviewBuilder();
+    }
+
     public boolean isManualMode() {
         if (manualParamModel != null)
             return manualParamModel.isManualMode();
@@ -139,6 +160,10 @@ public class ParamController implements Observer {
             if (object.equals(ManualParamModel.ID_FOCUS)) {
                 FOCUS = (float) model.getCurrentFocusValue();
                 setFocus((float) model.getCurrentFocusValue());
+            }
+            if (object.equals(ManualParamModel.ID_WB)) {
+                WB = model.getCurrentWbValue();
+                setWB(model.getCurrentWbValue());
             }
             if(object.equals(ManualParamModel.PANEL_INVISIBILITY)) {
                 Log.d(TAG, "update: " + model.isManualMode());
