@@ -1,7 +1,6 @@
 package com.particlesdevs.photoncamera.ui.camera;
 
 import android.content.Context;
-import android.provider.Settings;
 import android.view.OrientationEventListener;
 import android.view.Surface;
 
@@ -10,19 +9,15 @@ public abstract class CustomOrientationEventListener extends OrientationEventLis
 
     private static final String TAG = "CustomOrientationEvent";
     private int prevOrientation = OrientationEventListener.ORIENTATION_UNKNOWN;
-    private final Context context;
     private int rotation = 0;
 
     public CustomOrientationEventListener(Context context) {
         super(context);
-        this.context = context;
     }
 
     @Override
     public void onOrientationChanged(int orientation) {
 
-        if (android.provider.Settings.System.getInt(context.getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, 0) == 0) // 0 = Auto Rotate Disabled
-            return;
         int currentOrientation = OrientationEventListener.ORIENTATION_UNKNOWN;
         int ROTATION_O = 1;
         int ROTATION_90 = 2;
