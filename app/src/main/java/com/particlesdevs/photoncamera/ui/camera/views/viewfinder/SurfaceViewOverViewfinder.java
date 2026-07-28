@@ -59,11 +59,45 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        // PreferenceKeys is uninitialized in the layout editor, skip overlay drawing there.
-        if (isInEditMode()) return;
-        drawGrid(canvas);
-        drawRoundEdges(canvas);
+        // We use drawOnCanvas via refresh() instead of onDraw
+        // to avoid double rendering on the surface.
+    }
+
+    private void drawHistogram(Canvas canvas) {
+        if (!PreferenceKeys.isShowHistogramOn() || histogramData == null) return;
+
+        final int histWidth = 256;
+        final int histHeight = 100;
+        final int margin = (Math.abs(rotationDegrees) == 90) ? 80 : 20;
+
+        // Fixed physical position: top-left of the screen
+        float left = margin;
+        float top = margin;
+
+        canvas.save();
+        // Rotate in place around the histogram's center
+        canvas.rotate(rotationDegrees, left + histWidth / 2f, top + histHeight / 2f);
+
+        canvas.drawRect(left, top, left + histWidth, top + histHeight, histogramBackgroundPaint);
+
+        float maxVal = 0;
+        // Ignore the very first and last bins as they often have spikes (pure black/white)
+        for (int i = 1; i < histogramData.length - 1; i++) {
+            if (histogramData[i] > maxVal) maxVal = histogramData[i];
+        }
+
+        if (maxVal > 0) {
+            Path histPath = new Path();
+            histPath.moveTo(left, top + histHeight);
+            for (int i = 0; i < histogramData.length; i++) {
+                float barHeight = Math.min(histHeight, (histogramData[i] / maxVal) * histHeight);
+                histPath.lineTo(left + i, top + histHeight - barHeight);
+            }
+            histPath.lineTo(left + histWidth, top + histHeight);
+            histPath.close();
+            canvas.drawPath(histPath, histogramPaint);
+        }
+        canvas.restore();
     }
 
     private void drawGrid(Canvas canvas) {
