@@ -12,16 +12,24 @@ public class ManualParamModel extends Observable {
     public static final double EV_AUTO = 0;
     public static final double ISO_AUTO = 0;
     public static final double FOCUS_AUTO = -1.0d;
+    public static final double WB_AUTO = -1.0d;
+    public static final double WB_DAYLIGHT = -2.0d;
+    public static final double WB_CLOUDY = -3.0d;
+    public static final double WB_TUNGSTEN = -4.0d;
+    public static final double WB_FLUORESCENT = -5.0d;
+
     public static final String ID_FOCUS = "focus";
     public static final String ID_EV = "ev";
     public static final String ID_SHUTTER = "shutter";
     public static final String ID_ISO = "iso";
+    public static final String ID_WB = "wb";
 
     public static final String PANEL_INVISIBILITY = "panel_invisibility";
     private double currentFocusValue;
     private double currentEvValue;
     private double currentExposureValue;
     private double currentISOValue;
+    private double currentWbValue;
 
     public ManualParamModel() {
     }
@@ -62,11 +70,21 @@ public class ManualParamModel extends Observable {
         notifyObservers(ID_ISO);
     }
 
+    public double getCurrentWbValue() {
+        return currentWbValue;
+    }
+
+    public void setCurrentWbValue(double currentWbValue) {
+        this.currentWbValue = currentWbValue;
+        notifyObservers(ID_WB);
+    }
+
     public boolean isManualMode() {
         return !(getCurrentExposureValue() == EXPOSURE_AUTO
                 && getCurrentFocusValue() == FOCUS_AUTO
                 && getCurrentISOValue() == ISO_AUTO
-                && getCurrentEvValue() == EV_AUTO);
+                && getCurrentEvValue() == EV_AUTO
+                && getCurrentWbValue() == WB_AUTO);
     }
 
     public void reset() {
@@ -74,6 +92,7 @@ public class ManualParamModel extends Observable {
         currentEvValue = EV_AUTO;
         currentExposureValue = EXPOSURE_AUTO;
         currentISOValue = ISO_AUTO;
+        currentWbValue = WB_AUTO;
         notifyObservers(PANEL_INVISIBILITY);
     }
 
