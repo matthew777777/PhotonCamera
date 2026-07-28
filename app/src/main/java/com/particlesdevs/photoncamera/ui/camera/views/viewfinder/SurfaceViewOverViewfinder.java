@@ -66,53 +66,31 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
     private void drawHistogram(Canvas canvas) {
         if (!PreferenceKeys.isShowHistogramOn() || histogramData == null) return;
 
-        int w = canvas.getWidth();
-        int h = canvas.getHeight();
+        final int histWidth = 256;
+        final int histHeight = 100;
+        final int margin = (Math.abs(rotationDegrees) == 90) ? 80 : 20;
 
-        int histWidth = 256;
-        int histHeight = 100;
-        int margin = 20;
-
-        float left, top;
-
-        // Determine position based on rotation to keep it at the "visual" top-left
-        switch (rotationDegrees) {
-            case -90: // Landscape Left (Home button left)
-                left = w - histWidth - margin;
-                top = margin;
-                break;
-            case 90: // Landscape Right (Home button right)
-                left = margin;
-                top = h - histHeight - margin;
-                break;
-            case 180: // Reverse Portrait
-                left = w - histWidth - margin;
-                top = h - histHeight - margin;
-                break;
-            case 0:
-            default: // Portrait
-                left = margin;
-                top = margin;
-                break;
-        }
+        // Fixed physical position: top-left of the screen
+        float left = margin;
+        float top = margin;
 
         canvas.save();
-        // Use positive rotationDegrees to match visual orientation
+        // Rotate in place around the histogram's center
         canvas.rotate(rotationDegrees, left + histWidth / 2f, top + histHeight / 2f);
 
         canvas.drawRect(left, top, left + histWidth, top + histHeight, histogramBackgroundPaint);
 
-        float max = 0;
+        float maxVal = 0;
         // Ignore the very first and last bins as they often have spikes (pure black/white)
         for (int i = 1; i < histogramData.length - 1; i++) {
-            if (histogramData[i] > max) max = histogramData[i];
+            if (histogramData[i] > maxVal) maxVal = histogramData[i];
         }
 
-        if (max > 0) {
+        if (maxVal > 0) {
             Path histPath = new Path();
             histPath.moveTo(left, top + histHeight);
             for (int i = 0; i < histogramData.length; i++) {
-                float barHeight = Math.min(histHeight, (histogramData[i] / max) * histHeight);
+                float barHeight = Math.min(histHeight, (histogramData[i] / maxVal) * histHeight);
                 histPath.lineTo(left + i, top + histHeight - barHeight);
             }
             histPath.lineTo(left + histWidth, top + histHeight);

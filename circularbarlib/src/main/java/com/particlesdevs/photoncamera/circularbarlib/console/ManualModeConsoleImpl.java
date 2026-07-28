@@ -14,6 +14,7 @@ import com.particlesdevs.photoncamera.circularbarlib.control.models.FocusModel;
 import com.particlesdevs.photoncamera.circularbarlib.control.models.IsoModel;
 import com.particlesdevs.photoncamera.circularbarlib.control.models.ManualModel;
 import com.particlesdevs.photoncamera.circularbarlib.control.models.ShutterModel;
+import com.particlesdevs.photoncamera.circularbarlib.control.models.WbModel;
 import com.particlesdevs.photoncamera.circularbarlib.model.KnobModel;
 import com.particlesdevs.photoncamera.circularbarlib.model.ManualModeModel;
 import com.particlesdevs.photoncamera.circularbarlib.ui.ViewObserver;
@@ -38,7 +39,7 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
     private final ManualModeModel manualModeModel;
     private final KnobModel knobModel;
     private final ManualParamModel manualParamModel = new ManualParamModel();
-    private ManualModel<?> mfModel, isoModel, expoTimeModel, evModel, selectedModel;
+    private ManualModel<?> mfModel, isoModel, expoTimeModel, evModel, wbModel, selectedModel;
     private ViewObserver viewObserver;
 
     private ManualModeConsoleImpl() {
@@ -137,6 +138,7 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
                 manualModeModel::setIsoText, v);
         expoTimeModel = new ShutterModel(context, cameraCharacteristics, cameraProperties.expRange, manualParamModel,
                 manualModeModel::setExposureText, v);
+        wbModel = new WbModel(context, cameraCharacteristics, null, manualParamModel, manualModeModel::setWbText, v);
         knobModel.setKnobVisible(false);
         manualModeModel.setCheckedTextViewId(-1);
     }
@@ -169,6 +171,7 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
         manualModeModel.setEvTextClicked(v -> setListeners(v, evModel));
         manualModeModel.setExposureTextClicked(v -> setListeners(v, expoTimeModel));
         manualModeModel.setIsoTextClicked(v -> setListeners(v, isoModel));
+        manualModeModel.setWbTextClicked(v -> setListeners(v, wbModel));
     }
 
     private void setListeners(View view, ManualModel<?> model) {
@@ -191,6 +194,8 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
             expoTimeModel.setAutoTxt();
         if (isoModel != null)
             isoModel.setAutoTxt();
+        if(wbModel != null)
+            wbModel.setAutoTxt();
     }
 
     @Override
@@ -206,6 +211,8 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
             isoModel.resetModel();
         if (evModel != null)
             evModel.resetModel();
+        if(wbModel != null)
+            wbModel.resetModel();
         manualModeModel.setCheckedTextViewId(-1);
     }
 
