@@ -54,11 +54,9 @@ public class RawNINDProcessor {
                     Log.w(TAG, "RawNIND: No hardware acceleration available, using CPU");
                 }
             }
-            
-            options.setInterOpNumThreads(4);
+options.setInterOpNumThreads(4);
             options.setIntraOpNumThreads(4);
             options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-
             byte[] modelBytes = loadModel(context);
             if (modelBytes != null) {
                 session = env.createSession(modelBytes, options);
@@ -99,7 +97,7 @@ public class RawNINDProcessor {
 
             // USE DIRECT BUFFERS to avoid JNI copy overhead and allow additive weight blending
             FloatBuffer flattenedOutput = ByteBuffer.allocateDirect(width * height * 4 * 4)
-                    .order(ByteOrder.nativeOrder())
+.order(ByteOrder.nativeOrder())
                     .asFloatBuffer();
 
             FloatBuffer weightSum = ByteBuffer.allocateDirect(width * height * 4)
@@ -128,7 +126,7 @@ public class RawNINDProcessor {
                         for (int y = 0; y < TILE_SIZE; y++) {
                             System.arraycopy(
                                     inputData, c * width * height + (startY + y) * width + startX,
-                                    tileInput, c * TILE_SIZE * TILE_SIZE + y * TILE_SIZE,
+                                tileInput, c * TILE_SIZE * TILE_SIZE + y * TILE_SIZE,
                                     TILE_SIZE
                             );
                         }
@@ -142,12 +140,14 @@ public class RawNINDProcessor {
 
                     long[] shape = {1, 4, TILE_SIZE, TILE_SIZE};
                     try (OnnxTensor inputTensor = OnnxTensor.createTensor(env, FloatBuffer.wrap(tileInput), shape);
-                         OrtSession.Result result = session.run(Collections.singletonMap(inputName, inputTensor))) {
+
+            OrtSession.Result result = session.run(Collections.singletonMap(inputName, inputTensor))) {
 
                         OnnxTensor outputTensor = (OnnxTensor) result.get(outputName).orElse(null);
                         if (outputTensor == null) continue;
 
-                        outputTensor.getFloatBuffer().get(tileOutputBuf);
+
+             outputTensor.getFloatBuffer().get(tileOutputBuf);
 
                         if (!gainMeasured) {
                             float sum = 0;
@@ -172,8 +172,7 @@ public class RawNINDProcessor {
                     }
                 }
             }
-
-            Log.d(TAG, "RawNIND: Total inference time: " + (System.currentTimeMillis() - startTimeTotal) + "ms");
+Log.d(TAG, "RawNIND: Total inference time: " + (System.currentTimeMillis() - startTimeTotal) + "ms");
 
             float brightnessCorrection = (avgOut > 0.0001f) ? (avgIn / avgOut) : 1.0f;
 
