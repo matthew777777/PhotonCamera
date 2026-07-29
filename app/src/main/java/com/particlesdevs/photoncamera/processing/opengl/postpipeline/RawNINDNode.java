@@ -55,6 +55,15 @@ public class RawNINDNode extends Node {
         float whiteLevel = (float) basePipeline.mParameters.whiteLevel;
         float[] blackLevels = basePipeline.mParameters.blackLevel;
 
+        // Map physical Bayer cell (2x2) to AI channels directly
+        // Channel 0: (0,0), Channel 1: (0,1), Channel 2: (1,0), Channel 3: (1,1)
+        // This matches the order of Android's blackLevel pattern
+        int planeSize = inputH * inputW;
+        for (int y = 0; y < inputH; y++) {
+            for (int x = 0; x < inputW; x++) {
+                int baseIdx = (y * 2 * rawSize.x + x * 2);
+                int flatIdx = y * inputW + x;
+
         NativeEngine.nativePrepareRawNINDInput(
                 stackBuffer,
                 inputData,
@@ -77,15 +86,18 @@ public class RawNINDNode extends Node {
                     processor.lastAccumulatedOutput,
                     processor.lastWeightSum,
                     inputW,
+
                     inputH,
                     rawSize.x,
                     whiteLevel,
                     blackLevels,
+
                     strength,
                     brightnessCorrection
             );
             Log.d(TAG, "RawNIND seamless re-mosaicing completed via JNI with correction: " + brightnessCorrection);
-        } else {
+
+                    } else {
             Log.d(TAG, "RawNIND re-mosaicing FAILED via JNI");
         }
     }
