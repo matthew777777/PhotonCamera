@@ -122,14 +122,20 @@ public class ParamController implements Observer {
         }
         if (wbValue == ManualParamModel.WB_AUTO) {
             builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
+        } else if (wbValue == ManualParamModel.WB_INCANDESCENT) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT);
+        } else if (wbValue == ManualParamModel.WB_FLUORESCENT) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT);
+        } else if (wbValue == ManualParamModel.WB_WARM_FLUORESCENT) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_WARM_FLUORESCENT);
         } else if (wbValue == ManualParamModel.WB_DAYLIGHT) {
             builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT);
         } else if (wbValue == ManualParamModel.WB_CLOUDY) {
             builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT);
-        } else if (wbValue == ManualParamModel.WB_TUNGSTEN) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT);
-        } else if (wbValue == ManualParamModel.WB_FLUORESCENT) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT);
+        } else if (wbValue == ManualParamModel.WB_TWILIGHT) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_TWILIGHT);
+        } else if (wbValue == ManualParamModel.WB_SHADE) {
+            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_SHADE);
         }
         captureController.rebuildPreviewBuilder();
     }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <integer name="manual_awb_knob_view_angle_half">100</integer>
-    <integer name="manual_awb_knob_view_auto_angle">20</integer>
+    <integer name="manual_awb_knob_view_angle_half">250</integer>
+    <integer name="manual_awb_knob_view_auto_angle">40</integer>
     <integer name="manual_color_temperature_knob_view_angle_half">170</integer>
     <integer name="manual_color_temperature_knob_view_auto_angle">40</integer>
     <integer name="manual_exposure_knob_view_angle_half">250</integer>

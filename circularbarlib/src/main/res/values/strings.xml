@@ -4,8 +4,11 @@
     <string name="manual_mode_auto" translatable="false">Auto</string>
     <string name="manual_mode_manual" translatable="false">Manual</string>
     <string name="manual_mode_fixed" translatable="false">Fixed</string>
+    <string name="wb_incandescent" translatable="false">Incandescent</string>
+    <string name="wb_fluorescent" translatable="false">Fluorescent</string>
+    <string name="wb_warm_fluorescent" translatable="false">Warm Fluorescent</string>
     <string name="wb_daylight" translatable="false">Daylight</string>
     <string name="wb_cloudy" translatable="false">Cloudy</string>
-    <string name="wb_tungsten" translatable="false">Tungsten</string>
-    <string name="wb_fluorescent" translatable="false">Fluorescent</string>
+    <string name="wb_twilight" translatable="false">Twilight</string>
+    <string name="wb_shade" translatable="false">Shade</string>
 </resources>
