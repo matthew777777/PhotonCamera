@@ -287,7 +287,7 @@
                 android:title="@string/rawnind_strength"
                 android:summary=""
                 android:defaultValue="@string/pref_rawnind_strength_default"
-                app:maxValue="2.0"
+                app:maxValue="1.0"
                 app:minValue="0.0"
                 app:isFloat="true"
                 app:stepPerUnit="10"
