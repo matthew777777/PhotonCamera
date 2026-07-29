@@ -13,10 +13,13 @@ public class ManualParamModel extends Observable {
     public static final double ISO_AUTO = 0;
     public static final double FOCUS_AUTO = -1.0d;
     public static final double WB_AUTO = -1.0d;
-    public static final double WB_DAYLIGHT = -2.0d;
-    public static final double WB_CLOUDY = -3.0d;
-    public static final double WB_TUNGSTEN = -4.0d;
-    public static final double WB_FLUORESCENT = -5.0d;
+    public static final double WB_INCANDESCENT = -2.0d;
+    public static final double WB_FLUORESCENT = -3.0d;
+    public static final double WB_WARM_FLUORESCENT = -4.0d;
+    public static final double WB_DAYLIGHT = -5.0d;
+    public static final double WB_CLOUDY = -6.0d;
+    public static final double WB_TWILIGHT = -7.0d;
+    public static final double WB_SHADE = -8.0d;
 
     public static final String ID_FOCUS = "focus";
     public static final String ID_EV = "ev";

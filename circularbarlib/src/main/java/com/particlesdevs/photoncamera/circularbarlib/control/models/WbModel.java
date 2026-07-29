@@ -31,10 +31,13 @@ public class WbModel extends ManualModel<Double> {
         currentInfo = auto;
 
         // Profiles
+        addProfileItem(ManualParamModel.WB_INCANDESCENT, context.getString(R.string.wb_incandescent));
+        addProfileItem(ManualParamModel.WB_FLUORESCENT, context.getString(R.string.wb_fluorescent));
+        addProfileItem(ManualParamModel.WB_WARM_FLUORESCENT, context.getString(R.string.wb_warm_fluorescent));
         addProfileItem(ManualParamModel.WB_DAYLIGHT, context.getString(R.string.wb_daylight));
         addProfileItem(ManualParamModel.WB_CLOUDY, context.getString(R.string.wb_cloudy));
-        addProfileItem(ManualParamModel.WB_TUNGSTEN, context.getString(R.string.wb_tungsten));
-        addProfileItem(ManualParamModel.WB_FLUORESCENT, context.getString(R.string.wb_fluorescent));
+        addProfileItem(ManualParamModel.WB_TWILIGHT, context.getString(R.string.wb_twilight));
+        addProfileItem(ManualParamModel.WB_SHADE, context.getString(R.string.wb_shade));
 
         int angle = context.getResources().getInteger(R.integer.manual_awb_knob_view_angle_half);
         knobInfo = new KnobInfo(0, angle, 0, getKnobInfoList().size() - 1, context.getResources().getInteger(R.integer.manual_awb_knob_view_auto_angle));
