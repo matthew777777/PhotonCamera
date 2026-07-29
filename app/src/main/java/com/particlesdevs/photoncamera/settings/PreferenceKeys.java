@@ -229,6 +229,14 @@ public class PreferenceKeys {
         return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_HDRX_NR);
     }
 
+    public static boolean isRawNindOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_RAWNIND);
+    }
+
+    public static float getRawNindStrength() {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_RAWNIND_STRENGTH);
+    }
+
     public static int isSaveRaw() {
         return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_SAVE_RAW);
     }
@@ -490,6 +498,8 @@ public class PreferenceKeys {
         KEY_BINNING(R.string.pref_binning_key),
         KEY_ENHANCED_PROCESSING(R.string.pref_enhanced_processing_key),
         KEY_HDRX_NR(R.string.pref_hdrx_nr_key),
+        KEY_RAWNIND(R.string.pref_rawnind_key),
+        KEY_RAWNIND_STRENGTH(R.string.pref_rawnind_strength_key),
         KEY_SHOW_ROUND_EDGE(R.string.pref_show_roundedge_key),
         KEY_SHOW_HISTOGRAM(R.string.pref_show_histogram_key),
         KEY_SHOW_GRID(R.string.pref_show_grid_key),
