@@ -76,7 +76,11 @@ public class PhotonCamera extends Application {
                 return (PhotonCamera) application;
             }
         }
-        return null;
+        return sPhotonCamera;
+    }
+
+    public static Context getContext() {
+        return sPhotonCamera;
     }
 
     public static AudioManager getAudioManager() {
