@@ -55,6 +55,8 @@ public class RawNINDNode extends Node {
         float[] blackLevels = basePipeline.mParameters.blackLevel;
         
         // Map physical Bayer cell (2x2) to AI channels directly
+        // Channel 0: (0,0), Channel 1: (0,1), Channel 2: (1,0), Channel 3: (1,1)
+        // This matches the order of Android's blackLevel pattern
         int planeSize = inputH * inputW;
         for (int y = 0; y < inputH; y++) {
             for (int x = 0; x < inputW; x++) {
@@ -69,63 +71,24 @@ public class RawNINDNode extends Node {
         }
 
         // 2. Run Inference
-        float[] outputData1 = processor.runInference(inputData, inputW, inputH);
+        float[] outputData = processor.runInference(inputData, inputW, inputH);
         
-        if (outputData1 != null) {
-            float[] finalOutput;
-            float blendWeight;
-            
-            if (strength > 1.0f) {
-                // Pass 2: Run inference on the result of Pass 1
-                finalOutput = processor.runInference(outputData1, inputW, inputH);
-                if (finalOutput == null) {
-                    finalOutput = outputData1;
-                    blendWeight = 1.0f;
-                } else {
-                    blendWeight = strength - 1.0f;
-                }
-            } else {
-                finalOutput = outputData1;
-                blendWeight = strength;
-            }
-
+        if (outputData != null) {
             // 3. Blend and Re-mosaic back into shortBuffer
             for (int y = 0; y < inputH; y++) {
                 for (int x = 0; x < inputW; x++) {
                     int baseIdx = (y * 2 * rawSize.x + x * 2);
                     int flatIdx = y * inputW + x;
                     
-                    float d0, d1, d2, d3;
-                    float o0, o1, o2, o3;
-
-                    if (strength > 1.0f) {
-                        // Blend between 1x and 2x
-                        d0 = finalOutput[flatIdx] * whiteLevel + blackLevels[0];
-                        d1 = finalOutput[planeSize + flatIdx] * whiteLevel + blackLevels[1];
-                        d2 = finalOutput[2 * planeSize + flatIdx] * whiteLevel + blackLevels[2];
-                        d3 = finalOutput[3 * planeSize + flatIdx] * whiteLevel + blackLevels[3];
-                        
-                        o0 = outputData1[flatIdx] * whiteLevel + blackLevels[0];
-                        o1 = outputData1[planeSize + flatIdx] * whiteLevel + blackLevels[1];
-                        o2 = outputData1[2 * planeSize + flatIdx] * whiteLevel + blackLevels[2];
-                        o3 = outputData1[3 * planeSize + flatIdx] * whiteLevel + blackLevels[3];
-                    } else {
-                        // Blend between Original and 1x
-                        d0 = outputData1[flatIdx] * whiteLevel + blackLevels[0];
-                        d1 = outputData1[planeSize + flatIdx] * whiteLevel + blackLevels[1];
-                        d2 = outputData1[2 * planeSize + flatIdx] * whiteLevel + blackLevels[2];
-                        d3 = outputData1[3 * planeSize + flatIdx] * whiteLevel + blackLevels[3];
-                        
-                        o0 = (shortBuffer.get(baseIdx) & 0xFFFF);
-                        o1 = (shortBuffer.get(baseIdx + 1) & 0xFFFF);
-                        o2 = (shortBuffer.get(baseIdx + rawSize.x) & 0xFFFF);
-                        o3 = (shortBuffer.get(baseIdx + rawSize.x + 1) & 0xFFFF);
-                    }
+                    float d0 = outputData[flatIdx] * whiteLevel + blackLevels[0];
+                    float d1 = outputData[planeSize + flatIdx] * whiteLevel + blackLevels[1];
+                    float d2 = outputData[2 * planeSize + flatIdx] * whiteLevel + blackLevels[2];
+                    float d3 = outputData[3 * planeSize + flatIdx] * whiteLevel + blackLevels[3];
                     
-                    short p0 = (short) Math.max(0, Math.min(65535, (1.0f - blendWeight) * o0 + blendWeight * d0));
-                    short p1 = (short) Math.max(0, Math.min(65535, (1.0f - blendWeight) * o1 + blendWeight * d1));
-                    short p2 = (short) Math.max(0, Math.min(65535, (1.0f - blendWeight) * o2 + blendWeight * d2));
-                    short p3 = (short) Math.max(0, Math.min(65535, (1.0f - blendWeight) * o3 + blendWeight * d3));
+                    short p0 = (short) Math.max(0, Math.min(65535, (1.0f - strength) * (shortBuffer.get(baseIdx) & 0xFFFF) + strength * d0));
+                    short p1 = (short) Math.max(0, Math.min(65535, (1.0f - strength) * (shortBuffer.get(baseIdx + 1) & 0xFFFF) + strength * d1));
+                    short p2 = (short) Math.max(0, Math.min(65535, (1.0f - strength) * (shortBuffer.get(baseIdx + rawSize.x) & 0xFFFF) + strength * d2));
+                    short p3 = (short) Math.max(0, Math.min(65535, (1.0f - strength) * (shortBuffer.get(baseIdx + rawSize.x + 1) & 0xFFFF) + strength * d3));
                     
                     shortBuffer.put(baseIdx, p0);
                     shortBuffer.put(baseIdx + 1, p1);
@@ -133,7 +96,7 @@ public class RawNINDNode extends Node {
                     shortBuffer.put(baseIdx + rawSize.x + 1, p3);
                 }
             }
-            Log.d(TAG, "RawNIND re-mosaicing completed (" + (strength > 1.0f ? "2nd pass" : "1st pass") + ")");
+            Log.d(TAG, "RawNIND re-mosaicing completed");
         }
     }
     
