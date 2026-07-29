@@ -16,7 +16,9 @@ import com.particlesdevs.photoncamera.processing.opengl.GLInterface;
 import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 import com.particlesdevs.photoncamera.processing.parameters.ResolutionSolution;
 import com.particlesdevs.photoncamera.processing.render.NoiseModeler;
+import com.particlesdevs.photoncamera.api.Settings;
 import com.particlesdevs.photoncamera.processing.render.Parameters;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.Allocator;
 
@@ -137,6 +139,9 @@ public class PostPipeline extends GLBasePipeline {
 
     private void BuildDefaultPipeline() {
         boolean nightMode = PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT;
+        if (PreferenceKeys.isRawNindOn()) {
+            add(new RawNINDNode());
+        }
         add(new Bayer2Float());
         add(new ExposureFusionBayer2());
         switch (PhotonCamera.getSettings().cfaPattern) {
@@ -149,29 +154,8 @@ public class PostPipeline extends GLBasePipeline {
                 break;
             }
             default: {
-                //if (nightMode)
-                //    add(new HotPixelFilter());
-                //if(PhotonCamera.getSettings().hdrxNR) {
-                //add(new ESD3DBayerCS());
-                //}
-
-                if (PhotonCamera.getSettings().hdrxNR) {
-
-                    //add(new BayerFilter());
-                    /*if (nightMode) {
-                        add(new BayerConcat(true));
-                        add(new BayerFilter());
-                        add(new BayerConcat(false));
-                    }*/
-                    //add(new BayerMoire());
-
-                }
-
-                if(mSettings.alignAlgorithm != 2) {
-                    //add(new HotPixelFilter());
-                    // demosaicingMethod is automatically injected from settings
-                    //noinspection SwitchStatementWithTooFewBranches
-                    switch (demosaicingMethod){
+                if (mSettings.alignAlgorithm != 2) {
+                    switch (demosaicingMethod) {
                         case 0:
                             add(new Demosaic());
                             break;
@@ -180,10 +164,9 @@ public class PostPipeline extends GLBasePipeline {
                             break;
                     }
                 }
-                if (PhotonCamera.getSettings().hdrxNR) {
+                if (PhotonCamera.getSettings().hdrxNR && !PreferenceKeys.isRawNindOn()) {
                     add(new ESD3D2(true));
                 }
-                //add(new ImpulsePixelFilter());
                 break;
             }
         }

@@ -35,6 +35,11 @@
     <string name="general">General</string>
     <string name="telegram">Telegram Group ↗</string>
     <string name="hdrxNR">Noise Reduction</string>
+    <string name="rawnind" translatable="false">RawNIND (AI Denoise)</string>
+    <string name="rawnind_strength" translatable="false">RawNIND Strength</string>
+    <string name="pref_rawnind_key" translatable="false">pref_rawnind_key</string>
+    <string name="pref_rawnind_strength_key" translatable="false">pref_rawnind_strength_key</string>
+    <string name="pref_rawnind_strength_default" translatable="false">1.0</string>
     <string name="turn_on_watermark">Watermark</string>
     <string name="sure_delete">Are you sure to delete this image?</string>
     <string name="sure_delete_multiple">Are you sure to delete %1$s image(s)? %2$s will be cleared.</string>

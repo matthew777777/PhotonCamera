@@ -134,6 +134,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     implementation "com.anggrayudi:storage:2.2.0"
     implementation 'me.zhanghai.android.libarchive:library:1.1.6'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:latest.release'
     //Leak Canary
     //Use this lib to detect memory leaks when debugging
     //debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.6'
