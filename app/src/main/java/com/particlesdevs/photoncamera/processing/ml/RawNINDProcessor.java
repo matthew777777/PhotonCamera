@@ -15,7 +15,7 @@ import java.util.Collections;
 public class RawNINDProcessor {
     private static final String TAG = "RawNINDProcessor";
     private static final String MODEL_NAME = "rawnind_utnet2.onnx";
-    
+
     private OrtEnvironment env;
     private OrtSession session;
 
@@ -29,7 +29,7 @@ public class RawNINDProcessor {
             } catch (OrtException e) {
                 Log.w(TAG, "NNAPI not supported on this device, falling back to CPU", e);
             }
-            
+
             byte[] modelBytes = loadModel(context);
             if (modelBytes != null) {
                 session = env.createSession(modelBytes, options);
@@ -62,7 +62,7 @@ public class RawNINDProcessor {
             // UtNet2 requires H, W to be multiples of 16
             int paddedW = (width + 15) / 16 * 16;
             int paddedH = (height + 15) / 16 * 16;
-            
+
             float[] paddedInput;
             if (paddedW == width && paddedH == height) {
                 paddedInput = inputData;
@@ -70,8 +70,8 @@ public class RawNINDProcessor {
                 paddedInput = new float[paddedW * paddedH * 4];
                 for (int c = 0; c < 4; c++) {
                     for (int y = 0; y < height; y++) {
-                        System.arraycopy(inputData, c * width * height + y * width, 
-                                       paddedInput, c * paddedW * paddedH + y * paddedW, width);
+                        System.arraycopy(inputData, c * width * height + y * width,
+                                paddedInput, c * paddedW * paddedH + y * paddedW, width);
                     }
                 }
             }
@@ -79,12 +79,12 @@ public class RawNINDProcessor {
             long[] shape = {1, 4, paddedH, paddedW};
             FloatBuffer inputBuffer = FloatBuffer.wrap(paddedInput);
             OnnxTensor inputTensor = OnnxTensor.createTensor(env, inputBuffer, shape);
-            
+
             OrtSession.Result result = session.run(Collections.singletonMap("input", inputTensor));
             OnnxTensor outputTensor = (OnnxTensor) result.get(0);
             long[] outShape = outputTensor.getInfo().getShape();
             int outChannels = (int) outShape[1];
-            
+
             float[] flattened = new float[width * height * 4];
             float[][][][] outputData = (float[][][][]) outputTensor.getValue();
 
@@ -98,7 +98,7 @@ public class RawNINDProcessor {
                     }
                 }
             }
-            
+
             return flattened;
         } catch (OrtException e) {
             Log.e(TAG, "Error during inference", e);
