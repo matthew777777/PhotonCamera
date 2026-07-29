@@ -28,7 +28,7 @@ public class RawNINDProcessor {
     private OrtSession session;
     private String inputName;
     private String outputName;
-    
+
     public FloatBuffer lastAccumulatedOutput;
     public FloatBuffer lastWeightSum;
 
@@ -36,10 +36,10 @@ public class RawNINDProcessor {
         try {
             env = OrtEnvironment.getEnvironment();
             OrtSession.SessionOptions options = new OrtSession.SessionOptions();
-            
+
             options.setSessionLogLevel(OrtLoggingLevel.ORT_LOGGING_LEVEL_VERBOSE);
             options.setSessionLogVerbosityLevel(0);
-            
+
             try {
                 // Try WEBGPU first
                 Map<String, String> webgpuOptions = new HashMap<>();
@@ -48,7 +48,7 @@ public class RawNINDProcessor {
             } catch (OrtException e) {
                 Log.d(TAG, "RawNIND: WebGPU not available, trying NNAPI");
                 try {
-                    options.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16)); 
+                    options.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16));
                     Log.d(TAG, "RawNIND: NNAPI hardware acceleration requested");
                 } catch (OrtException e2) {
                     Log.w(TAG, "RawNIND: No hardware acceleration available, using CPU");
@@ -64,7 +64,7 @@ public class RawNINDProcessor {
                 session = env.createSession(modelBytes, options);
                 inputName = session.getInputNames().iterator().next();
                 outputName = session.getOutputNames().iterator().next();
-                
+
                 Log.d(TAG, "RawNIND: ONNX Session created. Input: " + inputName + ", Output: " + outputName);
             }
         } catch (Throwable e) {
@@ -93,15 +93,15 @@ public class RawNINDProcessor {
         try {
             long startTimeTotal = System.currentTimeMillis();
             final int TILE_SIZE = 512;
-            final int TILE_SIZE_OUT = 1024; 
-            final int OVERLAP = 32; 
+            final int TILE_SIZE_OUT = 1024;
+            final int OVERLAP = 32;
             final int STRIDE = TILE_SIZE - OVERLAP;
 
             // USE DIRECT BUFFERS to avoid JNI copy overhead and allow additive weight blending
             FloatBuffer flattenedOutput = ByteBuffer.allocateDirect(width * height * 4 * 4)
                     .order(ByteOrder.nativeOrder())
                     .asFloatBuffer();
-            
+
             FloatBuffer weightSum = ByteBuffer.allocateDirect(width * height * 4)
                     .order(ByteOrder.nativeOrder())
                     .asFloatBuffer();
@@ -112,8 +112,8 @@ public class RawNINDProcessor {
             Log.d(TAG, "RawNIND: Processing " + (tilesX * tilesY) + " seamless tiles via WeightSum");
 
             float[] tileInput = new float[TILE_SIZE * TILE_SIZE * 4];
-            float[] tileOutputBuf = new float[TILE_SIZE_OUT * TILE_SIZE_OUT * 3]; 
-            
+            float[] tileOutputBuf = new float[TILE_SIZE_OUT * TILE_SIZE_OUT * 3];
+
             float avgIn = 0, avgOut = 0;
             boolean gainMeasured = false;
 
@@ -133,7 +133,7 @@ public class RawNINDProcessor {
                             );
                         }
                     }
-                    
+
                     if (!gainMeasured) {
                         float sum = 0;
                         for (float v : tileInput) sum += Math.max(0, v);
@@ -148,7 +148,7 @@ public class RawNINDProcessor {
                         if (outputTensor == null) continue;
 
                         outputTensor.getFloatBuffer().get(tileOutputBuf);
-                        
+
                         if (!gainMeasured) {
                             float sum = 0;
                             for (float v : tileOutputBuf) sum += Math.max(0, v);
@@ -162,32 +162,32 @@ public class RawNINDProcessor {
                                 weightSum,
                                 startX,
                                 startY,
-                                TILE_SIZE, 
-                                TILE_SIZE, 
+                                TILE_SIZE,
+                                TILE_SIZE,
                                 width,
                                 height,
-                                TILE_SIZE_OUT, 
-                                3              
+                                TILE_SIZE_OUT,
+                                3
                         );
                     }
                 }
             }
 
             Log.d(TAG, "RawNIND: Total inference time: " + (System.currentTimeMillis() - startTimeTotal) + "ms");
-            
+
             float brightnessCorrection = (avgOut > 0.0001f) ? (avgIn / avgOut) : 1.0f;
-            
+
             // Return result with weights for final normalization in Node
             float[] finalArray = new float[width * height * 4 + 1];
             // Weight normalization will happen in JNI's applyRawNINDOutput
             // But we need to pass the weights to the Node's output array?
             // Actually, we pass the DirectBuffers to JNI in the next step.
             // Let's pass the Buffers as a special return type or store them in Processor.
-            
+
             // For now, let's keep the return as float[] for compatibility but wrap the buffers
             this.lastAccumulatedOutput = flattenedOutput;
             this.lastWeightSum = weightSum;
-            
+
             finalArray[finalArray.length - 1] = brightnessCorrection;
             return finalArray;
         } catch (Throwable e) {
