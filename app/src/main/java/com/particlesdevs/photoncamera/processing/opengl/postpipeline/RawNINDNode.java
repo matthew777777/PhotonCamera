@@ -48,9 +48,6 @@ public class RawNINDNode extends Node {
         }
 
         ByteBuffer stackBuffer = postPipeline.stackFrame;
-        stackBuffer.rewind();
-        ShortBuffer shortBuffer = stackBuffer.asShortBuffer();
-
         float[] inputData = new float[inputH * inputW * 4];
         float whiteLevel = (float) basePipeline.mParameters.whiteLevel;
         float[] blackLevels = basePipeline.mParameters.blackLevel;
