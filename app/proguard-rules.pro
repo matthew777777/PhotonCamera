@@ -56,3 +56,9 @@
 
 # Missing class rules
 -dontwarn org.apache.commons.lang.functor.Predicate
+
+# ONNX Runtime rules
+# Prevent R8 from stripping or obfuscating ONNX Runtime Java classes
+# which are accessed by native code.
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**

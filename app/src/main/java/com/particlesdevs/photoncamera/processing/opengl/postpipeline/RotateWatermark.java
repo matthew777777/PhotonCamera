@@ -46,9 +46,22 @@ public class RotateWatermark extends Node {
 
         glProg.useAssetProgram("addwatermark_rotate");
         try {
+            File waterAiOnExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark_ai_on.png");
+            File waterAiOffExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark_ai_off.png");
             File waterExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark.png");
-            if (waterExternal.exists()) watermark = new GLImage(waterExternal);
-            else watermark = new GLImage(PhotonCamera.getAssetLoader().getInputStream("watermark/photoncamera_watermark.png"));
+            if (waterAiOnExternal.exists() && waterAiOffExternal.exists()) {
+                if (PreferenceKeys.isRawNindOn()) {
+                    watermark = new GLImage(waterAiOnExternal);
+                } else {
+                    watermark = new GLImage(waterAiOffExternal);
+                }
+            }
+            else if (waterExternal.exists()) {
+                watermark = new GLImage(waterExternal);
+            }
+            else {
+                watermark = new GLImage(PhotonCamera.getAssetLoader().getInputStream("watermark/photoncamera_watermark.png"));
+            }
             noise = new GLImage(PhotonCamera.getAssetLoader().getInputStream("noise.png"));
             glProg.setTexture("Watermark", new GLTexture(watermark,GL_LINEAR,GL_CLAMP_TO_EDGE,0));
             glProg.setTexture("Noise", new GLTexture(noise,GL_LINEAR,GL_REPEAT,0));
