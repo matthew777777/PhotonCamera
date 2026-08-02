@@ -40,6 +40,8 @@ import androidx.annotation.Nullable;
 import com.particlesdevs.photoncamera.R;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.control.Vibration;
+import com.particlesdevs.photoncamera.processing.ProcessingLog;
+import com.particlesdevs.photoncamera.ui.ProcessingLogActivity;
 import com.particlesdevs.photoncamera.ui.camera.model.SettingsBarButtonModel;
 import com.particlesdevs.photoncamera.ui.camera.model.SettingsBarEntryModel;
 import com.particlesdevs.photoncamera.ui.settings.SettingsActivity;
@@ -77,8 +79,23 @@ public class SettingsBarLayout extends RelativeLayout implements SettingsBarList
         settingsButton.setPadding(dp(10), dp(5), dp(10), dp(5));
         settingsButton.setOnClickListener(v -> context.startActivity(new Intent(context, SettingsActivity.class)));
         LayoutParams buttonParam = new LayoutParams(dp(35), dp(35));
-        buttonParam.setMargins(dp(10), dp(2.5f), dp(20), dp(2.5f));
+        buttonParam.setMargins(dp(5), dp(2.5f), dp(5), dp(2.5f));
         settingsButtonContainer.addView(settingsButton, buttonParam);
+
+        ImageButton logButton = new ImageButton(context);
+        logButton.setImageResource(R.drawable.ic_developer);
+        logButton.setBackgroundResource(getResolvedAttr(context, android.R.attr.selectableItemBackgroundBorderless));
+        logButton.setPadding(dp(5), dp(5), dp(5), dp(5));
+        logButton.setOnClickListener(v -> {
+            if (PhotonCamera.getLatestProcessingLog() != null) {
+                context.startActivity(new Intent(context, ProcessingLogActivity.class));
+            } else {
+                PhotonCamera.showToast("No log data available. Capture a photo first.");
+            }
+        });
+        LayoutParams logParam = new LayoutParams(dp(35), dp(35));
+        logParam.setMargins(dp(5), dp(2.5f), dp(20), dp(2.5f));
+        settingsButtonContainer.addView(logButton, logParam);
 
         RelativeLayout.LayoutParams scrollViewParam = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         scrollViewParam.addRule(ABOVE, R.id.settings_bar_settings_button_container);

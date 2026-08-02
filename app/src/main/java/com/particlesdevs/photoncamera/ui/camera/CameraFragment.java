@@ -78,6 +78,7 @@ import com.particlesdevs.photoncamera.databinding.CameraFragmentBinding;
 import com.particlesdevs.photoncamera.gallery.ui.GalleryActivity;
 import com.particlesdevs.photoncamera.pro.SupportedDevice;
 import com.particlesdevs.photoncamera.processing.ProcessingEventsListener;
+import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.processing.parameters.IsoExpoSelector;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.settings.SettingsManager;
@@ -156,7 +157,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     public float displayAspectRatio;
     private final AtomicBoolean histogramProcessing = new AtomicBoolean(false);
     private HorizonIndicatorView mHorizonIndicatorView;
-    private final AtomicBoolean histogramProcessing = new AtomicBoolean(false);
 
     public CameraFragment() {
         Log.v(TAG, "fragment created");

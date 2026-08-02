@@ -2,13 +2,17 @@ package com.particlesdevs.photoncamera.ui.camera.views.viewfinder;
 
 import android.content.Context;
 import android.graphics.*;
+import android.text.StaticLayout;
+import android.text.Layout;
 import android.text.TextPaint;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import com.particlesdevs.photoncamera.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
+import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 
 public class SurfaceViewOverViewfinder extends SurfaceView {
