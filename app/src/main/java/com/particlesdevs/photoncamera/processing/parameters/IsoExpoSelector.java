@@ -26,7 +26,7 @@ public class IsoExpoSelector {
     public static ArrayList<ExpoPair> fullpairs = new ArrayList<>();
     public static long lastSelectedExposure = 0;
 
-    // ---- Shutter-Priority / Dynamic Low-Light AE Curve ----
+    // ---- Shutter-Priority / Dynamic Low-Light AE Curve (HDR+ Enhanced style) ----
     // Instead of letting stock 3A pick a fast shutter + high ISO, we keep the SAME
     // total exposure the platform metered (exposure_time * iso is still a valid
     // brightness target) and re-split it: push shutter time up first - more real
@@ -76,6 +76,7 @@ public class IsoExpoSelector {
         double compensation = Math.pow(2.0,PhotonCamera.getSettings().exposureCompensation);
         pair.normalizeiso100();
         pair.ExpoCompensateLower(1.0/compensation);
+
         if (PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT)
         {
             mpy1 = 7000.0;
@@ -169,7 +170,7 @@ public class IsoExpoSelector {
                 // High bracketing (1x, 8x)
                 pair.layerMpy = 8.f;
             }
-
+            
             if (pair.layerMpy > 1.f) {
                 pair.curlayer = ExpoPair.exposureLayer.High;
                 if (pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy)) {
@@ -194,7 +195,7 @@ public class IsoExpoSelector {
         if (pair.exposure < ExposureIndex.sec / 90 && PhotonCamera.getSettings().eisPhoto) {
             //HDR = true;
         }
-
+        
         if(step != -1) {
             if (step == 0) pairs.clear();
             if (pairs.size() < patternSize) {
@@ -301,7 +302,7 @@ public class IsoExpoSelector {
                 // Steady hands (shakiness ~25) -> up to 4x factor.
                 // Shaky hands (shakiness ~400) -> down to 0.25x factor.
                 stabilityFactor = 100.0 / Math.max(shakiness, 25);
-
+                
                 // For Motion mode, we must be conservative to avoid subject blur.
                 if (PhotonCamera.getSettings().selectedMode == CameraMode.MOTION) {
                     stabilityFactor = Math.min(stabilityFactor, 1.2);
@@ -312,7 +313,7 @@ public class IsoExpoSelector {
         double combined = focalFactor * stabilityFactor;
         // Clamp total scaling to [0.2x, 2.5x] range to avoid extreme/impossible shutter speeds.
         double finalFactor = Math.max(0.2, Math.min(combined, 2.5));
-        Log.v(TAG, "Dynamic AE Factor: " + String.format(Locale.US, "%.2f", finalFactor) +
+        Log.v(TAG, "Dynamic AE Factor: " + String.format(Locale.US, "%.2f", finalFactor) + 
                 " (Focal=" + String.format(Locale.US, "%.2f", effectiveFocalLength) + "mm, " +
                 "Stability=" + (PhotonCamera.getGyro() != null ? PhotonCamera.getGyro().getFilteredShakiness() : "N/A") + ")");
         return finalFactor;
@@ -415,7 +416,7 @@ public class IsoExpoSelector {
         }
 
         /**
-         * Shutter-Priority / Dynamic Low-Light AE curve.
+         * Shutter-Priority / Dynamic Low-Light AE curve (HDR+ Enhanced style).
          *
          * Keeps the platform's own metered brightness target (exposure * iso stays
          * constant) but re-splits it between shutter time and ISO gain: ISO is tried
@@ -469,7 +470,7 @@ public class IsoExpoSelector {
             } else {
                 long cleanIso = snapToCleanIso(isoMinToFit);
                 double shutterAtCleanIso = totalExposureEnergy / cleanIso;
-
+                
                 // If snapping up to a "clean" hardware gain stage would drop our shutter time
                 // by more than 5% below the cap, prioritize the photon collection (shutter duration)
                 // and use the exact ISO required instead.
