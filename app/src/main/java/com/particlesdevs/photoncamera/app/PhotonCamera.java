@@ -26,6 +26,7 @@ import com.particlesdevs.photoncamera.control.Gravity;
 import com.particlesdevs.photoncamera.control.Gyro;
 import com.particlesdevs.photoncamera.control.Vibration;
 import com.particlesdevs.photoncamera.debugclient.Debugger;
+import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.pro.SensorSpecifics;
 import com.particlesdevs.photoncamera.pro.Specific;
 import com.particlesdevs.photoncamera.pro.SupportedDevice;
@@ -46,6 +47,7 @@ import java.util.concurrent.Executors;
 public class PhotonCamera extends Application {
     public static final boolean DEBUG = false;
     private static PhotonCamera sPhotonCamera;
+    private static ProcessingLog latestProcessingLog;
     //    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 //    private final ExecutorService executorService = Executors.newWorkStealingPool();
     private final ExecutorService executorService = Executors.newSingleThreadExecutor(r -> {
@@ -150,6 +152,14 @@ public class PhotonCamera extends Application {
         intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
         context.startActivity(intent);
         System.exit(0);
+    }
+
+    public static ProcessingLog getLatestProcessingLog() {
+        return latestProcessingLog;
+    }
+
+    public static void setLatestProcessingLog(ProcessingLog log) {
+        latestProcessingLog = log;
     }
 
     public static void showToast(String msg) {

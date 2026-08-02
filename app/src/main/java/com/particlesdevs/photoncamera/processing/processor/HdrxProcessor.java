@@ -18,6 +18,7 @@ import com.particlesdevs.photoncamera.processing.ImageFrame;
 import com.particlesdevs.photoncamera.processing.ImageFrameDeblur;
 import com.particlesdevs.photoncamera.processing.ImageSaver;
 import com.particlesdevs.photoncamera.processing.ProcessingEventsListener;
+import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline;
 import com.particlesdevs.photoncamera.processing.parameters.FrameNumberSelector;
 import com.particlesdevs.photoncamera.processing.parameters.IsoExpoSelector;
@@ -105,6 +106,9 @@ public class HdrxProcessor extends ProcessorBase {
         callback.onStarted();
         processingEventsListener.onProcessingStarted("HDRX");
 
+        ProcessingLog processingLog = new ProcessingLog();
+        long totalStartTime = System.currentTimeMillis();
+
         Log.d(TAG, "ApplyHdrX() called from" + Thread.currentThread().getName());
 
         long startTime = System.currentTimeMillis();
@@ -129,6 +133,7 @@ public class HdrxProcessor extends ProcessorBase {
         if(BurstShakiness.size() < mImageFramesToProcess.size()){
             Log.d(TAG,"Warning: Gyro data size:"+BurstShakiness.size()+" is less than image size:"+mImageFramesToProcess.size());
         }
+        processingLog.totalFrames = mImageFramesToProcess.size();
         for (int i = 0; i < mImageFramesToProcess.size(); i++) {
             ImageFrame frame = mImageFramesToProcess.get(i);
             frame.frameGyro = BurstShakiness.get(i%BurstShakiness.size()); // cyclic for safety
@@ -138,6 +143,8 @@ public class HdrxProcessor extends ProcessorBase {
             frame.pair = IsoExpoSelector.fullpairs.get(i);
             frame.number = i;
             frame.pair.layerMpy = (float) (exposures.get(mImageFramesToProcess.get(i).getTimestamp()) / minExpo);
+            int ev = (int) Math.round(Math.log(frame.pair.layerMpy) / Math.log(2.0));
+            processingLog.frameInfos.add(new ProcessingLog.FrameInfo(i, ev, "Accepted", 1.0f / (1.0f + frame.frameGyro.shakiness)));
             if (frame.pair.layerMpy > 1.0) {
                 frame.pair.curlayer = IsoExpoSelector.ExpoPair.exposureLayer.High;
             } else {
@@ -207,6 +214,13 @@ public class HdrxProcessor extends ProcessorBase {
                         normalFrames--;
                     }
                     Log.d(TAG, "Removing unlucky:" + curunlucky + " number:" + images.get(images.size() - 1).number);
+                    for (ProcessingLog.FrameInfo info : processingLog.frameInfos) {
+                        if (info.index == cur.number) {
+                            info.status = "REJECTED";
+                            info.reason = "Unlucky";
+                            break;
+                        }
+                    }
                     images.get(images.size() - 1).close();
                     images.remove(images.size() - 1);
                 }
@@ -260,10 +274,14 @@ public class HdrxProcessor extends ProcessorBase {
         //WrapperAl.packImages();
         Log.d(TAG, "Packed");
         if(images.size() > 1) {
+            long mergeStart = System.currentTimeMillis();
             PyramidMerging pyramidMerging = new PyramidMerging(new Point(width, height), images);
             pyramidMerging.parameters = processingParameters;
             pyramidMerging.cameraMode = cameraMode;
             pyramidMerging.Run();
+            processingLog.mergeTimeMs = System.currentTimeMillis() - mergeStart;
+            processingLog.mergedFrames = images.size();
+            processingLog.discardedFrames = processingLog.totalFrames - images.size();
             pyramidMerging.close();
             output = pyramidMerging.Output;
             for (int i = 0; i < images.size(); i++) {
@@ -292,12 +310,17 @@ public class HdrxProcessor extends ProcessorBase {
 
         PostPipeline pipeline = new PostPipeline();
 
-        Bitmap img = pipeline.Run(output, processingParameters);
+        long jpgStart = System.currentTimeMillis();
+        Bitmap img = pipeline.Run(output, processingParameters, processingLog);
+        processingLog.jpgTimeMs = System.currentTimeMillis() - jpgStart;
+        processingLog.totalTimeMs = System.currentTimeMillis() - totalStartTime;
+
         Allocator.free(output);
 
         img = overlay(img, pipeline.debugData.toArray(new Bitmap[0]));
+        PhotonCamera.setLatestProcessingLog(processingLog);
         try {
-            processingEventsListener.onProcessingFinished("HdrX JPG Processing Finished");
+            processingEventsListener.onProcessingFinished(processingLog);
         }
         catch (Exception e){
             Log.d(TAG,"Error in processingEventsListener.onProcessingFinished:"+Log.getStackTraceString(e));

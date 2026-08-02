@@ -7,6 +7,7 @@ import com.particlesdevs.photoncamera.util.Log;
 import com.particlesdevs.photoncamera.api.CameraMode;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.processing.ImageFrame;
+import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.processing.opengl.GLBasePipeline;
 import com.particlesdevs.photoncamera.processing.opengl.GLCoreBlockProcessing;
 import com.particlesdevs.photoncamera.processing.opengl.GLDrawParams;
@@ -80,8 +81,21 @@ public class PostPipeline extends GLBasePipeline {
     int demosaicingMethod = 1;
 
     public Bitmap Run(ByteBuffer inBuffer, Parameters parameters) {
+        return Run(inBuffer, parameters, null);
+    }
+
+    public Bitmap Run(ByteBuffer inBuffer, Parameters parameters, ProcessingLog processingLog) {
         mParameters = parameters;
         mSettings = PhotonCamera.getSettings();
+        if (processingLog != null) {
+            processingLog.jpgSettings.put("sharpness", String.format("%.2f", PreferenceKeys.getSharpnessValue()));
+            processingLog.jpgSettings.put("saturation", String.format("%.2f", PreferenceKeys.getSaturationValue()));
+            processingLog.jpgSettings.put("contrast", String.format("%.2f", PreferenceKeys.getContrastValue()));
+            processingLog.jpgSettings.put("noise_str", String.format("%.2f", PreferenceKeys.getFloat(PreferenceKeys.Key.KEY_NOISESTR_SEEKBAR)));
+            processingLog.jpgSettings.put("gain", String.format("%.2f", PreferenceKeys.getGainValue()));
+            processingLog.jpgSettings.put("shadows", String.format("%.2f", PreferenceKeys.getFloat(PreferenceKeys.Key.KEY_SHADOWS_SEEKBAR)));
+            processingLog.jpgSettings.put("compressor", String.format("%.2f", PreferenceKeys.getCompressorValue()));
+        }
         workSize = new Point(mParameters.rawSize.x, mParameters.rawSize.y);
         NoiseModeler modeler = mParameters.noiseModeler;
         noiseS = modeler.computeModel[0].first.floatValue() +
