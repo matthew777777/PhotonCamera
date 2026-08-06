@@ -164,7 +164,7 @@ public class HdrxProcessor extends ProcessorBase {
         processingParameters.FillDynamicParameters(captureResult, captureRequest,ISO);
         processingParameters.cameraRotation = cameraRotation;
 
-        exifData.IMAGE_DESCRIPTION = processingParameters.toString();
+        ParseExif.syncWithParameters(exifData, processingParameters);
         ImageFrameDeblur imageFrameDeblur = new ImageFrameDeblur(processingParameters);
         imageFrameDeblur.firstFrameGyro = images.get(0).frameGyro.clone();
         for (int i = 0; i < images.size(); i++)

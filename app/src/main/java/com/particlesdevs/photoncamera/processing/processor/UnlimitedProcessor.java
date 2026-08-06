@@ -74,7 +74,7 @@ public class UnlimitedProcessor extends ProcessorBase {
             parameters.FillConstParameters(characteristics, new Point(width, height));
             parameters.FillDynamicParameters(captureResult, captureRequest, IsoExpoSelector.fullpairs.get(0).iso);
             parameters.cameraRotation = this.cameraRotation;
-            exifData.IMAGE_DESCRIPTION = parameters.toString();
+            ParseExif.syncWithParameters(exifData, parameters);
             fillParams = true;
         }
         if (averageRaw == null) {

@@ -158,7 +158,7 @@ public class RawVideoProcessor extends ProcessorBase {
             parameters.FillConstParameters(characteristics, parameters.rawSize);
             parameters.FillDynamicParameters(captureResult, captureRequest, 100);
             parameters.cameraRotation = this.cameraRotation;
-            exifData.IMAGE_DESCRIPTION = parameters.toString();
+            ParseExif.syncWithParameters(exifData, parameters);
             fillParams = true;
             dngCreator = new DngCreator();
             dngCreator.setParameters(parameters);

@@ -7,7 +7,7 @@ import com.particlesdevs.photoncamera.util.Log;
 import androidx.exifinterface.media.ExifInterface;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.processing.parameters.IsoExpoSelector;
-
+import com.particlesdevs.photoncamera.processing.render.Parameters;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -70,8 +70,8 @@ public class ParseExif {
 
         Integer iso = result.get(SENSOR_SENSITIVITY);
         int isonum = 100;
-        if (iso != null) isonum = (int) (iso * IsoExpoSelector.getMPY());
-        Log.d(TAG, "sensivity:" + isonum);
+        if (iso != null) isonum = iso;
+        Log.d(TAG, "sensitivity:" + isonum);
         isonum = Math.min(65535,isonum);
 
         data.SENSITIVITY_TYPE = String.valueOf(ExifInterface.SENSITIVITY_TYPE_ISO_SPEED);
@@ -79,14 +79,20 @@ public class ParseExif {
         data.F_NUMBER = resultget(result, LENS_APERTURE);
         String focal = resultget(result, LENS_FOCAL_LENGTH);
         if (!focal.isEmpty()) {
-            focal = requestget(request, CaptureRequest.LENS_FOCAL_LENGTH);
             data.FOCAL_LENGTH = ((int) (100 * Double.parseDouble(focal))) + "/100";
         }
         data.APERTURE_VALUE = String.valueOf(result.get(LENS_APERTURE));
         String exposure = resultget(result, SENSOR_EXPOSURE_TIME);
         if (!exposure.isEmpty()) {
-            exposure = requestget(request, CaptureRequest.SENSOR_EXPOSURE_TIME);
             data.EXPOSURE_TIME = getTime(Long.parseLong(exposure));
+        }
+        Long frameDuration = result.get(SENSOR_FRAME_DURATION);
+        if (frameDuration != null) {
+            data.FRAME_DURATION = getTime(frameDuration);
+        }
+        Integer awbMode = result.get(CONTROL_AWB_MODE);
+        if (awbMode != null) {
+            data.WHITE_BALANCE = (awbMode == CONTROL_AWB_MODE_AUTO) ? "0" : "1";
         }
         data.DATETIME = sFormatter.format(new Date(System.currentTimeMillis()));
         data.COMPRESSION = "97";
@@ -100,6 +106,15 @@ public class ParseExif {
         Log.d(TAG, "Saving 35mm FocalLength = " + mm35);
         */
         return data;
+    }
+
+    public static void syncWithParameters(ExifData data, Parameters parameters) {
+        data.PHOTOGRAPHIC_SENSITIVITY = String.valueOf(parameters.iso);
+        data.FOCAL_LENGTH = ((int) (100 * parameters.focalLength)) + "/100";
+        data.F_NUMBER = String.valueOf(parameters.aperture);
+        data.APERTURE_VALUE = String.valueOf(parameters.aperture);
+        data.EXPOSURE_TIME = getTime((long) (parameters.exposureTime * 1000000000L));
+        data.IMAGE_DESCRIPTION = parameters.toString();
     }
 
     public static ExifInterface setAllAttributes(File file, ExifData data) {
@@ -124,6 +139,7 @@ public class ParseExif {
         inter.setAttribute(TAG_COLOR_SPACE, data.COLOR_SPACE);
         inter.setAttribute(TAG_EXIF_VERSION, data.EXIF_VERSION);
         inter.setAttribute(TAG_IMAGE_DESCRIPTION, data.IMAGE_DESCRIPTION);
+        if (data.WHITE_BALANCE != null) inter.setAttribute(TAG_WHITE_BALANCE, data.WHITE_BALANCE);
         return inter;
     }
 
@@ -150,7 +166,6 @@ public class ParseExif {
         public final String MAKE = Build.BRAND;
         public final String COPYRIGHT = "PhotonCamera";
         public String SENSITIVITY_TYPE;
-        public String PHOTOGRAPHIC_SENSITIVITY;
         public String APERTURE_VALUE;
         public String COMPRESSION;
         public String COLOR_SPACE;
@@ -160,5 +175,8 @@ public class ParseExif {
         public String EXPOSURE_TIME;
         public String F_NUMBER;
         public String FOCAL_LENGTH;
+        public String PHOTOGRAPHIC_SENSITIVITY;
+        public String WHITE_BALANCE;
+        public String FRAME_DURATION;
     }
 }
