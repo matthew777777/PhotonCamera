@@ -244,17 +244,17 @@ public class PostPipeline extends GLBasePipeline {
 
     private void BuildExperimentalPipeline() {
         Log.d("PostPipeline", "Building Experimental JPEG Pipeline - DEBUG MODE");
-        
+
         // Input & Initial Processing
         Log.d("PostPipeline", "Adding Bayer2Float");
         add(new Bayer2Float());
-        
+
         // Stage 4: Highlight Recovery (Inpaint Opposed)
         Log.d("PostPipeline", "Adding HighlightRecovery");
         HighlightRecovery hr = new HighlightRecovery();
         hr.passThrough = 0; // DEBUG: ENABLE HIGHLIGHT RECOVERY
         add(hr);
-        
+
         // Stage 2: Demosaic Selection
         if (experimentalDemosaic == 0) {
             Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = LEGACY_Demosaic3");
@@ -265,7 +265,7 @@ public class PostPipeline extends GLBasePipeline {
             dem.passThrough = 0; // DEBUG: ENABLE RCD
             add(dem);
         }
-        
+
         // Black Level Correction (dynamic) - Moved after Demosaic to match RGB expectation
         Log.d("PostPipeline", "Adding ABLC");
         add(new ABLC());
@@ -273,7 +273,7 @@ public class PostPipeline extends GLBasePipeline {
         // Lens Correction
         Log.d("PostPipeline", "Adding CorrectingFlow");
         add(new CorrectingFlow());
-        
+
         // Standard stages to complete the pipeline
         if (PreferenceKeys.isModernCoreBalancingOn()) {
             Log.d("PostPipeline", "Adding ModernInitial");
@@ -291,7 +291,7 @@ public class PostPipeline extends GLBasePipeline {
 
         Log.d("PostPipeline", "Adding RotateWatermark");
         add(new RotateWatermark(getRotation()));
-        
+
         Log.d("PostPipeline", "Experimental Pipeline Build Complete");
     }
 }
