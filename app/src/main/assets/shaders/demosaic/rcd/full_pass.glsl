@@ -120,6 +120,7 @@ void main() {
         }
 
 #if ARTIFACT_CORRECTION == 1
+        // Step 1 - Reverting to previous known-good correction version
         if (pattern == 0) { // Red pixel
             r = bayer(pos);
             float bSum = 0.0, gSum = 0.0, bMin = 1e6, bMax = -1e6;
@@ -128,8 +129,11 @@ void main() {
                 ivec2 p = pos + neighbors[i];
                 float gn = green(p), val = bayer(p), rat = val / max(gn, EPS);
                 bMin = min(bMin, rat); bMax = max(bMax, rat);
+
+                // Experiment C: Isolated relJump Detector
                 float relJump = abs(gn - g) / (max(g, gn) + EPS);
                 maxRelJump = max(maxRelJump, relJump);
+
                 float w = 1.0 / (1.0 + pow(abs(gn - g) * 10.0 * ratioEdgeProtection, 2.0));
                 bSum += val * w; gSum += gn * w; edgeRej += (1.0 - w) * 0.25;
             }
@@ -154,8 +158,10 @@ void main() {
                 ivec2 p = pos + neighbors[i];
                 float gn = green(p), val = bayer(p), rat = val / max(gn, EPS);
                 rMin = min(rMin, rat); rMax = max(rMax, rat);
+
                 float relJump = abs(gn - g) / (max(g, gn) + EPS);
                 maxRelJump = max(maxRelJump, relJump);
+
                 float w = 1.0 / (1.0 + pow(abs(gn - g) * 10.0 * ratioEdgeProtection, 2.0));
                 rSum += val * w; gSum += gn * w; edgeRej += (1.0 - w) * 0.25;
             }
@@ -228,6 +234,7 @@ void main() {
             r = mix(r, avgCh, ratioOutlier * chromaCorrStr);
             b = mix(b, avgCh, ratioOutlier * chromaCorrStr);
             chromaCorr = ratioOutlier * chromaCorrStr;
+            if (debugMode == 16) { r = mix(r, avgCh, 0.9); b = mix(b, avgCh, 0.9); }
         }
 
         atomicAdd(bins[7], 1u);
@@ -236,6 +243,9 @@ void main() {
         else if (maxRelJump < 0.20) atomicAdd(bins[2], 1u);
         else if (maxRelJump < 0.50) atomicAdd(bins[3], 1u);
         else atomicAdd(bins[4], 1u);
+
+        if (maxRelJump > 0.20) atomicAdd(bins[5], 1u);
+        if (maxRelJump > 0.50) atomicAdd(bins[6], 1u);
 #else
         r = r_base;
         b = b_base;
@@ -246,11 +256,20 @@ void main() {
         else if (debugMode == 2) finalColor = vec3(conf);
         else if (debugMode == 3) finalColor = vec3(r, 0.0, 0.0);
         else if (debugMode == 4) finalColor = vec3(0.0, 0.0, b);
+        else if (debugMode == 5) finalColor = vec3(r / max(g, EPS), 0.0, 0.0);
+        else if (debugMode == 6) finalColor = vec3(0.0, 0.0, b / max(g, EPS));
+        else if (debugMode == 9) finalColor = vec3(conf);
+        else if (debugMode == 10) finalColor = vec3(r / max(g, EPS), 0.0, 0.0);
+        else if (debugMode == 11) finalColor = vec3(0.0, 0.0, b / max(g, EPS));
+        else if (debugMode == 12) finalColor = vec3(edgeRej);
+        else if (debugMode == 13) finalColor = vec3(ratioOutlier * 10.0);
+        else if (debugMode == 14) finalColor = vec3(chromaCorr * 10.0);
         else if (debugMode == 15) {
             float delta = abs(r - r_base) + abs(b - b_base);
             finalColor = vec3(delta * 100.0, 0.0, 0.0);
         }
 
+        // NUMERICAL SAFETY INSTRUMENTATION
         if (any(isnan(finalColor)) || any(isinf(finalColor))) {
             finalColor = vec3(1.0, 0.0, 1.0);
         }
