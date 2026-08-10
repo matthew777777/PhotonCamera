@@ -45,4 +45,10 @@ public class ImagePath {
         File dir = FileManager.sPHOTON_RAW_DIR;
         return Paths.get(dir.getAbsolutePath(), generateNewFileName("VID"));
     }
+
+    public static Path newBracketDNGFilePath(String baseName, int index, String evString) {
+        File dir = FileManager.sPHOTON_RAW_DIR;
+        String filename = baseName + "_HDRBRACKET_" + String.format(Locale.US, "%02d", index + 1) + "_" + evString + ".dng";
+        return Paths.get(dir.getAbsolutePath(), filename);
+    }
 }

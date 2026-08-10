@@ -160,6 +160,13 @@ public class SettingsBarEntryProvider extends ViewModel {
         );
     }
 
+    private void createSaveEachBracketEntry() {
+        saveEachBracketEntry.addSettingsBarButtonModels(
+                SettingsBarButtonModel.newButtonModel(R.id.save_each_bracket_off_button, R.drawable.ic_raw_off, R.string.off, 0, saveEachBracketEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.save_each_bracket_on_button, R.drawable.ic_raw, R.string.on, 1, saveEachBracketEntry)
+        );
+    }
+
     private void createFlashEntry() {
         flashEntry.addSettingsBarButtonModels(
                 SettingsBarButtonModel.newButtonModel(R.id.torch_button, R.drawable.ic_torch, R.string.torch, 0, flashEntry),

@@ -6,14 +6,18 @@ import android.hardware.camera2.CaptureResult;
 
 import com.particlesdevs.photoncamera.processing.processor.RawVideoProcessor;
 import com.particlesdevs.photoncamera.util.Log;
+import android.hardware.camera2.TotalCaptureResult;
 import com.particlesdevs.photoncamera.api.ParseExif;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.control.GyroBurst;
 import com.particlesdevs.photoncamera.processing.processor.HdrxProcessor;
 import com.particlesdevs.photoncamera.processing.processor.UnlimitedProcessor;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
+
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 
 public class DefaultSaver extends SaverImplementation {
     private static final String TAG = "DefaultSaver";
@@ -28,25 +32,49 @@ public class DefaultSaver extends SaverImplementation {
         this.mRawVideoProcessor = new RawVideoProcessor(processingEventsListener);
     }
 
-    public void runRaw(int imageFormat, CameraCharacteristics characteristics, CaptureResult captureResult, CaptureRequest captureRequest, ArrayList<GyroBurst> burstShakiness, int cameraRotation, HashMap<Long, Double> exposures) {
-        super.runRaw(imageFormat, characteristics, captureResult,captureRequest, burstShakiness, cameraRotation, exposures);
+    public void runRaw(int imageFormat, CameraCharacteristics characteristics, CaptureResult captureResult, CaptureRequest captureRequest, ArrayList<GyroBurst> burstShakiness, int cameraRotation, HashMap<Long, Double> exposures, ArrayList<TotalCaptureResult> captureResults) {
+        super.runRaw(imageFormat, characteristics, captureResult,captureRequest, burstShakiness, cameraRotation, exposures, captureResults);
         //Wait for one frame at least.
         Log.d(TAG, "Acquiring:" + IMAGE_BUFFER.size());
         while (bufferLock || IMAGE_BUFFER.isEmpty()){}
         Log.d(TAG, "Acquired:" + IMAGE_BUFFER.size());
         bufferLock = true;
         Log.d(TAG,"Size:"+IMAGE_BUFFER.size());
-        /*if (PhotonCamera.getSettings().frameCount == 1) {
-            Path dngFile = ImagePath.newDNGFilePath();
-            Log.d(TAG, "Size:" + IMAGE_BUFFER.size());
-            boolean imageSaved = ImageSaver.Util.saveSingleRaw(dngFile, IMAGE_BUFFER.get(0),
-                    characteristics, captureResult, cameraRotation);
-            processingEventsListener.notifyImageSavedStatus(imageSaved, dngFile);
-            processingEventsListener.onProcessingFinished("Saved Unprocessed RAW");
+        
+        if (PhotonCamera.getSettings().saveEachBracket && IMAGE_BUFFER.size() > 1) {
+            String baseName = ImagePath.generateNewFileName("IMG");
+            int toSave = Math.min(IMAGE_BUFFER.size(), captureResults.size());
+            for (int i = 0; i < toSave; i++) {
+                ImageFrame frame = IMAGE_BUFFER.get(i);
+                TotalCaptureResult res = captureResults.get(i);
+                
+                // Calculate EV relative to base (0 EV is middle frame)
+                int baseIndex = captureResults.size() / 2;
+                int bracketingMode = PreferenceKeys.getBracketingMode();
+                float evStep = (bracketingMode == 2) ? 2.0f : 1.0f;
+                float ev = (i - baseIndex) * evStep;
+                
+                String evString = (ev >= 0 ? "+" : "") + String.format(Locale.US, "%.1f", ev) + "EV";
+                Path bracketFile = ImagePath.newBracketDNGFilePath(baseName, i, evString);
+                
+                ImageSaver.Util.saveSingleRaw(bracketFile, frame, characteristics, res, cameraRotation);
+                processingEventsListener.notifyImageSavedStatus(true, bracketFile);
+            }
+            processingEventsListener.onProcessingFinished("Saved Bracket Frames");
+            for (int i = 0; i < toSave; i++) {
+                IMAGE_BUFFER.get(i).close();
+            }
+            ArrayList<ImageFrame> remain = new ArrayList<>();
+            for (int i = toSave; i < IMAGE_BUFFER.size(); i++) {
+                remain.add(IMAGE_BUFFER.get(i));
+            }
             IMAGE_BUFFER.clear();
+            IMAGE_BUFFER.addAll(remain);
             bufferLock = false;
+            processingCallback.onFinished();
             return;
-        }*/
+        }
+
         Path dngFile = ImagePath.newDNGFilePath();
         Path imageFile = ImagePath.newImageFilePath();
         //Remove broken images

@@ -210,6 +210,14 @@
             android:layout="@layout/preference_category_layout"
             android:key="@string/pref_category_hdrx_key"
             android:title="@string/hdrx">
+        <com.particlesdevs.photoncamera.ui.settings.custompreferences.ManagedSwitchPreference
+                android:key="@string/pref_experimental_jpeg_pipeline_key"
+                android:defaultValue="false"
+                android:layout="@layout/preference_with_margin"
+                android:title="@string/experimental_jpeg_pipeline"
+                android:summary="@string/experimental_jpeg_pipeline_summary"
+                android:icon="@drawable/ic_tune_black_24dp"
+                />
         <ListPreference
                 android:layout="@layout/preference_with_margin"
                 android:key="@string/pref_save_raw_key"

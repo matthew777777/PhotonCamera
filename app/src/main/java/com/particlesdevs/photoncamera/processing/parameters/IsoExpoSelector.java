@@ -138,6 +138,39 @@ public class IsoExpoSelector {
 
         pair.applyShutterPriorityCurve(capStart, capEnd, CAP_RAMP_STOPS);
 
+        if (PhotonCamera.getSettings().saveEachBracket && step != -1) {
+            int frameCount = FrameNumberSelector.frameCount;
+            int baseIndex = frameCount / 2;
+            int bracketingMode = PreferenceKeys.getBracketingMode();
+            float evStep = (bracketingMode == 2) ? 2.0f : 1.0f;
+            float evOffset = (step - baseIndex) * evStep;
+
+            // 1. Keep ISO constant from the first frame's metered exposure
+            // Use the ISO from the first frame generated in this burst.
+            if (step > 0 && !fullpairs.isEmpty()) {
+                pair.iso = fullpairs.get(0).iso;
+                // Re-calculate exposure to match total metered energy at this fixed ISO
+                double totalEnergy = (double) captureController.mPreviewExposureTime * captureController.mPreviewIso;
+                pair.exposure = (long) (totalEnergy / pair.iso);
+            }
+
+            // 2. Adjust exposure time based on evOffset
+            double factor = Math.pow(2.0, evOffset);
+            pair.exposure = (long) (pair.exposure * factor);
+
+            // 3. Clamp exposure but preserve constant ISO
+            if (pair.exposure > pair.exposurehigh) pair.exposure = pair.exposurehigh;
+            if (pair.exposure < pair.exposurelow) pair.exposure = pair.exposurelow;
+
+            pair.curlayer = ExpoPair.exposureLayer.Normal;
+            if (evOffset > 0.01f) pair.curlayer = ExpoPair.exposureLayer.High;
+            if (evOffset < -0.01f) pair.curlayer = ExpoPair.exposureLayer.Low;
+
+            pair.layerMpy = (float) factor;
+            pair.denormalizeSystem();
+            return pair;
+        }
+
         if (pair.normalizedIso() >= 12700.0/mpy1) {
             pair.ReduceIso();
         }
@@ -150,45 +183,38 @@ public class IsoExpoSelector {
         pair.exposure = currentManExp != 0 ? (long) currentManExp : pair.exposure;
         pair.iso = currentManISO != 0 ? (int) (currentManISO * 100.0 / pair.isolow) : pair.iso;
         pair.curlayer = ExpoPair.exposureLayer.Normal;
-        /*if (step%patternSize == 1 && HDR) {
-            pair.ExpoCompensateLower(2.0 / 1.0);
-            pair.curlayer = ExpoPair.exposureLayer.Low;
-        }*/
-        /*if(HDR) {
-            pair.ExpoCompensateLowerExpo(2.f);
-            pair.ExpoCompensateLower(1.f/2.f);
-        }*/
-        if (step%patternSize == 0 && HDR) {
-            // Set multiplier based on bracketing mode (0=Off, 1=Normal, 2=High)
-            int bracketingMode = PreferenceKeys.getBracketingMode();
-            pair.layerMpy = 1.f;
-            if (bracketingMode == 1) {
-                // Normal bracketing (1x, 4x)
-                pair.layerMpy = 4.f;
-            } else if (bracketingMode == 2) {
-                // High bracketing (1x, 8x)
-                pair.layerMpy = 8.f;
-            }
 
-            if (pair.layerMpy > 1.f) {
-                pair.curlayer = ExpoPair.exposureLayer.High;
-                if (pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy)) {
-                    pair.layerMpy = 1.f;
+        if (HDR && !PhotonCamera.getSettings().saveEachBracket) {
+            if (step % patternSize == 0) {
+                // Set multiplier based on bracketing mode (0=Off, 1=Normal, 2=High)
+                int bracketingMode = PreferenceKeys.getBracketingMode();
+                pair.layerMpy = 1.f;
+                if (bracketingMode == 1) {
+                    // Normal bracketing (1x, 4x)
+                    pair.layerMpy = 4.f;
+                } else if (bracketingMode == 2) {
+                    // High bracketing (1x, 8x)
+                    pair.layerMpy = 8.f;
+                }
+
+                if (pair.layerMpy > 1.f) {
+                    pair.curlayer = ExpoPair.exposureLayer.High;
+                    if (pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy)) {
+                        pair.layerMpy = 1.f;
+                        pair.curlayer = ExpoPair.exposureLayer.Normal;
+                    }
+                } else {
                     pair.curlayer = ExpoPair.exposureLayer.Normal;
                 }
-            } else {
+            } else if (step % patternSize == 1) {
+                pair.layerMpy = 1.f;
+                pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
+                pair.curlayer = ExpoPair.exposureLayer.Normal;
+            } else if (step % patternSize == 2) {
+                pair.layerMpy = 1.f;
+                pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
                 pair.curlayer = ExpoPair.exposureLayer.Normal;
             }
-        }
-        if ((step%patternSize == 1) && HDR) {
-            pair.layerMpy = 1.f;
-            pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
-            pair.curlayer = ExpoPair.exposureLayer.Normal;
-        }
-        if (step%patternSize == 2 && HDR) {
-            pair.layerMpy = 1.f;
-            pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
-            pair.curlayer = ExpoPair.exposureLayer.Normal;
         }
 
         if (pair.exposure < ExposureIndex.sec / 90 && PhotonCamera.getSettings().eisPhoto) {

@@ -77,6 +77,17 @@ public class PostPipeline extends GLBasePipeline {
     )
     int demosaicingMethod = 1;
 
+    @Tunable(
+        title = "Experimental Demosaic",
+        description = "Choose demosaic backend for the Experimental Pipeline. 0 = Legacy Demosaic3, 1 = RCD + Adaptive Selection",
+        category = "Demosaic",
+        min = 0.0f,
+        max = 1.0f,
+        defaultValue = 0.0f,
+        step = 1.0f
+    )
+    int experimentalDemosaic = 0;
+
     public Bitmap Run(ByteBuffer inBuffer, Parameters parameters) {
         mParameters = parameters;
         mSettings = PhotonCamera.getSettings();
@@ -127,7 +138,11 @@ public class PostPipeline extends GLBasePipeline {
         // Inject tunable values for PostPipeline (since it doesn't extend Node)
         com.particlesdevs.photoncamera.settings.TunableInjector.inject(this);
         
-        BuildDefaultPipeline();
+        if (PreferenceKeys.isExperimentalJpegPipelineOn()) {
+            BuildExperimentalPipeline();
+        } else {
+            BuildDefaultPipeline();
+        }
         GLImage resImg = runAll();
         Bitmap res = resImg.getBufferedImage();
         Allocator.free(resImg.byteBuffer);
@@ -219,5 +234,52 @@ public class PostPipeline extends GLBasePipeline {
         //add(new Sharpen("sharpen33"));
 
         add(new RotateWatermark(getRotation()));
+    }
+
+    private void BuildExperimentalPipeline() {
+        Log.d("PostPipeline", "Building Experimental JPEG Pipeline - DEBUG MODE");
+        
+        // Input & Initial Processing
+        Log.d("PostPipeline", "Adding Bayer2Float");
+        add(new Bayer2Float());
+        
+        // Stage 4: Highlight Recovery (Inpaint Opposed)
+        Log.d("PostPipeline", "Adding HighlightRecovery");
+        HighlightRecovery hr = new HighlightRecovery();
+        hr.passThrough = 0; // DEBUG: ENABLE HIGHLIGHT RECOVERY
+        add(hr);
+        
+        // Stage 2: Demosaic Selection
+        if (experimentalDemosaic == 0) {
+            Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = LEGACY_Demosaic3");
+            add(new Demosaic3());
+        } else {
+            Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = RCD_ADAPTIVE");
+            DemosaicRCD dem = new DemosaicRCD();
+            dem.passThrough = 0; // DEBUG: ENABLE RCD
+            add(dem);
+        }
+        
+        // Black Level Correction (dynamic) - Moved after Demosaic to match RGB expectation
+        Log.d("PostPipeline", "Adding ABLC");
+        add(new ABLC());
+        
+        // Stage 3: Capture Sharpening (RawTherapee-inspired)
+        Log.d("PostPipeline", "Adding ExperimentalCaptureSharpening");
+        ExperimentalCaptureSharpening cs = new ExperimentalCaptureSharpening();
+        cs.passThrough = 1; // DEBUG: ENABLE CAPTURE SHARPENING
+        add(cs);
+        
+        // Standard stages to complete the pipeline
+        Log.d("PostPipeline", "Adding Initial");
+        add(new Initial());
+        Log.d("PostPipeline", "Adding AutoExposure");
+        add(new AutoExposure());
+        Log.d("PostPipeline", "Adding Sharpen2");
+        add(new Sharpen2());
+        Log.d("PostPipeline", "Adding RotateWatermark");
+        add(new RotateWatermark(getRotation()));
+        
+        Log.d("PostPipeline", "Experimental Pipeline Build Complete");
     }
 }

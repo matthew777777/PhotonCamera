@@ -60,6 +60,9 @@ public class PreferenceKeys {
         Resources resources = context.getResources();
 
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_HDRX, resources.getBoolean(R.bool.pref_hdrx_mode_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_PIPELINE, false);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SHOW_ROUND_EDGE, resources.getBoolean(R.bool.pref_show_roundedge_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SHOW_HISTOGRAM, resources.getBoolean(R.bool.pref_show_histogram_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EIS_PHOTO, resources.getBoolean(R.bool.pref_eis_photo_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_QUAD_BAYER, resources.getBoolean(R.bool.pref_quad_bayer_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_REMOSAIC, resources.getBoolean(R.bool.pref_remosaic_default));
@@ -69,7 +72,6 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_COUNTDOWN_TIMER, 0);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_BRACKETING_MODE, 0); // Default to disable bracketing
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_METERING, -1); // Default to Off
-        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD, -1); // Default to Off
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SAVE_EACH_BRACKET, false);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, resources.getString(R.string.pref_video_resolution_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_DOWNSCALE_4X, false);
@@ -325,6 +327,10 @@ public class PreferenceKeys {
         return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_HDRX);
     }
 
+    public static boolean isExperimentalJpegPipelineOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_PIPELINE);
+    }
+
     public static void setHdrX(boolean value) {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_HDRX, value);
     }
@@ -379,14 +385,6 @@ public class PreferenceKeys {
 
     public static void setAeMetering(int value) {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_AE_METERING, value);
-    }
-
-    public static int getAeMeteringStd() {
-        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD);
-    }
-
-    public static void setAeMeteringStd(int value) {
-        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD, value);
     }
 
     public static boolean isSaveEachBracketOn() {
@@ -503,6 +501,7 @@ public class PreferenceKeys {
         KEY_AE_METERING(R.string.pref_ae_metering_key),
         KEY_AE_METERING_STD(R.string.pref_ae_metering_std_key),
         KEY_BRACKETING_MODE(R.string.pref_bracketing_key),
+        KEY_SAVE_EACH_BRACKET(R.string.pref_save_each_bracket_key),
         KEY_COUNTDOWN_TIMER(R.string.pref_countdown_timer_key),
         /**
          * Enhanced settings keys
@@ -517,6 +516,11 @@ public class PreferenceKeys {
         KEY_SAVE_RAW(R.string.pref_save_raw_key),
         KEY_CFA(R.string.pref_cfa_key),
         KEY_REMOSAIC(R.string.pref_remosaic_key),////TODO
+
+        /**
+         * Experimental Pipeline
+         */
+        KEY_EXPERIMENTAL_JPEG_PIPELINE(R.string.pref_experimental_jpeg_pipeline_key),
 
         /**
          * Other Keys

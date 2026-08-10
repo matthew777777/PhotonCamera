@@ -5,6 +5,7 @@ import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.FileManager;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 
 public class Demosaic3 extends Node {
     public  Demosaic3() {
@@ -78,6 +79,9 @@ public class Demosaic3 extends Node {
         WorkingTexture = basePipeline.main3;
         glProg.setDefine("greenmin",greenMin);
         glProg.setDefine("greenmax",greenMax);
+        if (PreferenceKeys.isExperimentalJpegPipelineOn()) {
+            glProg.setDefine("NO_CLAMP", true);
+        }
         glProg.setLayout(tile,tile,1);
         //glProg.useFileProgram(FileManager.sPHOTON_TUNING_DIR + "demosaicp2ec.glsl",true);
         glProg.useAssetProgram("demosaic/demosaicp2ed2",true);
