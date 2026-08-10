@@ -251,6 +251,9 @@ final class CameraUIController implements CameraUIEventsListener,
                         break;
                     case RAW:
                         PreferenceKeys.setSaveRaw((Integer) value);
+                        if ((Integer) value != 2 && PreferenceKeys.isSaveEachBracketOn()) {
+                            PhotonCamera.showToast(R.string.use_with_raw_only_warning);
+                        }
                         break;
                     case BATTERY_SAVER:
                         PreferenceKeys.setBatterySaver(value.equals(1));
@@ -267,6 +270,13 @@ final class CameraUIController implements CameraUIEventsListener,
                     case AE_METERING:
                         PreferenceKeys.setAeMetering((Integer) value);
                         cameraFragment.captureController.applyAeMetering();
+                        break;
+                    case SAVE_EACH_BRACKET:
+                        PreferenceKeys.setSaveEachBracket(value.equals(1));
+                        IsoExpoSelector.HDR = value.equals(1) || PreferenceKeys.getBracketingMode() > 0;
+                        if (value.equals(1) && PreferenceKeys.isSaveRaw() != 2) {
+                            PhotonCamera.showToast(R.string.use_with_raw_only_warning);
+                        }
                         break;
 
                 }

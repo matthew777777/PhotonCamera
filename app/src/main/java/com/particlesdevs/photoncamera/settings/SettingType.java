@@ -12,5 +12,6 @@ public enum SettingType {
     BATTERY_SAVER,
     BRACKETING,
     HISTOGRAM,
-    AE_METERING
+    AE_METERING,
+    SAVE_EACH_BRACKET
 }

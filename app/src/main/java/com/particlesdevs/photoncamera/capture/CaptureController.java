@@ -271,6 +271,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      */
     public ImageSaver mImageSaver;
     public HashMap<Long, Double> mExposures = new HashMap<>();
+    public ArrayList<TotalCaptureResult> mCaptureResults = new ArrayList<>();
 
     private final ArrayDeque<Image> mZslRingBuffer = new ArrayDeque<>();
     private final Object mZslBufferLock = new Object();
@@ -1837,7 +1838,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                     else
                         createCameraPreviewSession(false);
                     taskResults.removeIf(Future::isDone); //remove already completed results
-                    Future<?> result = processExecutor.submit(() -> mImageSaver.runRaw(mCameraCharacteristics, mCaptureResult, mCaptureRequest, new ArrayList<>(BurstShakiness), cameraRotation, mExposures));
+                    Future<?> result = processExecutor.submit(() -> mImageSaver.runRaw(mCameraCharacteristics, mCaptureResult, mCaptureRequest, new ArrayList<>(BurstShakiness), cameraRotation, mExposures, new ArrayList<>(mCaptureResults)));
                     taskResults.add(result);
                 }
             };
@@ -1989,7 +1990,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 mImageSaver.implementation.bufferLock = false;
                 mImageSaver.updateFrameCount(capturedCount);
                 mImageSaver.runRaw(mCameraCharacteristics, mPreviewCaptureResult, mPreviewCaptureRequest,
-                        new ArrayList<>(BurstShakiness), cameraRotation, mExposures);
+                        new ArrayList<>(BurstShakiness), cameraRotation, mExposures, new ArrayList<>(mCaptureResults));
             } catch (Exception e) {
                 Log.e(TAG, "ZSL runRaw: " + Log.getStackTraceString(e));
                 cameraEventsListener.onProcessingError(e.getLocalizedMessage());
@@ -2062,6 +2063,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             captures = new ArrayList<>();
             BurstShakiness = new ArrayList<>();
             mExposures = new HashMap<>();
+            mCaptureResults = new ArrayList<>();
             SaverImplementation.IMAGE_BUFFER.clear();
 
             int frameCount = FrameNumberSelector.getFrames();
@@ -2195,6 +2197,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                         Object timeKey = result.get(CaptureResult.SENSOR_EXPOSURE_TIME);
                         double exposureTime = ExposureIndex.time2sec((long) timeKey);
                         mExposures.put((long) time, exposureTime * iso);
+                        mCaptureResults.add(result);
                     }
                     cameraEventsListener.onFrameCaptureCompleted(
                             new TimerFrameCountViewModel.FrameCntTime(frameCount, maxFrameCount[0], frametime));
@@ -2269,7 +2272,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                             }
                             mImageSaver.updateFrameCount(mImageSaver.bufferSize());
                             if (mImageSaver.bufferSize() != 0)
-                                mImageSaver.runRaw(mCameraCharacteristics, mCaptureResult, mCaptureRequest, new ArrayList<>(BurstShakiness), cameraRotation, mExposures);
+                                mImageSaver.runRaw(mCameraCharacteristics, mCaptureResult, mCaptureRequest, new ArrayList<>(BurstShakiness), cameraRotation, mExposures, new ArrayList<>(mCaptureResults));
                             } catch (Exception e){
                                 Log.e(TAG, "runRaw:"+Log.getStackTraceString(e));
                                 cameraEventsListener.onProcessingError(e.getLocalizedMessage());

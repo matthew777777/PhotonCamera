@@ -257,6 +257,7 @@ public class GLProg implements AutoCloseable {
             new Exception("Program must be compute!").printStackTrace();
             return;
         }
+        Log.d(TAG, "glDispatchCompute: " + x + ", " + y + ", " + z);
         glDispatchCompute(x, y, z);
         glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
         glMemoryBarrier(GL_ALL_SHADER_BITS);

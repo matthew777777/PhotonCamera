@@ -45,6 +45,7 @@ public class SettingsBarEntryProvider extends ViewModel {
     private final SettingsBarEntryModel saveRawEntry = SettingsBarEntryModel.newEntry(R.id.saveraw_entry_layout, R.string.raw_string, SettingType.RAW);
     private final SettingsBarEntryModel batterySaverEntry = SettingsBarEntryModel.newEntry(R.id.batterysaver_entry_layout, R.string.energy_saving, SettingType.BATTERY_SAVER);
     private final SettingsBarEntryModel bracketingEntry = SettingsBarEntryModel.newEntry(R.id.bracketing_entry_layout, R.string.exposure_bracketing, SettingType.BRACKETING);
+    private final SettingsBarEntryModel saveEachBracketEntry = SettingsBarEntryModel.newEntry(R.id.save_each_bracket_entry_layout, R.string.save_each_bracket, SettingType.SAVE_EACH_BRACKET);
     private final SettingsBarEntryModel histogramEntry = SettingsBarEntryModel.newEntry(R.id.histogram_entry_layout, R.string.histogram, SettingType.HISTOGRAM);
     private final SettingsBarEntryModel aeMeteringEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_entry_layout, R.string.ae_metering, SettingType.AE_METERING);
     private final List<SettingsBarEntryModel> allEntries = new ArrayList<>(8);
@@ -60,6 +61,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         allEntries.add(gridEntry);
         allEntries.add(batterySaverEntry);
         allEntries.add(bracketingEntry);
+        allEntries.add(saveEachBracketEntry);
         allEntries.add(histogramEntry);
         allEntries.add(aeMeteringEntry);
     }
@@ -75,6 +77,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         createGridEntry();
         createBatterySaverEntry();
         createBracketingEntry();
+        createSaveEachBracketEntry();
         createHistogramEntry();
         createAeMeteringEntry();
         updateAllEntries();
@@ -91,6 +94,7 @@ public class SettingsBarEntryProvider extends ViewModel {
         updateEntry(saveRawEntry, PreferenceKeys.isSaveRaw());
         updateEntry(batterySaverEntry, PreferenceKeys.isBatterySaverOn());
         updateEntry(bracketingEntry, PreferenceKeys.getBracketingMode());
+        updateEntry(saveEachBracketEntry, PreferenceKeys.isSaveEachBracketOn());
         updateEntry(histogramEntry, PreferenceKeys.isShowHistogramOn());
         updateEntry(aeMeteringEntry, PreferenceKeys.getAeMetering());
     }
@@ -149,6 +153,13 @@ public class SettingsBarEntryProvider extends ViewModel {
                 SettingsBarButtonModel.newButtonModel(R.id.bracketing_off_button, R.drawable.ic_exposure, R.string.bracketing_off, 0, bracketingEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.bracketing_normal_button, R.drawable.ic_exposure, R.string.bracketing_normal, 1, bracketingEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.bracketing_high_button, R.drawable.ic_exposure, R.string.bracketing_high, 2, bracketingEntry)
+        );
+    }
+
+    private void createSaveEachBracketEntry() {
+        saveEachBracketEntry.addSettingsBarButtonModels(
+                SettingsBarButtonModel.newButtonModel(R.id.save_each_bracket_off_button, R.drawable.ic_raw_off, R.string.off, 0, saveEachBracketEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.save_each_bracket_on_button, R.drawable.ic_raw, R.string.on, 1, saveEachBracketEntry)
         );
     }
 

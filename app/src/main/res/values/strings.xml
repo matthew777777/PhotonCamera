@@ -150,7 +150,12 @@
     <string name="gallery_folders">Gallery Folders</string>
     <string name="options">Options</string>
     <string name="session_on_configure_failed">System session configuration failed try changing preview format</string>
-    
+
+    <!-- Experimental Pipeline -->
+    <string name="experimental_jpeg_pipeline">Experimental JPEG Pipeline</string>
+    <string name="experimental_jpeg_pipeline_summary">Enable the new experimental JPEG rendering pipeline. Coexists with Legacy pipeline.</string>
+    <string name="pref_experimental_jpeg_pipeline_key" translatable="false">pref_experimental_jpeg_pipeline_key</string>
+
     <!-- Metering mode strings -->
     <string name="ae_metering">MTK Metering</string>
     <string name="ae_metering_off">Off</string>
@@ -165,7 +170,10 @@
     <string name="bracketing_normal">Normal (1x, 4x)</string>
     <string name="bracketing_high">High (1x, 8x)</string>
     <string name="pref_bracketing_key" translatable="false">pref_bracketing_mode_key</string>
-    
+    <string name="save_each_bracket">Bracketing (Saves Each Bracket)</string>
+    <string name="use_with_raw_only_warning">Bracketing (Saves Each Bracket) should be used with RAW only mode!</string>
+    <string name="pref_save_each_bracket_key" translatable="false">pref_save_each_bracket_key</string>
+
     <!-- Video Settings -->
     <string name="video_settings">Video Settings</string>
     <string name="raw_video_settings">Raw Video Settings</string>

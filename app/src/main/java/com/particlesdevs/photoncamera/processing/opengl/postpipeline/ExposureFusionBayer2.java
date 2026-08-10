@@ -330,7 +330,7 @@ public class ExposureFusionBayer2 extends Node {
 
     @Tunable(title = "Noise Max", category = "Exposure Fusion", max = 1.0f, defaultValue = 0.05f)
     float noiseMax;
-    
+
     float[] toneCurveX;
     float[] toneCurveY;
 

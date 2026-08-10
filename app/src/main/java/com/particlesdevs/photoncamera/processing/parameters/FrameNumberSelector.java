@@ -21,7 +21,7 @@ public class FrameNumberSelector {
             if (frameCount < 4 && frames >= 4) frameCount = 4;
         }
         if (PhotonCamera.getSettings().selectedMode == CameraMode.UNLIMITED || PhotonCamera.getSettings().selectedMode == CameraMode.RAWVIDEO) frameCount = -1;
-        if(PhotonCamera.getSettings().DebugData) frameCount = frames;
+        if(PhotonCamera.getSettings().DebugData || PhotonCamera.getSettings().saveEachBracket) frameCount = frames;
         throwCount = (frameCount-throwCount);
         return frameCount;
     }
