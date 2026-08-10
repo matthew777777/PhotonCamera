@@ -271,6 +271,10 @@ final class CameraUIController implements CameraUIEventsListener,
                         PreferenceKeys.setAeMetering((Integer) value);
                         cameraFragment.captureController.applyAeMetering();
                         break;
+                    case AE_METERING_STD:
+                        PreferenceKeys.setAeMeteringStd((Integer) value);
+                        cameraFragment.captureController.applyAeMetering();
+                        break;
                     case SAVE_EACH_BRACKET:
                         PreferenceKeys.setSaveEachBracket(value.equals(1));
                         IsoExpoSelector.HDR = value.equals(1) || PreferenceKeys.getBracketingMode() > 0;
