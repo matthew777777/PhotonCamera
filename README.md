@@ -16,8 +16,6 @@ Android Camera that uses Enhanced Image Processing
 </p>
 
 ## Libraries used by Photon Camera
-* [RawNIND UtNet2](https://github.com/trougnouf/rawnind_jddc)
-* [Darktable-Ai](https://github.com/darktable-org/darktable-ai)
 * [Glide](https://github.com/bumptech/glide)
 * [SSIV](https://github.com/davemorrissey/subsampling-scale-image-view)
 * [GSON](https://github.com/google/gson)
