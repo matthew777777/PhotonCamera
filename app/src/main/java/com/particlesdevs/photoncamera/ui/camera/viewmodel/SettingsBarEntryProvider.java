@@ -45,6 +45,10 @@ public class SettingsBarEntryProvider extends ViewModel {
     private final SettingsBarEntryModel saveRawEntry = SettingsBarEntryModel.newEntry(R.id.saveraw_entry_layout, R.string.raw_string, SettingType.RAW);
     private final SettingsBarEntryModel batterySaverEntry = SettingsBarEntryModel.newEntry(R.id.batterysaver_entry_layout, R.string.energy_saving, SettingType.BATTERY_SAVER);
     private final SettingsBarEntryModel bracketingEntry = SettingsBarEntryModel.newEntry(R.id.bracketing_entry_layout, R.string.exposure_bracketing, SettingType.BRACKETING);
+    private final SettingsBarEntryModel saveEachBracketEntry = SettingsBarEntryModel.newEntry(R.id.save_each_bracket_entry_layout, R.string.save_each_bracket, SettingType.SAVE_EACH_BRACKET);
+    private final SettingsBarEntryModel histogramEntry = SettingsBarEntryModel.newEntry(R.id.histogram_entry_layout, R.string.histogram, SettingType.HISTOGRAM);
+    private final SettingsBarEntryModel aeMeteringEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_entry_layout, R.string.ae_metering, SettingType.AE_METERING);
+    private final SettingsBarEntryModel aeMeteringStdEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_std_entry_layout, R.string.ae_metering_std, SettingType.AE_METERING_STD);
     private final List<SettingsBarEntryModel> allEntries = new ArrayList<>(8);
 
     public SettingsBarEntryProvider() {
@@ -58,6 +62,10 @@ public class SettingsBarEntryProvider extends ViewModel {
         allEntries.add(gridEntry);
         allEntries.add(batterySaverEntry);
         allEntries.add(bracketingEntry);
+        allEntries.add(saveEachBracketEntry);
+        allEntries.add(histogramEntry);
+        allEntries.add(aeMeteringEntry);
+        allEntries.add(aeMeteringStdEntry);
     }
 
     public void createEntries() {
@@ -71,6 +79,10 @@ public class SettingsBarEntryProvider extends ViewModel {
         createGridEntry();
         createBatterySaverEntry();
         createBracketingEntry();
+        createSaveEachBracketEntry();
+        createHistogramEntry();
+        createAeMeteringEntry();
+        createAeMeteringStdEntry();
         updateAllEntries();
     }
 
@@ -85,6 +97,10 @@ public class SettingsBarEntryProvider extends ViewModel {
         updateEntry(saveRawEntry, PreferenceKeys.isSaveRaw());
         updateEntry(batterySaverEntry, PreferenceKeys.isBatterySaverOn());
         updateEntry(bracketingEntry, PreferenceKeys.getBracketingMode());
+        updateEntry(saveEachBracketEntry, PreferenceKeys.isSaveEachBracketOn());
+        updateEntry(histogramEntry, PreferenceKeys.isShowHistogramOn());
+        updateEntry(aeMeteringEntry, PreferenceKeys.getAeMetering());
+        updateEntry(aeMeteringStdEntry, PreferenceKeys.getAeMeteringStd());
     }
 
     public void addObserver(Observer<TopBarSettingsData<?, ?>> observer) {
@@ -175,6 +191,31 @@ public class SettingsBarEntryProvider extends ViewModel {
                 SettingsBarButtonModel.newButtonModel(R.id.grid_44_button, R.drawable.ic_grid_on, R.string.four_x4, 2, gridEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.grid_gr_button, R.drawable.ic_grid_on, R.string.golden_ratio, 3, gridEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.grid_dt_button, R.drawable.ic_grid_on, R.string.diag_triangle, 4, gridEntry)
+        );
+    }
+
+    private void createHistogramEntry() {
+        histogramEntry.addSettingsBarButtonModels(
+                SettingsBarButtonModel.newButtonModel(R.id.histogram_off_button, R.drawable.ic_histogram, R.string.off, 0, histogramEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.histogram_on_button, R.drawable.ic_histogram, R.string.on, 1, histogramEntry)
+        );
+    }
+
+    private void createAeMeteringEntry() {
+        aeMeteringEntry.addSettingsBarButtonModels(
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_off_button, R.drawable.ic_exposure, R.string.ae_metering_off, -1, aeMeteringEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_center_button, R.drawable.ic_exposure, R.string.ae_metering_center, 0, aeMeteringEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_average_button, R.drawable.ic_exposure, R.string.ae_metering_average, 1, aeMeteringEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_spot_button, R.drawable.ic_exposure, R.string.ae_metering_spot, 2, aeMeteringEntry)
+        );
+    }
+
+    private void createAeMeteringStdEntry() {
+        aeMeteringStdEntry.addSettingsBarButtonModels(
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_off_button, R.drawable.ic_exposure, R.string.ae_metering_off, -1, aeMeteringStdEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_center_button, R.drawable.ic_exposure, R.string.ae_metering_center, 0, aeMeteringStdEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_average_button, R.drawable.ic_exposure, R.string.ae_metering_average, 1, aeMeteringStdEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_spot_button, R.drawable.ic_exposure, R.string.ae_metering_spot, 2, aeMeteringStdEntry)
         );
     }
 

@@ -149,14 +149,32 @@
     <string name="gallery_folders">Gallery Folders</string>
     <string name="options">Options</string>
     <string name="session_on_configure_failed">System session configuration failed try changing preview format</string>
-    
+
+    <!-- Experimental Pipeline -->
+    <string name="experimental_jpeg_pipeline">Experimental JPEG Pipeline</string>
+    <string name="experimental_jpeg_pipeline_summary">Enable the new experimental JPEG rendering pipeline. Coexists with Legacy pipeline.</string>
+    <string name="pref_experimental_jpeg_pipeline_key" translatable="false">pref_experimental_jpeg_pipeline_key</string>
+
+    <!-- Metering mode strings -->
+    <string name="ae_metering">MTK Metering</string>
+    <string name="ae_metering_off">Auto</string>
+    <string name="ae_metering_center">Center Weighted</string>
+    <string name="ae_metering_average">Frame Average</string>
+    <string name="ae_metering_spot">Spot Metering</string>
+    <string name="ae_metering_std">AE Metering</string>
+    <string name="pref_ae_metering_key" translatable="false">pref_ae_metering_mode_key</string>
+    <string name="pref_ae_metering_std_key" translatable="false">pref_ae_metering_std_mode_key</string>
+
     <!-- Bracketing mode strings -->
     <string name="exposure_bracketing">Exposure Bracketing</string>
     <string name="bracketing_off">Off (1x)</string>
     <string name="bracketing_normal">Normal (1x, 4x)</string>
     <string name="bracketing_high">High (1x, 8x)</string>
     <string name="pref_bracketing_key" translatable="false">pref_bracketing_mode_key</string>
-    
+    <string name="save_each_bracket">Bracketing (Saves Each Bracket)</string>
+    <string name="use_with_raw_only_warning">Bracketing (Saves Each Bracket) should be used with RAW only mode!</string>
+    <string name="pref_save_each_bracket_key" translatable="false">pref_save_each_bracket_key</string>
+
     <!-- Video Settings -->
     <string name="video_settings">Video Settings</string>
     <string name="raw_video_settings">Raw Video Settings</string>
@@ -170,7 +188,19 @@
     <string name="video_res_4k" translatable="false">3840x2160 (4K)</string>
     <string name="video_res_fhd" translatable="false">1920x1080 (Full HD)</string>
     <string name="video_res_hd" translatable="false">1280x720 (HD)</string>
-    
+
+    <string name="pref_video_encoder_key" translatable="false">pref_video_encoder_key</string>
+    <string name="pref_video_bit_depth_key" translatable="false">pref_video_bit_depth_key</string>
+    <string name="pref_video_bitrate_mode_key" translatable="false">pref_video_bitrate_mode_key</string>
+    <string name="pref_video_nr_mode_key" translatable="false">pref_video_nr_mode_key</string>
+    <string name="pref_video_edge_mode_key" translatable="false">pref_video_edge_mode_key</string>
+
+    <string name="video_encoder">Video Encoder</string>
+    <string name="video_bit_depth">Video Bit Depth</string>
+    <string name="video_bitrate_mode">Video Bitrate Mode</string>
+    <string name="video_nr_mode">Video Noise Reduction</string>
+    <string name="video_edge_mode">Video Edge Mode</string>
+
     <!-- Storage Access Framework folder picker -->
     <string name="select_dcim_folder_hint">Select the DCIM folder for saving photos</string>
 

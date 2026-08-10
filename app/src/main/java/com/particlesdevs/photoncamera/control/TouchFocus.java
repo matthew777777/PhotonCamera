@@ -1,6 +1,7 @@
 package com.particlesdevs.photoncamera.control;
 
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.MeteringRectangle;
@@ -76,7 +77,13 @@ public class TouchFocus {
         }
         Point size = new Point(captureController.mImageReaderPreview.getWidth(), captureController.mImageReaderPreview.getHeight());
         Point CurUi = new Point(textureView.getWidth(),textureView.getHeight());
-        Size sizee = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+        Rect activeArray = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        Size sizee;
+        if (activeArray != null) {
+            sizee = new Size(activeArray.width(), activeArray.height());
+        } else {
+            sizee = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+        }
         if (sizee == null) {
             sizee = new Size(size.x, size.y);
         }

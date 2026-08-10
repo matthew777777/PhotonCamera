@@ -10,5 +10,9 @@ public enum SettingType {
     EIS,
     RAW,
     BATTERY_SAVER,
-    BRACKETING
+    BRACKETING,
+    HISTOGRAM,
+    AE_METERING,
+    AE_METERING_STD,
+    SAVE_EACH_BRACKET
 }
