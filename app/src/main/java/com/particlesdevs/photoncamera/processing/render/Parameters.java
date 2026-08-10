@@ -629,7 +629,6 @@ public class Parameters {
                 "\n Color=" + PhotonCamera.getSettings().colorMethod +
                 "\n PreviewFormat=" + PhotonCamera.getSettings().previewFormat +
                 "\n FocalL=" + FltFormat(focalLength) +
-                "\n RawNIND=" + (PreferenceKeys.isRawNindOn() ? "On" : "Off") +
                 "\n Version=" + PhotonCamera.getVersion();
     }
 

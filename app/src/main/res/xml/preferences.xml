@@ -281,27 +281,6 @@
                 android:summary=""
                 android:icon="@drawable/ic_gradient_black_24dp"
                 />
-        <com.particlesdevs.photoncamera.ui.settings.custompreferences.ManagedSwitchPreference
-                android:key="@string/pref_rawnind_key"
-                android:defaultValue="false"
-                android:layout="@layout/preference_with_margin"
-                android:title="@string/rawnind"
-                android:summary=""
-                android:icon="@drawable/ic_gradient_black_24dp"
-                />
-        <com.particlesdevs.photoncamera.ui.settings.custompreferences.UniversalSeekBarPreference
-                android:key="@string/pref_rawnind_strength_key"
-                android:layout="@layout/preference_seekbar"
-                android:title="@string/rawnind_strength"
-                android:summary=""
-                android:defaultValue="@string/pref_rawnind_strength_default"
-                app:maxValue="1.0"
-                app:minValue="0.0"
-                app:isFloat="true"
-                app:stepPerUnit="10"
-                android:icon="@drawable/ic_compressor"
-                dependency="@string/pref_rawnind_key"
-                />
         <com.particlesdevs.photoncamera.ui.settings.custompreferences.UniversalSeekBarPreference
                 android:key="@string/pref_sharpness_seekbar_key"
                 android:layout="@layout/preference_seekbar"

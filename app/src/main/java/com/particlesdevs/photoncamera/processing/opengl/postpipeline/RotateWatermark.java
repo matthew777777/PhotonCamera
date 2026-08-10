@@ -46,15 +46,10 @@ public class RotateWatermark extends Node {
 
         glProg.useAssetProgram("addwatermark_rotate");
         try {
-            File waterAiOnExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark_ai_on.png");
             File waterAiOffExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark_ai_off.png");
             File waterExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark.png");
-            if (waterAiOnExternal.exists() && waterAiOffExternal.exists()) {
-                if (PreferenceKeys.isRawNindOn()) {
-                    watermark = new GLImage(waterAiOnExternal);
-                } else {
-                    watermark = new GLImage(waterAiOffExternal);
-                }
+            if (waterAiOffExternal.exists()) {
+                watermark = new GLImage(waterAiOffExternal);
             }
             else if (waterExternal.exists()) {
                 watermark = new GLImage(waterExternal);
