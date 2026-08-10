@@ -52,6 +52,11 @@
     <item name="ae_metering_center_button" type="id"/>
     <item name="ae_metering_average_button" type="id"/>
     <item name="ae_metering_spot_button" type="id"/>
+    <item name="ae_metering_std_entry_layout" type="id"/>
+    <item name="ae_metering_std_off_button" type="id"/>
+    <item name="ae_metering_std_center_button" type="id"/>
+    <item name="ae_metering_std_average_button" type="id"/>
+    <item name="ae_metering_std_spot_button" type="id"/>
     <item name="save_each_bracket_entry_layout" type="id"/>
     <item name="save_each_bracket_off_button" type="id"/>
     <item name="save_each_bracket_on_button" type="id"/>

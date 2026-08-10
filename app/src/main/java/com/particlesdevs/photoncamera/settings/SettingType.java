@@ -13,5 +13,6 @@ public enum SettingType {
     BRACKETING,
     HISTOGRAM,
     AE_METERING,
+    AE_METERING_STD,
     SAVE_EACH_BRACKET
 }

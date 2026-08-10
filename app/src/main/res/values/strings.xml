@@ -158,11 +158,13 @@
 
     <!-- Metering mode strings -->
     <string name="ae_metering">MTK Metering</string>
-    <string name="ae_metering_off">Off</string>
+    <string name="ae_metering_off">Auto</string>
     <string name="ae_metering_center">Center Weighted</string>
     <string name="ae_metering_average">Frame Average</string>
     <string name="ae_metering_spot">Spot Metering</string>
+    <string name="ae_metering_std">AE Metering</string>
     <string name="pref_ae_metering_key" translatable="false">pref_ae_metering_mode_key</string>
+    <string name="pref_ae_metering_std_key" translatable="false">pref_ae_metering_std_mode_key</string>
 
     <!-- Bracketing mode strings -->
     <string name="exposure_bracketing">Exposure Bracketing</string>

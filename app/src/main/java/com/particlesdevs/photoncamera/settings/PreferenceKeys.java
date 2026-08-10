@@ -73,6 +73,7 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_COUNTDOWN_TIMER, 0);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_BRACKETING_MODE, 0); // Default to disable bracketing
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_METERING, -1); // Default to Off
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD, -1); // Default to Off
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SAVE_EACH_BRACKET, false);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, resources.getString(R.string.pref_video_resolution_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_ENCODER, 2); // H.264 (MediaRecorder.VideoEncoder.H264)
@@ -409,6 +410,14 @@ public class PreferenceKeys {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_AE_METERING, value);
     }
 
+    public static int getAeMeteringStd() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD);
+    }
+
+    public static void setAeMeteringStd(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD, value);
+    }
+
     public static boolean isSaveEachBracketOn() {
         return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_SAVE_EACH_BRACKET);
     }
@@ -544,6 +553,7 @@ public class PreferenceKeys {
         KEY_AF_MODE(R.string.pref_af_mode_key),
         KEY_AE_MODE(R.string.pref_ae_mode_key),
         KEY_AE_METERING(R.string.pref_ae_metering_key),
+        KEY_AE_METERING_STD(R.string.pref_ae_metering_std_key),
         KEY_BRACKETING_MODE(R.string.pref_bracketing_key),
         KEY_SAVE_EACH_BRACKET(R.string.pref_save_each_bracket_key),
         KEY_COUNTDOWN_TIMER(R.string.pref_countdown_timer_key),
