@@ -154,11 +154,14 @@ public class GLBasePipeline implements AutoCloseable {
             prepareNode(Nodes.get(i),i);
             startTimeMeasure();
             Nodes.get(i).Run();
+            GLCoreBlockProcessing.checkEglError("Node.Run: " + Nodes.get(i).Name);
             endTimeMeasure(Nodes.get(i).Name);
             if (i != Nodes.size() - 1) {
                 drawProgramTexture(Nodes.get(i));
+                GLCoreBlockProcessing.checkEglError("drawProgramTexture: " + Nodes.get(i).Name);
             }
             Nodes.get(i).AfterRun();
+            GLCoreBlockProcessing.checkEglError("Node.AfterRun: " + Nodes.get(i).Name);
         }
         if(texnum == 1){
             if (main2 != null) main2.close();

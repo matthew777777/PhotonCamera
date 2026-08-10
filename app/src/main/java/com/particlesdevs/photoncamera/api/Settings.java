@@ -1,5 +1,6 @@
 package com.particlesdevs.photoncamera.api;
 
+import com.particlesdevs.photoncamera.processing.parameters.IsoExpoSelector;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.util.Allocator;
 
@@ -37,6 +38,7 @@ public class Settings {
     public int cfaPattern;
     public int theme;
     public boolean remosaic;//TODO
+    public boolean saveEachBracket;
     public boolean eisPhoto;
     public int fpsMode;
     public int alignAlgorithm;
@@ -87,6 +89,7 @@ public class Settings {
         cfaPattern = PreferenceKeys.getCFAValue();
         rawSaver = PreferenceKeys.isSaveRaw();
         remosaic = PreferenceKeys.isRemosaicOn();
+        saveEachBracket = PreferenceKeys.isSaveEachBracketOn();
         eisPhoto = PreferenceKeys.isEisPhotoOn();
         QuadBayer = PreferenceKeys.isQuadBayerOn();
         fpsMode = PreferenceKeys.getFpsMode();
@@ -105,6 +108,7 @@ public class Settings {
         gamma = parseGammaArray();
         mCameraID = PreferenceKeys.getCameraID();
         theme = PreferenceKeys.getThemeValue();
+        IsoExpoSelector.HDR = PreferenceKeys.getBracketingMode() > 0 || saveEachBracket;
     }
 
     public void saveID() {

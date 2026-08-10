@@ -344,7 +344,9 @@ void main() {
              outp.r = getC(grk, dhtd(pos));
          }
     }
+    #ifndef NO_CLAMP
     outp = clamp(outp,0.0,1.0);
+    #endif
     //outp.rb = vec2(igE, igS);
     imageStore(outTexture, ivec2(gl_GlobalInvocationID.xy), vec4(outp, 1.0));
     //imageStore(outTexture, pos, vec4(gr(pos).x));

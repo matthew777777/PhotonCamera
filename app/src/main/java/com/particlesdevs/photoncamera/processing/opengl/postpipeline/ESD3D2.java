@@ -52,7 +52,7 @@ public class ESD3D2 extends Node {
     )
     float moire = 1.5f;
 
-    @Tunable(title = "Use Color Denoising", category = "Denoise", defaultValue = 1, min = 0, max = 1, step = 1,
+    @Tunable(title = "Use Color Denoising", category = "Denoise", defaultValue = 0, min = 0, max = 1, step = 1,
             description = "Whether to apply subsampling denoising to color channels (in addition to luma)"
     )
     boolean useColorDenoising;
