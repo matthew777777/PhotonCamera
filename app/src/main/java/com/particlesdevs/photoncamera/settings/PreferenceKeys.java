@@ -84,6 +84,7 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_DOWNSCALE_4X, false);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_WRITE_ZIP, true);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_CROP_169, true);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_QUALITY, 100);
 
         settingsManager.setDefaults(Key.CAMERA_ID, resources.getString(R.string.camera_id_default), new String[]{"0", "1"});
         settingsManager.setDefaults(Key.TONEMAP, resources.getString(R.string.tonemap_default), new String[]{resources.getString(R.string.tonemap_default)});
@@ -346,6 +347,14 @@ public class PreferenceKeys {
         return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_PIPELINE);
     }
 
+    public static int getJpegChromaSubsampling() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_JPEG_CHROMA_SUBSAMPLING);
+    }
+
+    public static int getExperimentalJpegQuality() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_QUALITY);
+    }
+
     public static void setHdrX(boolean value) {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_HDRX, value);
     }
@@ -570,6 +579,8 @@ public class PreferenceKeys {
          * Experimental Pipeline
          */
         KEY_EXPERIMENTAL_JPEG_PIPELINE(R.string.pref_experimental_jpeg_pipeline_key),
+        KEY_JPEG_CHROMA_SUBSAMPLING(R.string.pref_jpeg_chroma_subsampling_key),
+        KEY_EXPERIMENTAL_JPEG_QUALITY(R.string.pref_experimental_jpeg_quality_key),
 
         /**
          * Other Keys

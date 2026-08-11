@@ -20,6 +20,7 @@ import com.particlesdevs.photoncamera.processing.ImageSaver;
 import com.particlesdevs.photoncamera.processing.ProcessingEventsListener;
 import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.processing.parameters.FrameNumberSelector;
 import com.particlesdevs.photoncamera.processing.parameters.IsoExpoSelector;
 import com.particlesdevs.photoncamera.processing.render.Parameters;
@@ -326,9 +327,22 @@ public class HdrxProcessor extends ProcessorBase {
             Log.d(TAG,"Error in processingEventsListener.onProcessingFinished:"+Log.getStackTraceString(e));
         }
         imageFile = Paths.get(imageFile.toAbsolutePath() + ".jpg");
+
+        boolean isExperimental = PreferenceKeys.isExperimentalJpegPipelineOn();
+        int chromaSubsampling = PreferenceKeys.getJpegChromaSubsampling();
+        int jpgQuality = isExperimental ? PhotonCamera.getSettings().experimentalJpegQuality : ImageSaver.JPG_QUALITY;
+        boolean use444 = isExperimental && (chromaSubsampling == 1);
+
+        if (isExperimental) {
+            Log.d(TAG, "ExperimentalJPEG:");
+            Log.d(TAG, "quality = " + jpgQuality);
+            Log.d(TAG, "chromaSubsampling = " + (use444 ? "4:4:4" : "4:2:0"));
+            Log.d(TAG, "encoder = " + (use444 ? "stb_image_write" : "Android Bitmap.compress"));
+        }
+
         //Saves the final bitmap
         boolean imageSaved = ImageSaver.Util.saveBitmapAsJPG(imageFile, img,
-                ImageSaver.JPG_QUALITY, exifData);
+                jpgQuality, exifData, use444);
 
         try {
             processingEventsListener.notifyImageSavedStatus(imageSaved, imageFile);
