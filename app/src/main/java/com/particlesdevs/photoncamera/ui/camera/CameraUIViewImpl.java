@@ -1,6 +1,7 @@
 package com.particlesdevs.photoncamera.ui.camera;
 
 import android.os.Bundle;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import com.particlesdevs.photoncamera.app.PhotonCamera;
@@ -66,6 +67,7 @@ public class CameraUIViewImpl implements CameraUIView {
         this.mVideoRecordingInfo = cameraFragment.cameraFragmentBinding.getRoot().findViewById(R.id.video_recording_info);
         this.initListeners();
         this.initModeSwitcher();
+        this.initFrameCountSlider();
         this.currentState = new PhotoMotionModeState(); //init mode
         initModeState(CameraMode.valueOf(PreferenceKeys.getCameraModeOrdinal()));
     }
@@ -104,6 +106,32 @@ public class CameraUIViewImpl implements CameraUIView {
         this.mModePicker.setOverScrollMode(View.OVER_SCROLL_NEVER);
         this.mModePicker.setOnItemSelectedListener(index -> switchToMode(CameraMode.valueOf(index)));
         this.mModePicker.setSelectedItem(PreferenceKeys.getCameraModeOrdinal());
+    }
+
+    private void initFrameCountSlider() {
+        SeekBar frameCountSeekBar = cameraFragment.cameraFragmentBinding.frameCountSlider.frameCountSeekbar;
+        if (frameCountSeekBar != null) {
+            frameCountSeekBar.setProgress(PreferenceKeys.getFrameCountValue() - 1);
+            frameCountSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    if (fromUser) {
+                        int frames = progress + 1;
+                        PreferenceKeys.setFrameCountValue(frames);
+                        cameraFragment.getCameraFragmentViewModel().updateFrameCountDisplay();
+                        cameraFragment.getCameraFragmentViewModel().resetAutoHideTimer();
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {
+                }
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {
+                }
+            });
+        }
     }
 
     @Override
@@ -172,6 +200,13 @@ public class CameraUIViewImpl implements CameraUIView {
         cameraFragment.cameraFragmentBinding.invalidateAll();
         currentState.reConfigureModeViews(CameraMode.valueOf(PreferenceKeys.getCameraModeOrdinal()));
         this.resetCaptureProgressBar();
+
+        // Sync frame count slider
+        SeekBar frameCountSeekBar = cameraFragment.cameraFragmentBinding.frameCountSlider.frameCountSeekbar;
+        if (frameCountSeekBar != null) {
+            frameCountSeekBar.setProgress(PreferenceKeys.getFrameCountValue() - 1);
+        }
+
         if (!processing) {
             this.activateShutterButton(true);
             this.setProcessingProgressBarIndeterminate(false);

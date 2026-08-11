@@ -4,6 +4,9 @@ import android.app.Application;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
+
 import com.particlesdevs.photoncamera.util.Log;
 
 import androidx.annotation.NonNull;
@@ -17,6 +20,7 @@ import com.particlesdevs.photoncamera.gallery.files.GalleryFileOperations;
 import com.particlesdevs.photoncamera.gallery.files.ImageFile;
 import com.particlesdevs.photoncamera.ui.camera.CustomOrientationEventListener;
 import com.particlesdevs.photoncamera.ui.camera.model.CameraFragmentModel;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 
 /**
  * Class get used to update the Models binded to the ui
@@ -29,12 +33,15 @@ public class CameraFragmentViewModel extends AndroidViewModel {
     private final CameraFragmentModel cameraFragmentModel;
     //listen to device orientation changes
     private CustomOrientationEventListener mCustomOrientationEventListener;
+    private final Handler autoHideHandler = new Handler(Looper.getMainLooper());
+    private final Runnable hideSliderRunnable = () -> setFrameSliderVisible(false);
 
 
     public CameraFragmentViewModel(@NonNull Application application) {
         super(application);
         cameraFragmentModel = new CameraFragmentModel();
         initOrientationEventListener();
+        updateFrameCountDisplay();
     }
 
     public CameraFragmentModel getCameraFragmentModel() {
@@ -44,6 +51,7 @@ public class CameraFragmentViewModel extends AndroidViewModel {
     public void onResume() {
         mCustomOrientationEventListener.enable();
         cameraFragmentModel.setSettingsBarVisibility(false);
+        updateFrameCountDisplay();
     }
 
     public void onPause() {

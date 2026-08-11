@@ -17,6 +17,8 @@ public class CameraFragmentModel extends BaseObservable {
     private boolean settingsBarVisibility;
     private float screenAspectRatio = 9f / 16;
     private String dummyAspectRatio = "16:9";
+    private String frameCountSelected = "1F";
+    private boolean frameSliderVisible = false;
 
     @Bindable
     public float getScreenAspectRatio() {
@@ -78,5 +80,25 @@ public class CameraFragmentModel extends BaseObservable {
     public void setDummyAspectRatio(String dummyAspectRatio) {
         this.dummyAspectRatio = dummyAspectRatio;
         notifyPropertyChanged(BR.dummyAspectRatio);
+    }
+
+    @Bindable
+    public String getFrameCountSelected() {
+        return frameCountSelected;
+    }
+
+    public void setFrameCountSelected(String frameCountSelected) {
+        this.frameCountSelected = frameCountSelected;
+        notifyPropertyChanged(BR.frameCountSelected);
+    }
+
+    @Bindable
+    public boolean isFrameSliderVisible() {
+        return frameSliderVisible;
+    }
+
+    public void setFrameSliderVisible(boolean frameSliderVisible) {
+        this.frameSliderVisible = frameSliderVisible;
+        notifyPropertyChanged(BR.frameSliderVisible);
     }
 }
