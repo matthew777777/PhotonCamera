@@ -134,7 +134,7 @@ public class CameraFragmentViewModel extends AndroidViewModel {
     public void resetAutoHideTimer() {
         autoHideHandler.removeCallbacks(hideSliderRunnable);
         if (cameraFragmentModel.isFrameSliderVisible()) {
-            autoHideHandler.postDelayed(hideSliderRunnable, 1500);
+            autoHideHandler.postDelayed(hideSliderRunnable, 2500);
         }
     }
 
