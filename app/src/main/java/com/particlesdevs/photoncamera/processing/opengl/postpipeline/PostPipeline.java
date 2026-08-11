@@ -278,6 +278,7 @@ public class PostPipeline extends GLBasePipeline {
         add(new AutoExposure());
         Log.d("PostPipeline", "Adding Sharpen2");
         add(new Sharpen2());
+
         Log.d("PostPipeline", "Adding RotateWatermark");
         add(new RotateWatermark(getRotation()));
         

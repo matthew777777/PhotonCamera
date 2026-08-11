@@ -7,8 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-add_link_options("-Wl,-z,max-page-size=16384")
-
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../../../version.properties ver)
 string(REGEX MATCH "VERSION_BUILD=([0-9]*)" _ ${ver})
 set(VERSION_BUILD ${CMAKE_MATCH_1})
@@ -18,6 +16,12 @@ set(VERSION_NAME ${CMAKE_MATCH_1})
 file(DOWNLOAD
         https://raw.githubusercontent.com/ParticlesDevs/tinydng/refs/heads/master/tiny_dng_writer.h
         ${CMAKE_CURRENT_SOURCE_DIR}/deps/tiny_dng_writer.h)
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/deps/stb_image_write.h)
+    file(DOWNLOAD
+            https://raw.githubusercontent.com/nothings/stb/master/stb_image_write.h
+            ${CMAKE_CURRENT_SOURCE_DIR}/deps/stb_image_write.h)
+endif()
 
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/deps/technicallyflac.h)
     file(DOWNLOAD
@@ -201,6 +205,9 @@ add_library(allocator SHARED
 add_library(flacRecorder SHARED
     ${SRC_DIR}/flacRecorder.cpp
 )
+add_library(jpegEncoder SHARED
+    ${SRC_DIR}/jpegEncoder.cpp
+)
 add_library(
         camera2native SHARED ${SRC_DIR}/native-engine.cpp
 )
@@ -221,6 +228,11 @@ target_link_libraries(allocator PRIVATE
 
 target_link_libraries(flacRecorder PRIVATE
         log
+)
+
+target_link_libraries(jpegEncoder PRIVATE
+        log
+        jnigraphics
 )
 
 target_link_libraries(

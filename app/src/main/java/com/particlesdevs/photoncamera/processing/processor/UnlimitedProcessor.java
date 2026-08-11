@@ -6,11 +6,13 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.media.Image;
+import com.particlesdevs.photoncamera.util.Log;
 import com.particlesdevs.photoncamera.api.ParseExif;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.processing.ImageSaver;
 import com.particlesdevs.photoncamera.processing.ProcessingEventsListener;
 import com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.processing.opengl.scripts.AverageParams;
 import com.particlesdevs.photoncamera.processing.opengl.scripts.AverageRaw;
 import com.particlesdevs.photoncamera.processing.parameters.FrameNumberSelector;
@@ -132,8 +134,21 @@ public class UnlimitedProcessor extends ProcessorBase {
 
         processingEventsListener.onProcessingFinished("Unlimited JPG Processing Finished");
         imageFile = Paths.get(imageFile.toAbsolutePath() + ".jpg");
+
+        boolean isExperimental = PreferenceKeys.isExperimentalJpegPipelineOn();
+        int chromaSubsampling = PreferenceKeys.getJpegChromaSubsampling();
+        int jpgQuality = isExperimental ? PhotonCamera.getSettings().experimentalJpegQuality : ImageSaver.JPG_QUALITY;
+        boolean use444 = isExperimental && (chromaSubsampling == 1);
+
+        if (isExperimental) {
+            Log.d(TAG, "ExperimentalJPEG (Unlimited):");
+            Log.d(TAG, "quality = " + jpgQuality);
+            Log.d(TAG, "chromaSubsampling = " + (use444 ? "4:4:4" : "4:2:0"));
+            Log.d(TAG, "encoder = " + (use444 ? "stb_image_write" : "Android Bitmap.compress"));
+        }
+
         boolean imageSaved = ImageSaver.Util.saveBitmapAsJPG(imageFile, bitmap,
-                ImageSaver.JPG_QUALITY, exifData);
+                jpgQuality, exifData, use444);
 
         processingEventsListener.notifyImageSavedStatus(imageSaved, imageFile);
 
