@@ -49,6 +49,9 @@ public class Settings {
     public int videoNRMode;
     public int videoEdgeMode;
 
+    public int jpegChromaSubsampling;
+    public int experimentalJpegQuality;
+
     public int colorMethod;
     public int focusPeak;
     public int previewFormat;
@@ -100,6 +103,8 @@ public class Settings {
         videoBitrateMode = PreferenceKeys.getVideoBitrateMode();
         videoNRMode = PreferenceKeys.getVideoNRMode();
         videoEdgeMode = PreferenceKeys.getVideoEdgeMode();
+        jpegChromaSubsampling = PreferenceKeys.getJpegChromaSubsampling();
+        experimentalJpegQuality = PreferenceKeys.getExperimentalJpegQuality();
         colorMethod = PreferenceKeys.getColorMethodValue();
         focusPeak = PreferenceKeys.getFocusPeakValue();
         previewFormat = PreferenceKeys.getPreviewFormatValue();

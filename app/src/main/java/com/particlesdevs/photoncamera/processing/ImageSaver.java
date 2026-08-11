@@ -16,6 +16,7 @@ import androidx.exifinterface.media.ExifInterface;
 import com.particlesdevs.photoncamera.api.ParseExif;
 import com.particlesdevs.photoncamera.control.GyroBurst;
 import com.particlesdevs.photoncamera.processing.render.Parameters;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -118,16 +119,38 @@ public class ImageSaver {
 
     public static class Util {
         public static boolean saveBitmapAsJPG(Path fileToSave, Bitmap img, int jpgQuality, ParseExif.ExifData exifData) {
+            return saveBitmapAsJPG(fileToSave, img, jpgQuality, exifData, false);
+        }
+
+        public static boolean saveBitmapAsJPG(Path fileToSave, Bitmap img, int jpgQuality, ParseExif.ExifData exifData, boolean use444) {
             exifData.COMPRESSION = String.valueOf(jpgQuality);
             try {
-                OutputStream outputStream = Files.newOutputStream(fileToSave);
-                img.compress(Bitmap.CompressFormat.JPEG, jpgQuality, outputStream);
-                outputStream.flush();
-                outputStream.close();
+                boolean success = false;
+                boolean isExperimental = PreferenceKeys.isExperimentalJpegPipelineOn();
+                
+                // Use native encoder for Experimental path if 4:4:4 is requested
+                boolean needsNative = isExperimental && use444;
+
+                if (needsNative) {
+                    Log.d(TAG, "ExperimentalJPEG: Encoding with native encoder (4:4:4=" + use444 + ")");
+                    success = JpegEncoder.encodeJpeg(img, fileToSave.toAbsolutePath().toString(), jpgQuality, use444);
+                    if (!success) {
+                        Log.e(TAG, "ExperimentalJPEG: Native encoding failed, falling back to 4:2:0");
+                    }
+                }
+
+                if (!success) {
+                    OutputStream outputStream = Files.newOutputStream(fileToSave);
+                    img.compress(Bitmap.CompressFormat.JPEG, jpgQuality, outputStream);
+                    outputStream.flush();
+                    outputStream.close();
+                    success = true;
+                }
+
                 img.recycle();
                 ExifInterface inter = ParseExif.setAllAttributes(fileToSave.toFile(), exifData);
                 inter.saveAttributes();
-                return true;
+                return success;
             } catch (IOException e) {
                 e.printStackTrace();
                 return false;
