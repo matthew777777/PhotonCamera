@@ -286,6 +286,17 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
             mHorizonIndicatorView.setVisible(PreferenceKeys.isHorizonOn());
         }
         initSettingsBar();
+        textureView.setHistogramCallback(histData -> {
+            if (surfaceView != null && !histogramProcessing.get()) {
+                histogramProcessing.set(true);
+                surfaceView.post(() -> {
+                    surfaceView.setHistogramData(histData);
+                    surfaceView.setRotation(cameraFragmentViewModel.getCameraFragmentModel().getOrientation());
+                    surfaceView.refresh();
+                    histogramProcessing.set(false);
+                });
+            }
+        });
     }
 
     private void initSettingsBar() {
@@ -621,7 +632,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         Intent galleryIntent = new Intent(activity, GalleryActivity.class);
         // Create gallery bundle
         galleryIntent.putExtra("CameraFragment", true);
-        
+
         startActivity(galleryIntent, null);
     }
 

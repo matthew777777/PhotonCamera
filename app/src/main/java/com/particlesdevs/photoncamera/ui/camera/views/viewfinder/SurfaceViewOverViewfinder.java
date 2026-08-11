@@ -20,13 +20,14 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
     private final TextPaint textPaint = new TextPaint(TextPaint.ANTI_ALIAS_FLAG);
     private final Paint rectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint histogramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final PorterDuffXfermode porterDuffXfermode = new PorterDuffXfermode(PorterDuff.Mode.ADD);
     private final Paint histogramBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     public boolean isCanvasDrawn = false;
     private RectF afRectToDraw = new RectF();
     private RectF aeRectToDraw = new RectF();
     private String debugText = null;
-    private int[] histogramData;
+    private int[][] histogramData;
     private int rotationDegrees;
 
     public SurfaceViewOverViewfinder(Context context, AttributeSet attrs) {
@@ -82,20 +83,34 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
 
         float maxVal = 0;
         // Ignore the very first and last bins as they often have spikes (pure black/white)
-        for (int i = 1; i < histogramData.length - 1; i++) {
-            if (histogramData[i] > maxVal) maxVal = histogramData[i];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 1; j < histogramData[i].length - 1; j++) {
+                if (histogramData[i][j] > maxVal) maxVal = histogramData[i][j];
+            }
         }
 
         if (maxVal > 0) {
-            Path histPath = new Path();
-            histPath.moveTo(left, top + histHeight);
-            for (int i = 0; i < histogramData.length; i++) {
-                float barHeight = Math.min(histHeight, (histogramData[i] / maxVal) * histHeight);
-                histPath.lineTo(left + i, top + histHeight - barHeight);
+            histogramPaint.setXfermode(porterDuffXfermode);
+            for (int i = 0; i < 3; i++) {
+                if (i == 0) {
+                    histogramPaint.setARGB(0xFF, 0xFF, 0x07, 0x00);
+                } else if (i == 1) {
+                    histogramPaint.setARGB(0xFF, 0x00, 0xC9, 0x0D);
+                } else {
+                    histogramPaint.setARGB(0xFF, 0x19, 0x24, 0xB1);
+                }
+
+                Path histPath = new Path();
+                histPath.moveTo(left, top + histHeight);
+                for (int j = 0; j < histogramData[i].length; j++) {
+                    float barHeight = Math.min(histHeight, (histogramData[i][j] / maxVal) * histHeight);
+                    histPath.lineTo(left + j, top + histHeight - barHeight);
+                }
+                histPath.lineTo(left + histWidth, top + histHeight);
+                histPath.close();
+                canvas.drawPath(histPath, histogramPaint);
             }
-            histPath.lineTo(left + histWidth, top + histHeight);
-            histPath.close();
-            canvas.drawPath(histPath, histogramPaint);
+            histogramPaint.setXfermode(null);
         }
         canvas.restore();
     }
@@ -191,7 +206,7 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
         this.debugText = debugText;
     }
 
-    public void setHistogramData(int[] data) {
+    public void setHistogramData(int[][] data) {
         this.histogramData = data;
     }
 

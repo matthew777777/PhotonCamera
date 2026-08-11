@@ -8,7 +8,9 @@ import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
 
 import com.particlesdevs.photoncamera.processing.opengl.GLFormat;
+import com.particlesdevs.photoncamera.processing.opengl.GLProg;
 import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
+import com.particlesdevs.photoncamera.processing.opengl.scripts.GLHistogram;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.util.Log;
 
@@ -50,10 +52,10 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int hProgram;
     private GLTexture sampleTex;
     private int[] sampleFbo;
-    private ByteBuffer sampleBuffer;
+    private GLHistogram glHistogram;
 
     public interface HistogramCallback {
-        void onHistogramUpdate(byte[] rgbaData);
+        void onHistogramUpdate(int[][] histogramData);
     }
 
     public void setHistogramCallback(HistogramCallback callback) {
@@ -82,10 +84,15 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 mUpdateST = false;
             }
         }
+        GLES20.glUseProgram(hProgram);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
+
         GLES20.glUniformMatrix4fv(uTexRotateMatrix, 1, false, mTexRotateMatrix, 0);
         int peakEnabled = getPeakEnabled();
         GLES20.glUniform1i(enablePeak, peakEnabled);
         GLES20.glUniform1i(mirror, mMirrorPreview ? 1 : 0);
+        GLES20.glUniform2f(resolution, mView.getWidth(), mView.getHeight());
 
         GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 4 * 2, pVertex);
         GLES20.glVertexAttribPointer(vTexCoord, 2, GLES20.GL_FLOAT, false, 4 * 2, pTexCoord);
@@ -100,54 +107,66 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     }
 
     private void updateHistogram() {
-        int sampleSize = 64;
-        if (sampleTex == null) {
-            sampleTex = new GLTexture(sampleSize, sampleSize, new GLFormat(GLFormat.DataType.SIMPLE_8, 4));
-            sampleFbo = new int[1];
-            GLES30.glGenFramebuffers(1, sampleFbo, 0);
-            sampleBuffer = ByteBuffer.allocateDirect(sampleSize * sampleSize * 4);
+        try {
+            int sampleSize = 64;
+            if (sampleTex == null) {
+                sampleTex = new GLTexture(sampleSize, sampleSize, new GLFormat(GLFormat.DataType.SIMPLE_8, 4));
+                sampleFbo = new int[1];
+                GLES30.glGenFramebuffers(1, sampleFbo, 0);
+                glHistogram = new GLHistogram(new GLProg(), sampleSize);
+            }
+
+            // Save current GL state
+            int[] oldViewport = new int[4];
+            GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, oldViewport, 0);
+            int[] oldFbo = new int[1];
+            GLES20.glGetIntegerv(GLES30.GL_FRAMEBUFFER_BINDING, oldFbo, 0);
+            int[] oldProg = new int[1];
+            GLES20.glGetIntegerv(GLES20.GL_CURRENT_PROGRAM, oldProg, 0);
+            int[] oldActiveTex = new int[1];
+            GLES20.glGetIntegerv(GLES20.GL_ACTIVE_TEXTURE, oldActiveTex, 0);
+
+            // Bind sample FBO
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, sampleFbo[0]);
+            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, sampleTex.mTextureID, 0);
+            GLES30.glViewport(0, 0, sampleSize, sampleSize);
+
+            GLES20.glUseProgram(hProgram);
+
+            // Set uniforms for histogram sample blit
+            GLES20.glUniform1i(enablePeak, 0);
+            GLES20.glUniform2f(resolution, sampleSize, sampleSize);
+
+            // Draw OES to sample texture
+            GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 4 * 2, pVertex);
+            GLES20.glVertexAttribPointer(vTexCoord, 2, GLES20.GL_FLOAT, false, 4 * 2, pTexCoord);
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
+
+            // Compute histogram on GPU
+            glHistogram.Ac = false; // We don't need alpha histogram
+            int[][] data = glHistogram.Compute(sampleTex);
+
+            // Restore GL state
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, oldFbo[0]);
+            GLES20.glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
+
+            GLES20.glUseProgram(oldProg[0]);
+            // If we were using the main program, restore its uniforms immediately
+            if (oldProg[0] == hProgram) {
+                GLES20.glUniform2f(resolution, mView.getWidth(), mView.getHeight());
+                GLES20.glUniform1i(enablePeak, PhotonCamera.getSettings().focusPeak);
+            }
+
+            // Restore active texture unit and ensure OES is bound to unit 0
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
+            GLES20.glActiveTexture(oldActiveTex[0]);
+
+            histogramCallback.onHistogramUpdate(data);
+        } catch (Exception e) {
+            Log.e("MainRenderer", "Histogram update failed: " + e.getMessage());
+            e.printStackTrace();
         }
-
-        // Save current GL state
-        int[] oldViewport = new int[4];
-        GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, oldViewport, 0);
-        int[] oldFbo = new int[1];
-        GLES20.glGetIntegerv(GLES30.GL_FRAMEBUFFER_BINDING, oldFbo, 0);
-
-        GLES20.glUseProgram(hProgram);
-
-        // Bind sample FBO
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, sampleFbo[0]);
-        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, sampleTex.mTextureID, 0);
-        GLES30.glViewport(0, 0, sampleSize, sampleSize);
-
-        // Disable peak for histogram blit
-        int peakLoc = GLES20.glGetUniformLocation(hProgram, "enablePeak");
-        GLES20.glUniform1i(peakLoc, 0);
-
-        int resolutionLoc = GLES20.glGetUniformLocation(hProgram, "resolution");
-        GLES20.glUniform2f(resolutionLoc, sampleSize, sampleSize);
-
-        // Draw OES to sample texture
-        GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 4 * 2, pVertex);
-        GLES20.glVertexAttribPointer(vTexCoord, 2, GLES20.GL_FLOAT, false, 4 * 2, pTexCoord);
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-
-        // Read pixels
-        sampleBuffer.rewind();
-        GLES20.glReadPixels(0, 0, sampleSize, sampleSize, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, sampleBuffer);
-
-        byte[] data = new byte[sampleSize * sampleSize * 4];
-        sampleBuffer.rewind();
-        sampleBuffer.get(data);
-
-        // Restore GL state
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, oldFbo[0]);
-        GLES20.glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
-        GLES20.glUniform2f(resolutionLoc, mView.getWidth(), mView.getHeight());
-        GLES20.glUniform1i(peakLoc, PhotonCamera.getSettings().focusPeak);
-
-        histogramCallback.onHistogramUpdate(data);
     }
 
     private int uTexRotateMatrix;
@@ -172,11 +191,12 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         vTexCoord = GLES20.glGetAttribLocation(hProgram, "vTexCoord");
         enablePeak = GLES20.glGetUniformLocation(hProgram, "enablePeak");
         mirror = GLES20.glGetUniformLocation(hProgram, "mirror");
+        resolution = GLES20.glGetUniformLocation(hProgram, "resolution");
         GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 4 * 2, pVertex);
         GLES20.glVertexAttribPointer(vTexCoord, 2, GLES20.GL_FLOAT, false, 4 * 2, pTexCoord);
         GLES20.glEnableVertexAttribArray(vPosition);
         GLES20.glEnableVertexAttribArray(vTexCoord);
-        GLES20.glUniform2f(GLES20.glGetUniformLocation(hProgram, "resolution"), mView.getWidth(), mView.getHeight());
+        GLES20.glUniform2f(resolution, mView.getWidth(), mView.getHeight());
         mGLInit = true;
         mView.fireOnSurfaceTextureAvailable(mSTexture, 0, 0);
     }
