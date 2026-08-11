@@ -116,6 +116,19 @@
                     app:layout_constraintStart_toStartOf="parent"
                     android:layout_marginBottom="8dp" />
 
+            <include
+                    android:id="@+id/frame_count_slider"
+                    layout="@layout/layout_frame_slider"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="54dp"
+                    app:layout_constraintBottom_toTopOf="@+id/layout_bottombar"
+                    app:layout_constraintEnd_toStartOf="@+id/aux_buttons_container"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:uimodel="@{uimodel}" />
+
             <!--    Block 1.6-->
             <!--    includes the Layout resource of BottomBar-->
             <include

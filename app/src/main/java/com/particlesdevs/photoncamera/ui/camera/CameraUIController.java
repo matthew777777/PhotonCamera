@@ -73,6 +73,7 @@ final class CameraUIController implements CameraUIEventsListener,
                 }
                 break;
             case R.id.settings_button:
+                cameraFragment.getCameraFragmentViewModel().setFrameSliderVisible(false);
                 cameraFragment.launchSettings();
                 break;
 
@@ -135,6 +136,12 @@ final class CameraUIController implements CameraUIEventsListener,
                 ((TimerButton) view).setTimerIconState(PreferenceKeys.getCountdownTimerIndex());
                 cameraFragment.updateSettingsBar();
                 break;
+
+            case R.id.frame_count_selection_button:
+                cameraFragment.getCameraFragmentViewModel().setFrameSliderVisible(
+                        !cameraFragment.getCameraFragmentViewModel().getCameraFragmentModel().isFrameSliderVisible()
+                );
+                break;
         }
     }
 
@@ -172,6 +179,7 @@ final class CameraUIController implements CameraUIEventsListener,
 
     @Override
     public void onCameraModeChanged(CameraMode cameraMode) {
+        cameraFragment.getCameraFragmentViewModel().setFrameSliderVisible(false);
         PreferenceKeys.setCameraModeOrdinal(cameraMode.ordinal());
         Log.d(TAG, "onCameraModeChanged() called with: cameraMode = [" + cameraMode + "]");
         switch (cameraMode) {

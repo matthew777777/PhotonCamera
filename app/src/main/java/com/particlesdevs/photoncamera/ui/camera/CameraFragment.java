@@ -807,6 +807,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
         @Override
         public void onCaptureStillPictureStarted(Object o) {
+            cameraFragmentViewModel.setFrameSliderVisible(false);
             if (PhotonCamera.getSettings().selectedMode != CameraMode.RAWVIDEO) {
                 mCameraUIView.setCaptureProgressBarOpacity(1.0f);
                 mCameraUIView.lockUIForBurst(true);
