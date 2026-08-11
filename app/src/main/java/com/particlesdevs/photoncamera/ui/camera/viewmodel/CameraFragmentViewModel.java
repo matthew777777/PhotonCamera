@@ -109,6 +109,27 @@ public class CameraFragmentViewModel extends AndroidViewModel {
         }
     }
 
+    public void updateFrameCountDisplay() {
+        int frames = PreferenceKeys.getFrameCountValue();
+        cameraFragmentModel.setFrameCountSelected(frames + "F");
+    }
+
+    public void setFrameSliderVisible(boolean visible) {
+        cameraFragmentModel.setFrameSliderVisible(visible);
+        if (visible) {
+            resetAutoHideTimer();
+        } else {
+            autoHideHandler.removeCallbacks(hideSliderRunnable);
+        }
+    }
+
+    public void resetAutoHideTimer() {
+        autoHideHandler.removeCallbacks(hideSliderRunnable);
+        if (cameraFragmentModel.isFrameSliderVisible()) {
+            autoHideHandler.postDelayed(hideSliderRunnable, 2500);
+        }
+    }
+
     public void setScreenAspectRatio(float aspectRatio){
         cameraFragmentModel.setScreenAspectRatio(aspectRatio);
     }
