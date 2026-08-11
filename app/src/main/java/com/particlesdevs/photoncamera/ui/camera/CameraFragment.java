@@ -260,25 +260,14 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
             mHorizonIndicatorView.setVisible(PreferenceKeys.isHorizonOn());
         }
         initSettingsBar();
-        textureView.setHistogramCallback(rgbaData -> {
+        textureView.setHistogramCallback(histData -> {
             if (surfaceView != null && !histogramProcessing.get()) {
                 histogramProcessing.set(true);
-                processExecutorService.execute(() -> {
-                    int[] hist = new int[256];
-                    for (int i = 0; i < rgbaData.length; i += 4) {
-                        int r = rgbaData[i] & 0xFF;
-                        int g = rgbaData[i + 1] & 0xFF;
-                        int b = rgbaData[i + 2] & 0xFF;
-                        // Luminance: 0.299R + 0.587G + 0.114B
-                        int lum = (int) (0.299f * r + 0.587f * g + 0.114f * b);
-                        hist[lum & 0xFF]++;
-                    }
-                    surfaceView.post(() -> {
-                        surfaceView.setHistogramData(hist);
-                        surfaceView.setRotation(cameraFragmentViewModel.getCameraFragmentModel().getOrientation());
-                        surfaceView.refresh();
-                        histogramProcessing.set(false);
-                    });
+                surfaceView.post(() -> {
+                    surfaceView.setHistogramData(histData);
+                    surfaceView.setRotation(cameraFragmentViewModel.getCameraFragmentModel().getOrientation());
+                    surfaceView.refresh();
+                    histogramProcessing.set(false);
                 });
             }
         });
