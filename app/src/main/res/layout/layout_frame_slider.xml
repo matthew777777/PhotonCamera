@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+        <import type="android.view.View" />
+        <variable
+            name="uimodel"
+            type="com.particlesdevs.photoncamera.ui.camera.model.CameraFragmentModel" />
+    </data>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/frame_slider_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/aux_container_background"
+        android:padding="12dp"
+        android:visibility="@{uimodel.frameSliderVisible ? View.VISIBLE : View.GONE}"
+        android:clickable="true"
+        android:focusable="true">
+
+        <TextView
+            android:id="@+id/frame_slider_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/frame_count"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:ellipsize="end"
+            android:singleLine="true"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/frame_slider_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@{uimodel.frameCountSelected}"
+            tools:text="11F"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            app:layout_constraintStart_toEndOf="@+id/frame_slider_title"
+            app:layout_constraintTop_toTopOf="parent"
+            android:layout_marginStart="120dp" />
+
+        <SeekBar
+            android:id="@+id/frame_count_seekbar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:max="199"
+            android:progress="10"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/frame_slider_title" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</layout>

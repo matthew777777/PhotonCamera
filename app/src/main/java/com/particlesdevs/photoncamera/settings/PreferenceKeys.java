@@ -292,6 +292,10 @@ public class PreferenceKeys {
         return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_FRAME_COUNT);
     }
 
+    public static void setFrameCountValue(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_FRAME_COUNT, value);
+    }
+
     public static float getSharpnessValue() {
         return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_SHARPNESS_SEEKBAR);
     }

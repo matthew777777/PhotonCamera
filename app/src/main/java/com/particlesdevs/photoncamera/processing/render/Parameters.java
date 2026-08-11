@@ -612,6 +612,16 @@ public class Parameters {
     @NonNull
     @Override
     public String toString() {
+        if (PreferenceKeys.isExperimentalJpegPipelineOn()) {
+            return "parameters:\n" +
+                    "\n hasGainMap=" + hasGainMap +
+                    "\n FrameCount=" + FrameNumberSelector.frameCount +
+                    "\n CameraID=" + cameraID +
+                    "\n ExpoCorrect=" + FltFormat(PhotonCamera.getSettings().exposureCompensation) +
+                    "\n Noise Merging=" + FltFormat(PhotonCamera.getSettings().mergeStrength) +
+                    "\n FocalL=" + FltFormat(focalLength) +
+                    "\n Version=" + PhotonCamera.getVersion();
+        }
         return "parameters:\n" +
                 "\n hasGainMap=" + hasGainMap +
                 "\n FrameCount=" + FrameNumberSelector.frameCount +

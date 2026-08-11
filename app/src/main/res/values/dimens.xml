@@ -7,7 +7,7 @@
     <dimen name="viewfinder_top_padding">0dp</dimen>
     <dimen name="mode_chip_height">30dp</dimen>
     <dimen name="flip_camera_size">50dp</dimen>
-    <dimen name="gallery_button_size">60dp</dimen>
+    <dimen name="gallery_button_size">50dp</dimen>
     <dimen name="bottombar_to_modeswitcher_margin">@dimen/bottombar_padding</dimen>
     <dimen name="bottombar_padding">0dp</dimen>
     <dimen name="shutter_progress_bar_size">70dp</dimen>
