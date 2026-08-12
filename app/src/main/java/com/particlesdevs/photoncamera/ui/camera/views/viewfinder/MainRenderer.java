@@ -184,6 +184,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int vTexCoord;
     private int enablePeak;
     private int mirror;
+    private int resolution;
 
     @Override
     public void close() {
