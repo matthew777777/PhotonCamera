@@ -6,7 +6,6 @@ Android Camera that uses Enhanced Image Processing
 ## Links
 
 [![Telegram - ENG](https://img.shields.io/badge/Telegram-ENG-blue)](https://t.me/PhotonCameraEN)
-[![Telegram - RU](https://img.shields.io/badge/Telegram-RU-blue)](https://t.me/PhotonCamera)
 
 
 ## Screenshots
