@@ -145,7 +145,7 @@
 
         <!-- Activity alias for launcher icon - can be enabled/disabled programmatically -->
         <activity-alias
-                android:name="com.particlesdevs.photoncamera.gallery.ui.GalleryActivityLauncher"
+                android:name="${applicationId}.gallery.ui.GalleryActivityLauncher"
                 android:targetActivity="com.particlesdevs.photoncamera.gallery.ui.GalleryActivity"
                 android:label="@string/gallery_name"
                 android:icon="@mipmap/ic_gallery_launcher"
