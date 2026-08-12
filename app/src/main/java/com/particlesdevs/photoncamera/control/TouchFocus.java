@@ -210,17 +210,6 @@ public class TouchFocus {
         builder.set(CaptureRequest.CONTROL_AF_MODE, captureController.mPreviewAFMode);
         builder.set(CaptureRequest.CONTROL_AE_MODE, captureController.mPreviewAEMode);
         
-        // Kickstart the continuous focus algorithm if we are returning to a continuous mode.
-        // This ensures the camera re-evaluates the scene immediately without needing motion.
-        // We use START -> CANCEL to jolt the state machine into PASSIVE_SCAN.
-        if (captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE ||
-                captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO) {
-            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
-            captureController.rebuildPreviewBuilderOneShot();
-            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-            captureController.rebuildPreviewBuilderOneShot();
-        }
-
         builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
         captureController.rebuildPreviewBuilder();
         isTouchFocus = false;
