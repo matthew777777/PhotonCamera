@@ -26,7 +26,7 @@ public class IsoExpoSelector {
     public static ArrayList<ExpoPair> fullpairs = new ArrayList<>();
     public static long lastSelectedExposure = 0;
 
-    // ---- Shutter-Priority / Dynamic Low-Light AE Curve ----
+    // ---- Shutter-Priority / Dynamic Low-Light AE Curve (HDR+ Enhanced style) ----
     // Instead of letting stock 3A pick a fast shutter + high ISO, we keep the SAME
     // total exposure the platform metered (exposure_time * iso is still a valid
     // brightness target) and re-split it: push shutter time up first - more real
@@ -76,7 +76,6 @@ public class IsoExpoSelector {
         double compensation = Math.pow(2.0,PhotonCamera.getSettings().exposureCompensation);
         pair.normalizeiso100();
         pair.ExpoCompensateLower(1.0/compensation);
-
 
         if (PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT)
         {
@@ -222,6 +221,7 @@ public class IsoExpoSelector {
         if (pair.exposure < ExposureIndex.sec / 90 && PhotonCamera.getSettings().eisPhoto) {
             //HDR = true;
         }
+
         if(step != -1) {
             if (step == 0) pairs.clear();
             if (pairs.size() < patternSize) {
@@ -442,7 +442,7 @@ public class IsoExpoSelector {
         }
 
         /**
-         * Shutter-Priority / Dynamic Low-Light AE curve.
+         * Shutter-Priority / Dynamic Low-Light AE curve (HDR+ Enhanced style).
          *
          * Keeps the platform's own metered brightness target (exposure * iso stays
          * constant) but re-splits it between shutter time and ISO gain: ISO is tried

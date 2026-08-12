@@ -114,11 +114,11 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 Log.d("MainRenderer", "Initializing histogram resources");
                 if (sampleTex != null) sampleTex.close();
                 sampleTex = new GLTexture(sampleSize, sampleSize, new GLFormat(GLFormat.DataType.SIMPLE_8, 4));
-                
+
                 if (sampleFbo != null) GLES30.glDeleteFramebuffers(1, sampleFbo, 0);
                 sampleFbo = new int[1];
                 GLES30.glGenFramebuffers(1, sampleFbo, 0);
-                
+
                 if (glHistogram != null) glHistogram.close();
                 glHistogram = new GLHistogram(new GLProg(), histSize);
             }
@@ -206,7 +206,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         Log.d("MainRenderer", "onSurfaceCreated");
-        
+
         // Reset resources on context creation to ensure they are recreated with valid IDs
         glHistogram = null;
         sampleTex = null;

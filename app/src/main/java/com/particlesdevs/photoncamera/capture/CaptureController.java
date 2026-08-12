@@ -2624,6 +2624,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 Log.e(TAG, "Failed to set 10-bit HEVC profile: " + e.getMessage());
             }
         }
+
         mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         mMediaRecorder.setAudioEncodingBitRate(profile.audioBitRate);
         mMediaRecorder.setAudioSamplingRate(profile.audioSampleRate);
