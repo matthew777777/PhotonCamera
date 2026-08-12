@@ -35,6 +35,7 @@ public class GLPreview extends GLSurfaceView {
         mRenderer = new MainRenderer(this);
 
         setEGLContextClientVersion(3);
+        setPreserveEGLContextOnPause(true);
         setRenderer(mRenderer);
         setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
     }
@@ -78,9 +79,12 @@ public class GLPreview extends GLSurfaceView {
 
     @Override
     public void onPause() {
-        available = false;
+        // available = false; // Keep it true if context is preserved
         fireOnSurfaceTextureDestroyed(getSurfaceTexture());
-        // mRenderer.onPause();
+        // Removing unsafe cleanup from UI thread
+        // if (mRenderer != null) {
+        //     mRenderer.close();
+        // }
         super.onPause();
     }
 
@@ -164,6 +168,10 @@ public class GLPreview extends GLSurfaceView {
     public void setSurfaceTextureListener(TextureView.SurfaceTextureListener l) {
         this.surfaceTextureListener = l;
         available = true;
+        SurfaceTexture st = getSurfaceTexture();
+        if (st != null) {
+            fireOnSurfaceTextureAvailable(st, getWidth(), getHeight());
+        }
     }
 
     public void scale(int in_width, int in_height, int out_width, int out_height, int or) {

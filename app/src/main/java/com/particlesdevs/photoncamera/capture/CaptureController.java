@@ -522,6 +522,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         @Override
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             // This method is called when the camera is opened.  We start camera preview here.
+            Log.d(TAG, "CameraDevice onOpened(): " + cameraDevice.getId());
             mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
             mImageSaver = new ImageSaver(cameraEventsListener);
@@ -1472,6 +1473,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     }
     Surface surface;
     public void createCameraPreviewSession(boolean isBurstSession) {
+        Log.d(TAG, "createCameraPreviewSession() isBurstSession:" + isBurstSession);
         try {
             SurfaceTexture texture = mTextureView.getSurfaceTexture();
             if (texture == null) {
@@ -1525,7 +1527,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                     new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    Log.d(TAG, "CameraCaptureSession onConfigured():" + cameraCaptureSession);
+                    Log.d(TAG, "CameraCaptureSession onConfigured(): " + cameraCaptureSession);
                     // The camera is already closed
                     if (null == mCameraDevice) {
                         return;
@@ -1583,7 +1585,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 public void onConfigureFailed(
                         @NonNull CameraCaptureSession cameraCaptureSession) {
                     showToast(activity.getString(R.string.session_on_configure_failed));
-                    Log.d(TAG, "CameraCaptureSession onConfigureFailed()");
+                    Log.e(TAG, "CameraCaptureSession onConfigureFailed() session:" + cameraCaptureSession);
                 }
             };
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -1714,6 +1716,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      * finished.
      */
     public void unlockFocus() {
+        if (mPreviewRequestBuilder == null || mCaptureSession == null) {
+            Log.w(TAG, "unlockFocus(): camera not ready (builder=" + mPreviewRequestBuilder + " session=" + mCaptureSession + ")");
+            return;
+        }
         try {
             // Reset the auto-focus trigger
             //mCaptureSession.stopRepeating();
