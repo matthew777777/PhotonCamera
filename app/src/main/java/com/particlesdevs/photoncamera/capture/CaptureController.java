@@ -1586,7 +1586,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 if(!Objects.equals(physicalID, logicalID) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P){
                     config.setPhysicalCameraId(physicalID);
                 }
-                
+
                 // Set 10-bit dynamic range profile for video surfaces if supported
                 if (mIsRecordingVideo && bitDepth == 10 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     // Check if this surface is the MediaRecorder surface
@@ -1598,7 +1598,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                         }
                     }
                 }
-                
+
                 outputConfigurations.add(config);
             }
 
@@ -1628,7 +1628,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                 Log.d(TAG, "Failed to set LENS_SHADING_MAP_MODE_ON for ZSL mode:" + Log.getStackTraceString(e));
                             }
                         //}
-                        
+
                         // Apply dynamic OIS for preview stream
                         applyOisMode(mPreviewRequestBuilder, false);
 
@@ -1750,7 +1750,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (PreferenceKeys.isEisPhotoOn()) {
                 mPreviewRequestBuilder.set(CONTROL_VIDEO_STABILIZATION_MODE, CONTROL_VIDEO_STABILIZATION_MODE_ON);
             }
-            
+
             // Apply Noise Reduction and Edge Mode for Video
             int nrMode = PreferenceKeys.getVideoNRMode();
             int edgeMode = PreferenceKeys.getVideoEdgeMode();
@@ -1800,13 +1800,15 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      */
     public void unlockFocus() {
         try {
+            // Reset the auto-focus trigger once
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                    CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+            rebuildPreviewBuilderOneShot();
+
             reset3Aparams();
-            
+
             // Restore manual parameters if any
             paramController.setupPreview();
-            
-            // Ensure the trigger is reset to IDLE for repeating requests
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
 
             // Go back to normal preview state
             mState = STATE_PREVIEW;
@@ -2123,7 +2125,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (mFlashed) captureBuilder.set(FLASH_MODE, FLASH_MODE_TORCH);
             Log.d(TAG, "Focus:" + focus);
             captureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL);
-           
+
             int[] stabilizationModes = mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
             if (stabilizationModes != null && stabilizationModes.length > 1) {
                 Log.d(TAG, "LENS_OPTICAL_STABILIZATION_MODE");
@@ -2615,19 +2617,19 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         int cameraIdInt;
         try { cameraIdInt = Integer.parseInt(cameraIdStr); } catch (NumberFormatException e) { cameraIdInt = 0; }
         CamcorderProfile profile = resolveVideoProfile(cameraIdInt, PreferenceKeys.getVideoResolution());
-        
+
         int encoder = PreferenceKeys.getVideoEncoder();
         int bitDepth = PreferenceKeys.getVideoBitDepth();
         int bitrateMode = PreferenceKeys.getVideoBitrateMode();
 
         mMediaRecorder.setVideoFrameRate(profile.videoFrameRate);
         mMediaRecorder.setVideoSize(profile.videoFrameWidth, profile.videoFrameHeight);
-        
+
         // Bitrate calculation
         int bitrate = profile.videoBitRate;
         String mime = (encoder == MediaRecorder.VideoEncoder.HEVC) ? MediaFormat.MIMETYPE_VIDEO_HEVC : MediaFormat.MIMETYPE_VIDEO_AVC;
         int maxBitrate = getMaxBitrate(mime);
-        
+
         switch (bitrateMode) {
             case 1: // High / Max
                 // Use a high percentage of max if max is reasonable, otherwise use profile * 2
@@ -2644,10 +2646,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             default:
                 break;
         }
-        
+
         mMediaRecorder.setVideoEncodingBitRate(bitrate);
         mMediaRecorder.setVideoEncoder(encoder);
-        
+
         // 10-bit HEVC support (API 33+)
         if (bitDepth == 10 && encoder == MediaRecorder.VideoEncoder.HEVC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             try {
@@ -2658,7 +2660,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 // But for MediaRecorder, we try to set the profile if possible.
                 // mMediaRecorder.setVideoProfile(MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10); // This doesn't exist on MediaRecorder
                 // Instead, we use setVideoEncodingProfileLevel
-                mMediaRecorder.setVideoEncodingProfileLevel(MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10, 
+                mMediaRecorder.setVideoEncodingProfileLevel(MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10,
                         MediaCodecInfo.CodecProfileLevel.HEVCMainTierLevel1);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to set 10-bit HEVC profile: " + e.getMessage());
