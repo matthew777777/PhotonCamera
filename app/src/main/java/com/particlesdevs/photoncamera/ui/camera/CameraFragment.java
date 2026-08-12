@@ -363,8 +363,9 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     private void initTouchFocus() {
         if (cameraFragmentBinding != null && captureController != null) {
             View focusCircle = cameraFragmentBinding.layoutViewfinder.touchFocus;
+            View exposureCircle = cameraFragmentBinding.layoutViewfinder.exposureFocus;
             textureView.post(() -> {
-                mTouchFocus = new TouchFocus(captureController,focusCircle,textureView);
+                mTouchFocus = new TouchFocus(captureController,focusCircle,exposureCircle, textureView);
                 captureController.mTouchFocus = mTouchFocus;
             });
         }
@@ -752,7 +753,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         Intent galleryIntent = new Intent(activity, GalleryActivity.class);
         // Create gallery bundle
         galleryIntent.putExtra("CameraFragment", true);
-        
+
         startActivity(galleryIntent, null);
     }
 
