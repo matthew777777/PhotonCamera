@@ -17,7 +17,7 @@ import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.GLPreview;
 
 public class TouchFocus {
     private static final String TAG = "TouchFocus";
-    private static final int AUTO_HIDE_DELAY_MS = 3000;
+    private static final int AUTO_HIDE_DELAY_MS = 5000;
     private final CaptureController captureController;
     private final GLPreview textureView;
     private final View focusCircleView;
@@ -219,17 +219,11 @@ public class TouchFocus {
         
         // Kickstart the continuous focus algorithm if we are returning to a continuous mode.
         // This ensures the camera re-evaluates the scene immediately without needing motion.
+        // We use START -> CANCEL to jolt the state machine into PASSIVE_SCAN.
         if (captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE ||
                 captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO) {
-            
-            // Step 1: Briefly switch mode to OFF to force a state machine reset
-            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
             captureController.rebuildPreviewBuilderOneShot();
-            
-            // Step 2: Restore CONTINUOUS mode
-            builder.set(CaptureRequest.CONTROL_AF_MODE, captureController.mPreviewAFMode);
-            
-            // Step 3: Send CANCEL to unlock and start a fresh passive scan
             builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
             captureController.rebuildPreviewBuilderOneShot();
         }
