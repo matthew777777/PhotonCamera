@@ -109,6 +109,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private void updateHistogram() {
         try {
             int sampleSize = 64;
+            int histSize = 256;
             if (glHistogram == null || sampleTex == null || sampleFbo == null) {
                 Log.d("MainRenderer", "Initializing histogram resources");
                 if (sampleTex != null) sampleTex.close();
@@ -119,7 +120,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 GLES30.glGenFramebuffers(1, sampleFbo, 0);
                 
                 if (glHistogram != null) glHistogram.close();
-                glHistogram = new GLHistogram(new GLProg(), sampleSize);
+                glHistogram = new GLHistogram(new GLProg(), histSize);
             }
 
             // Save current GL state

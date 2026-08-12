@@ -106,9 +106,10 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
 
                 Path histPath = new Path();
                 histPath.moveTo(left, top + histHeight);
+                float xInterval = (float) histWidth / (float) histogramData[i].length;
                 for (int j = 0; j < histogramData[i].length; j++) {
                     float barHeight = Math.min(histHeight, (histogramData[i][j] / maxVal) * histHeight);
-                    histPath.lineTo(left + j, top + histHeight - barHeight);
+                    histPath.lineTo(left + j * xInterval, top + histHeight - barHeight);
                 }
                 histPath.lineTo(left + histWidth, top + histHeight);
                 histPath.close();
