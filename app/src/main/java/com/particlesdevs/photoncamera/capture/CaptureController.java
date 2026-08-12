@@ -1817,25 +1817,13 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      */
     public void unlockFocus() {
         try {
-            // Reset the auto-focus trigger once
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-            rebuildPreviewBuilderOneShot();
-
             reset3Aparams();
             
             // Restore manual parameters if any
             paramController.setupPreview();
             
-            // Kickstart the continuous focus algorithm if we are in a continuous mode.
-            // This ensures the camera re-evaluates the scene immediately after capture.
-            if (mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE ||
-                    mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO) {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
-                rebuildPreviewBuilderOneShot();
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-                rebuildPreviewBuilderOneShot();
-            }
+            // Ensure the trigger is reset to IDLE for repeating requests
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
 
             // Go back to normal preview state
             mState = STATE_PREVIEW;
