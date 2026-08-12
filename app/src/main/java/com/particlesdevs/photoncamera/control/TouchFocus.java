@@ -133,25 +133,31 @@ public class TouchFocus {
             Log.w(TAG, "triggerAutoFocus(): mPreviewRequestBuilder is null");
             return;
         }
+
+        // Cancel any existing AF/AE triggers
         builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-        //builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+        builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL);
         captureController.rebuildPreviewBuilderOneShot();
+
+        // Apply new regions
         builder.set(CaptureRequest.CONTROL_AF_REGIONS, rectaf);
         builder.set(CaptureRequest.CONTROL_AE_REGIONS, rectaf);
         builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
-        builder.set(CaptureRequest.CONTROL_AF_MODE, PreferenceKeys.getAfMode());
+
+        // Force AUTO mode to ensure an active scan happens on trigger start
+        // This fixes the issue where tap-to-focus is ignored in continuous modes
+        builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
         builder.set(CaptureRequest.CONTROL_AE_MODE, Math.max(PreferenceKeys.getAeMode(), 1));
-        //set focus area repeating,else cam forget after one frame where it should focus
-        //trigger af start only once. cam starts focusing till its focused or failed
-        if(PreferenceKeys.getAfMode() == CaptureRequest.CONTROL_AF_MODE_AUTO) {
-            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
-            captureController.rebuildPreviewBuilderOneShot();
-            //set focus trigger back to idle to signal cam after focusing is done to do nothing
-            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
-            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
-            captureController.rebuildPreviewBuilderOneShot();
-        }
+
+        // Start triggers
+        builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+        captureController.rebuildPreviewBuilderOneShot();
+
+        // Reset triggers to IDLE for repeating requests
+        builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+
         captureController.rebuildPreviewBuilder();
         isTouchFocus = true;
     }
@@ -182,12 +188,22 @@ public class TouchFocus {
         captureController.rebuildPreviewBuilderOneShot();
         captureController.rebuildPreviewBuilder();*/
         builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-        //builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+        captureController.rebuildPreviewBuilderOneShot();
+
         builder.set(CaptureRequest.CONTROL_AF_REGIONS, captureController.mPreviewMeteringAF);
         builder.set(CaptureRequest.CONTROL_AE_REGIONS, captureController.mPreviewMeteringAE);
         builder.set(CaptureRequest.CONTROL_AF_MODE, captureController.mPreviewAFMode);
         builder.set(CaptureRequest.CONTROL_AE_MODE, captureController.mPreviewAEMode);
-        captureController.rebuildPreviewBuilderOneShot();
+
+        // Kickstart the continuous focus algorithm if we are returning to a continuous mode.
+        // This ensures the camera re-evaluates the scene immediately without needing motion.
+        if (captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE ||
+                captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO) {
+            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+            captureController.rebuildPreviewBuilderOneShot();
+        }
+
+        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
         captureController.rebuildPreviewBuilder();
         isTouchFocus = false;
     }
@@ -203,8 +219,14 @@ public class TouchFocus {
 
     //Must be run on UI Thread
     private void hideFocusCircleView() {
-        if (focusCircleView.getVisibility() == View.VISIBLE) {
-            focusCircleView.animate().alpha(0f).scaleY(1.8f).scaleX(1.8f).setDuration(100)
+        hideCircle(focusCircleView);
+        hideCircle(exposureCircleView);
+        resetAutoFocus();
+    }
+
+    private void hideCircle(View view) {
+        if (view.getVisibility() == View.VISIBLE) {
+            view.animate().alpha(0f).scaleY(1.8f).scaleX(1.8f).setDuration(100)
                     .withEndAction(() -> {
                         focusCircleView.setVisibility(View.GONE);
                         focusCircleView.setX((float) textureView.getWidth() / 2.f);
