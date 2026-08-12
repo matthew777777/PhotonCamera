@@ -221,7 +221,16 @@ public class TouchFocus {
         // This ensures the camera re-evaluates the scene immediately without needing motion.
         if (captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE ||
                 captureController.mPreviewAFMode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO) {
-            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+            
+            // Step 1: Briefly switch mode to OFF to force a state machine reset
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            captureController.rebuildPreviewBuilderOneShot();
+            
+            // Step 2: Restore CONTINUOUS mode
+            builder.set(CaptureRequest.CONTROL_AF_MODE, captureController.mPreviewAFMode);
+            
+            // Step 3: Send CANCEL to unlock and start a fresh passive scan
+            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
             captureController.rebuildPreviewBuilderOneShot();
         }
 
