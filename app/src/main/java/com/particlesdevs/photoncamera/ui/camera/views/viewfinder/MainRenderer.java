@@ -26,7 +26,7 @@ import java.util.Arrays;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
-public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFrameAvailableListener {
+public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFrameAvailableListener, AutoCloseable {
 
     private int[] hTex;
     private final FloatBuffer pVertex;
@@ -102,10 +102,16 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private void updateHistogram() {
         try {
             int sampleSize = 64;
-            if (sampleTex == null) {
+            if (glHistogram == null || sampleTex == null || sampleFbo == null) {
+                Log.d("MainRenderer", "Initializing histogram resources");
+                if (sampleTex != null) sampleTex.close();
                 sampleTex = new GLTexture(sampleSize, sampleSize, new GLFormat(GLFormat.DataType.SIMPLE_8, 4));
+                
+                if (sampleFbo != null) GLES30.glDeleteFramebuffers(1, sampleFbo, 0);
                 sampleFbo = new int[1];
                 GLES30.glGenFramebuffers(1, sampleFbo, 0);
+                
+                if (glHistogram != null) glHistogram.close();
                 glHistogram = new GLHistogram(new GLProg(), sampleSize);
             }
 
@@ -155,10 +161,13 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
             GLES20.glActiveTexture(oldActiveTex[0]);
 
-            histogramCallback.onHistogramUpdate(data);
+            if (histogramCallback != null) {
+                histogramCallback.onHistogramUpdate(data);
+            }
         } catch (Exception e) {
             Log.e("MainRenderer", "Histogram update failed: " + e.getMessage());
-            e.printStackTrace();
+            // If it failed, maybe resources are invalid, reset them for next time
+            close();
         }
     }
 
@@ -169,7 +178,31 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int mirror;
     private int resolution;
     @Override
+    public void close() {
+        if (glHistogram != null) {
+            glHistogram.close();
+            glHistogram = null;
+        }
+        if (sampleTex != null) {
+            sampleTex.close();
+            sampleTex = null;
+        }
+        if (sampleFbo != null) {
+            GLES30.glDeleteFramebuffers(1, sampleFbo, 0);
+            sampleFbo = null;
+        }
+        mGLInit = false;
+    }
+
+    @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        Log.d("MainRenderer", "onSurfaceCreated");
+        
+        // Reset resources on context creation to ensure they are recreated with valid IDs
+        glHistogram = null;
+        sampleTex = null;
+        sampleFbo = null;
+
         initTex();
         mSTexture = new SurfaceTexture(hTex[0]);
         mSTexture.setOnFrameAvailableListener(this);
