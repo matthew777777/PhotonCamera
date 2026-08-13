@@ -150,6 +150,8 @@
             glProg.setVar("whiteMax", mpy);
         }
         glProg.setVar("applyGammaMix", applyGammaMix);
+        glProg.setVar("noiseS", basePipeline.noiseS);
+        glProg.setVar("noiseO", basePipeline.noiseO);
         WorkingTexture = basePipeline.getMain();
         glProg.drawBlocks(WorkingTexture);
         glProg.closed = true;
