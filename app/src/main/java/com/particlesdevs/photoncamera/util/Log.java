@@ -291,6 +291,100 @@ public class Log {
     public static void setLogEnabled(boolean enabled) {
         logEnabled = enabled;
     }
+
+    /**
+     * Reads relevant debug metrics from the stored log file for a specific capture.
+     * @param startTime The epoch timestamp when capture processing started.
+     */
+    public static String getRelevantLogsSince(long startTime) {
+        if (logContext == null) {
+            logContext = com.particlesdevs.photoncamera.app.PhotonCamera.getContext();
+        }
+        if (logContext == null) return "";
+        
+        DocumentFile folder = getLogFolderDocumentFile();
+        if (folder == null || !folder.isDirectory()) return "";
+
+        String today = dateFormatter.get().format(new java.util.Date(startTime));
+        String logFileName = "log-" + today + ".txt";
+        DocumentFile file = folder.findFile(logFileName);
+        if (file == null || !file.exists()) return "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n--- REFERENCE DATA (From Storage Log) ---\n");
+
+        try (java.io.InputStream is = DocumentFileUtils.openInputStream(file, logContext);
+             java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(is))) {
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.length() < 23) continue;
+
+                try {
+                    String timeStr = line.substring(0, 23);
+                    java.util.Date parsedDate = timeFormatter.get().parse(timeStr);
+                    if (parsedDate == null) continue;
+                    long entryTime = parsedDate.getTime();
+
+                    // Filter: within 60 seconds before and 20 seconds after capture start
+                    if (entryTime < startTime - 60000 || entryTime > startTime + 20000) continue;
+
+                    int slashIdx = line.indexOf('/', 23);
+                    int colonIdx = line.indexOf(':', slashIdx);
+                    if (slashIdx == -1 || colonIdx == -1) continue;
+
+                    String tag = line.substring(slashIdx + 1, colonIdx).trim();
+                    String message = line.substring(colonIdx + 1).trim();
+
+                    boolean relevant = false;
+                    String tagLower = tag.toLowerCase(Locale.US);
+                    if (tagLower.contains("isoexposelector")) {
+                        if (message.contains("Dynamic AE Factor") || message.contains("ShutterPriorityCurve") || message.contains("IsoSelected")) {
+                            relevant = true;
+                        }
+                    } else if (tagLower.contains("hdrxprocessor")) {
+                        if (message.contains("unlucky map") || message.contains("Removing unlucky") || message.contains("ApplyHdrX") || message.contains("Alignment elapsed")) {
+                            relevant = true;
+                        }
+                    } else if (tagLower.contains("postpipeline")) {
+                        if (message.contains("Building Experimental") || message.contains("Building Default") || message.contains("NoiseS") || message.contains("noise_o")) {
+                            relevant = true;
+                        }
+                    } else if (tagLower.contains("capturecontroller") || tagLower.contains("burstcounter")) {
+                        if (message.contains("CaptureStarted") || message.contains("CaptureCompleted") || message.contains("SequenceCompleted") || message.contains("Temperature") || message.contains("Focus")) {
+                            relevant = true;
+                        }
+                    } else if (tagLower.contains("gyro")) {
+                        if (message.contains("Shakiness") || message.contains("DelayUs")) {
+                            relevant = true;
+                        }
+                    } else if (tagLower.contains("pyramidmerging") || tagLower.contains("dynamicnoise") || tagLower.contains("alignment") || tagLower.contains("pyramidalignment")) {
+                        if (message.contains("Alignment time") || message.contains("Hot pixels") || message.contains("Fit S") || message.contains("Blended noise") || message.contains("Fitted noise") || message.contains("best exposure")) {
+                            relevant = true;
+                        }
+                    } else if (tagLower.contains("imagesaver")) {
+                        if (message.contains("notifyImageSavedStatus")) {
+                            relevant = true;
+                        }
+                    }
+
+                    if (relevant) {
+                        sb.append("[").append(tag).append("] ").append(message).append("\n");
+                    }
+                } catch (Exception e) {
+                    // Ignore line parse errors
+                }
+            }
+        } catch (Exception e) {
+            sb.append("Error reading log file: ").append(e.getMessage()).append("\n");
+        }
+
+        if (sb.length() < 45) { // If only header exists (\n--- REFERENCE DATA (From Storage Log) ---\n is 43 chars)
+            return "";
+        }
+
+        return sb.toString();
+    }
     
     // Cleanup method to call when app is closing
     public static void shutdown() {

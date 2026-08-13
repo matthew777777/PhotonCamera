@@ -99,13 +99,18 @@ public class PostPipeline extends GLBasePipeline {
         mParameters = parameters;
         mSettings = PhotonCamera.getSettings();
         if (processingLog != null) {
-            processingLog.jpgSettings.put("sharpness", String.format("%.2f", PreferenceKeys.getSharpnessValue()));
-            processingLog.jpgSettings.put("saturation", String.format("%.2f", PreferenceKeys.getSaturationValue()));
-            processingLog.jpgSettings.put("contrast", String.format("%.2f", PreferenceKeys.getContrastValue()));
-            processingLog.jpgSettings.put("noise_str", String.format("%.2f", PreferenceKeys.getFloat(PreferenceKeys.Key.KEY_NOISESTR_SEEKBAR)));
-            processingLog.jpgSettings.put("gain", String.format("%.2f", PreferenceKeys.getGainValue()));
-            processingLog.jpgSettings.put("shadows", String.format("%.2f", PreferenceKeys.getFloat(PreferenceKeys.Key.KEY_SHADOWS_SEEKBAR)));
-            processingLog.jpgSettings.put("compressor", String.format("%.2f", PreferenceKeys.getCompressorValue()));
+            if (PreferenceKeys.isExperimentalJpegPipelineOn()) {
+                processingLog.jpgSettings.put("exp_demosaic", experimentalDemosaic == 0 ? "Legacy" : "RCD");
+            } else {
+                processingLog.jpgSettings.put("sharpness", String.format("%.2f", PreferenceKeys.getSharpnessValue()));
+                processingLog.jpgSettings.put("saturation", String.format("%.2f", PreferenceKeys.getSaturationValue()));
+                processingLog.jpgSettings.put("contrast", String.format("%.2f", PreferenceKeys.getContrastValue()));
+                processingLog.jpgSettings.put("noise_str", String.format("%.2f", PreferenceKeys.getFloat(PreferenceKeys.Key.KEY_NOISESTR_SEEKBAR)));
+                processingLog.jpgSettings.put("gain", String.format("%.2f", PreferenceKeys.getGainValue()));
+                processingLog.jpgSettings.put("shadows", String.format("%.2f", PreferenceKeys.getFloat(PreferenceKeys.Key.KEY_SHADOWS_SEEKBAR)));
+                processingLog.jpgSettings.put("compressor", String.format("%.2f", PreferenceKeys.getCompressorValue()));
+                processingLog.jpgSettings.put("demosaic", demosaicingMethod == 0 ? "Bilinear" : "Demosaic3");
+            }
         }
         workSize = new Point(mParameters.rawSize.x, mParameters.rawSize.y);
         NoiseModeler modeler = mParameters.noiseModeler;
@@ -117,6 +122,10 @@ public class PostPipeline extends GLBasePipeline {
                 modeler.computeModel[2].second.floatValue();
         noiseS /= 3.f;
         noiseO /= 3.f;
+        if (processingLog != null) {
+            processingLog.jpgSettings.put("noise_s", String.format("%.6f", noiseS));
+            processingLog.jpgSettings.put("noise_o", String.format("%.6f", noiseO));
+        }
         double noisempy = Math.pow(2.0, mSettings.noiseRstr + constShift);
         Log.d("PostPipeline", "noisempy:" + noisempy);
         noiseS *= noisempy;

@@ -20,6 +20,7 @@ import com.particlesdevs.photoncamera.processing.ImageSaver;
 import com.particlesdevs.photoncamera.processing.ProcessingEventsListener;
 import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline;
+import com.particlesdevs.photoncamera.processing.parameters.ExposureIndex;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.processing.parameters.FrameNumberSelector;
 import com.particlesdevs.photoncamera.processing.parameters.IsoExpoSelector;
@@ -135,6 +136,7 @@ public class HdrxProcessor extends ProcessorBase {
             Log.d(TAG,"Warning: Gyro data size:"+BurstShakiness.size()+" is less than image size:"+mImageFramesToProcess.size());
         }
         processingLog.totalFrames = mImageFramesToProcess.size();
+        processingLog.startTime = totalStartTime;
         for (int i = 0; i < mImageFramesToProcess.size(); i++) {
             ImageFrame frame = mImageFramesToProcess.get(i);
             frame.frameGyro = BurstShakiness.get(i%BurstShakiness.size()); // cyclic for safety
@@ -145,7 +147,9 @@ public class HdrxProcessor extends ProcessorBase {
             frame.number = i;
             frame.pair.layerMpy = (float) (exposures.get(mImageFramesToProcess.get(i).getTimestamp()) / minExpo);
             int ev = (int) Math.round(Math.log(frame.pair.layerMpy) / Math.log(2.0));
-            processingLog.frameInfos.add(new ProcessingLog.FrameInfo(i, ev, "Accepted", 1.0f / (1.0f + frame.frameGyro.shakiness)));
+            processingLog.frameInfos.add(new ProcessingLog.FrameInfo(i, ev, (int)frame.pair.iso,
+                    ExposureIndex.sec2string(ExposureIndex.time2sec(frame.pair.exposure)),
+                    "Accepted", 1.0f / (1.0f + frame.frameGyro.shakiness)));
             if (frame.pair.layerMpy > 1.0) {
                 frame.pair.curlayer = IsoExpoSelector.ExpoPair.exposureLayer.High;
             } else {
@@ -338,6 +342,11 @@ public class HdrxProcessor extends ProcessorBase {
             Log.d(TAG, "quality = " + jpgQuality);
             Log.d(TAG, "chromaSubsampling = " + (use444 ? "4:4:4" : "4:2:0"));
             Log.d(TAG, "encoder = " + (use444 ? "stb_image_write" : "Android Bitmap.compress"));
+            processingLog.jpgSettings.put("pipeline", "Experimental");
+            processingLog.jpgSettings.put("quality", String.valueOf(jpgQuality));
+            processingLog.jpgSettings.put("subsampling", use444 ? "4:4:4" : "4:2:0");
+        } else {
+            processingLog.jpgSettings.put("pipeline", "Legacy");
         }
 
         //Saves the final bitmap

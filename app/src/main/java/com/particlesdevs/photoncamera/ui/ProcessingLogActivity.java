@@ -14,6 +14,7 @@ import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.app.base.BaseActivity;
 import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
+import com.particlesdevs.photoncamera.util.Log;
 
 public class ProcessingLogActivity extends BaseActivity {
 
@@ -30,7 +31,8 @@ public class ProcessingLogActivity extends BaseActivity {
         TextView logText = findViewById(R.id.log_text);
         ProcessingLog log = PhotonCamera.getLatestProcessingLog();
         if (log != null) {
-            logText.setText(log.toString());
+            String content = log.toString() + "\n" + Log.getRelevantLogsSince(log.startTime);
+            logText.setText(content);
         } else {
             logText.setText("No log data available. Capture a photo first.");
         }
@@ -55,10 +57,12 @@ public class ProcessingLogActivity extends BaseActivity {
         ProcessingLog log = PhotonCamera.getLatestProcessingLog();
         if (log == null) return;
 
+        String content = log.toString() + "\n" + Log.getRelevantLogsSince(log.startTime);
+
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setType("text/plain");
         intent.putExtra(Intent.EXTRA_SUBJECT, "PhotonCamera Processing Log");
-        intent.putExtra(Intent.EXTRA_TEXT, log.toString());
+        intent.putExtra(Intent.EXTRA_TEXT, content);
         startActivity(Intent.createChooser(intent, "Share Log via"));
     }
 }

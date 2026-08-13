@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 public class ProcessingLog {
+    public long startTime = 0;
     public int totalFrames = 0;
     public int mergedFrames = 0;
     public int discardedFrames = 0;
@@ -14,6 +15,8 @@ public class ProcessingLog {
     public static class FrameInfo {
         public int index;
         public int ev;
+        public int iso;
+        public String exposure;
         public String status;
         public float sharpness;
         public String reason = "";
@@ -21,6 +24,15 @@ public class ProcessingLog {
         public FrameInfo(int index, int ev, String status, float sharpness) {
             this.index = index;
             this.ev = ev;
+            this.status = status;
+            this.sharpness = sharpness;
+        }
+
+        public FrameInfo(int index, int ev, int iso, String exposure, String status, float sharpness) {
+            this.index = index;
+            this.ev = ev;
+            this.iso = iso;
+            this.exposure = exposure;
             this.status = status;
             this.sharpness = sharpness;
         }
@@ -43,7 +55,10 @@ public class ProcessingLog {
         sb.append("Frames discarded: ").append(discardedFrames).append("\n\n");
         
         for (FrameInfo info : frameInfos) {
-            sb.append("F").append(info.index).append(" EV=").append(info.ev > 0 ? "+" : "").append(info.ev);
+            sb.append("F").append(info.index);
+            sb.append(" EV=").append(info.ev > 0 ? "+" : "").append(info.ev);
+            if (info.iso > 0) sb.append(" ISO=").append(info.iso);
+            if (info.exposure != null && !info.exposure.isEmpty()) sb.append(" ").append(info.exposure);
             sb.append(": ").append(info.status);
             if (!info.reason.isEmpty()) {
                 sb.append(" (").append(info.reason).append(")");
