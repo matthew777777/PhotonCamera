@@ -71,7 +71,6 @@ out vec3 Output;
 #define FUSIONNORM 64.0
 #define VIGNETTE 0.0
 #define LTMMIX 0.0
-#define NOISE_PROT 5.0
 #import coords
 #import interpolation
 #import gaussian
@@ -417,18 +416,12 @@ vec3 applyColorSpace(vec3 pRGB,float tonemapGain, float gainsVal){
     //pRGB /= br;
     //float vignetteFactor = mix(0.0,VIGNETTE,clamp(br*100.0 - 0.01,0.0,1.0));
     float noise = sqrt(NOISES + NOISEO + 1e-8);
-    // Noise floor protection factor
-    float protection = br * br / (br * br + noise * noise * NOISE_PROT * NOISE_PROT + 1e-9);
-
     //float vignetteFactor = smoothstep(0.0,min(noise, 0.1),br)*VIGNETTE;
     float vignetteFactor = (br*br/(br*br+noise*noise))*VIGNETTE;
-    gainsVal = mix(1.0, gainsVal, protection);
-
-    float protectedTonemapGain = mix(1.0, tonemapGain, protection);
-
+    gainsVal = mix(float(1.0), gainsVal, 1.0);
     //br = clamp(reinhard_extended(br*gainsVal,max(1.0,gainsVal)),0.0,1.0);
     //br = clamp(reinhard_extended(br*tonemapGain,max(1.0,tonemapGain)),0.0,1.0);
-    pRGB = clamp(pRGB*mix(protectedTonemapGain,1.0,LTMMIX), 0.0,1.0);
+    pRGB = clamp(pRGB*mix(tonemapGain,1.0,LTMMIX), 0.0,1.0);
     //pRGB = clamp(reinhard_extended(pRGB*tonemapGain,max(1.0,tonemapGain)),vec3(0.0),vec3(1.0));
 
     pRGB = clamp(reinhard_extended(pRGB*gainsVal,max(1.0,gainsVal)),vec3(0.0),vec3(1.0));
@@ -440,7 +433,7 @@ vec3 applyColorSpace(vec3 pRGB,float tonemapGain, float gainsVal){
     //pRGB = saturate(pRGB,br);
 
     pRGB = gammaCorrectPixel2(pRGB);
-    pRGB = tonemap(pRGB, mix(1.0,protectedTonemapGain,LTMMIX));
+    pRGB = tonemap(pRGB, mix(1.0,tonemapGain,LTMMIX));
     pRGB = mix(pRGB*pRGB*pRGB*TONEMAPX3 + pRGB*pRGB*TONEMAPX2 + pRGB*TONEMAPX1,pRGB,min(pRGB*0.8+0.55,1.0));
 
     return pRGB;

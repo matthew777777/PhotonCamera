@@ -103,9 +103,6 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
     @Tunable(title = "LTM Mix", category = "Color & Tone", max = 1.0f, defaultValue = 0.0f)
     float ltmMix = 0.0f;
 
-    @Tunable(title = "Noise Floor Protection", category = "Color & Tone", min = 0.0f, max = 10.0f, defaultValue = 5.0f)
-    float noiseFloorProtection = 5.0f;
-
     @Tunable(title = "LUT png selector", category = "Color & Tone", description = "Select a square CLUT PNG file", allowedPngSizes = {512, 1000, 1728, 2744, 4096})
     File postlut;
 
@@ -212,7 +209,6 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
         glProg.setDefine("SATURATIONRED",  saturationRed);
         glProg.setDefine("NOISEO",  basePipeline.noiseO);
         glProg.setDefine("NOISES",  basePipeline.noiseS);
-        glProg.setDefine("NOISE_PROT", noiseFloorProtection);
         glProg.setDefine("EPS", eps);
 
         if(postlut != null && postlut.exists()){
