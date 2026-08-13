@@ -96,7 +96,7 @@ android {
     namespace 'com.particlesdevs.photoncamera'
     applicationVariants.all {
         variant -> variant.outputs.all {
-            outputFileName = "PhotonCamera-${versionName}${versionBuild}-${variant.name}.apk"
+            outputFileName = "PhotonCamera-community-${versionName}${versionBuild}-${variant.name}.apk"
         }
     }
     testOptions {
