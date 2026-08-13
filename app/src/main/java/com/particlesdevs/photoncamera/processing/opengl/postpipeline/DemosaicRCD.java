@@ -31,13 +31,13 @@ public class DemosaicRCD extends Node {
     @Tunable(
         title = "Artifact Correction",
         category = "DemosaicRCD",
-        defaultValue = 0,
+        defaultValue = 1,
         min = 0,
         max = 1,
         step = 1,
         description = "Enable advanced RCD artifact correction logic"
     )
-    boolean rcdArtifactCorrection = false;
+    boolean rcdArtifactCorrection = true;
 
     @Tunable(title = "Edge Sensitivity", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
     float rcdEdgeSensitivity = 1.0f;

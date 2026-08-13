@@ -4,6 +4,8 @@ uniform sampler2D InputBuffer;
 uniform float mpy;
 uniform float whiteMax;
 uniform float applyGammaMix;
+uniform float noiseS;
+uniform float noiseO;
 out vec4 Output;
 vec3 reinhard_extended(vec3 v, float max_white){
     vec3 numerator = v * (vec3(1.0f) + (v / vec3(max_white * max_white)));
@@ -47,7 +49,10 @@ vec3 tonemap(vec3 rgb, float gain) {
 void main() {
     ivec2 xy = ivec2(gl_FragCoord.xy);
     vec4 inp = texelFetch(InputBuffer, xy, 0);
-    //Output.rgb = reinhard_extended(inp.rgb * mpy, mpy);
-    Output.rgb = tonemap(mix(inp.rgb,sqrt(inp.rgb), applyGammaMix), mpy);
-    Output.rgb = mix(Output.rgb,Output.rgb * Output.rgb, applyGammaMix);
+    float noise = sqrt(noiseS + noiseO + 1e-8);
+    // Controlled shadow boost instead of raw sqrt(inp.rgb)
+    // This curve follows sqrt at high values but becomes linear near the noise floor
+    vec3 boosted = inp.rgb / (sqrt(inp.rgb + noise * noise + 1e-9));
+    Output.rgb = tonemap(mix(inp.rgb, boosted, applyGammaMix), mpy);
+    Output.rgb = mix(Output.rgb, Output.rgb * Output.rgb, applyGammaMix);
 }

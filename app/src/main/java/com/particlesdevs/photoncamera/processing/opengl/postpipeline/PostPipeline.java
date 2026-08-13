@@ -86,10 +86,10 @@ public class PostPipeline extends GLBasePipeline {
         category = "Demosaic",
         min = 0.0f,
         max = 1.0f,
-        defaultValue = 0.0f,
+        defaultValue = 1.0f,
         step = 1.0f
     )
-    int experimentalDemosaic = 0;
+    int experimentalDemosaic = 1;
 
     public Bitmap Run(ByteBuffer inBuffer, Parameters parameters) {
         return Run(inBuffer, parameters, null);
