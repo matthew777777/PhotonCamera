@@ -154,7 +154,7 @@ final class CameraUIController implements CameraUIEventsListener,
         if (this.shutterButton != null) {
             this.shutterButton.setHovered(true);
             this.countdownTimer = new CountdownTimer(
-                    cameraFragment.findViewById(R.id.frameTimer),
+                    cameraFragment.cameraFragmentBinding.layoutViewfinder.frameTimer,
                     getTimerValue(this.shutterButton.getContext()) * 1000L, 1000,
                     this::onTimerFinished).start();
         }

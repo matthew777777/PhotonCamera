@@ -3,6 +3,7 @@ package com.particlesdevs.photoncamera.processing.opengl.postpipeline;
 import android.hardware.camera2.CameraCharacteristics;
 
 import com.particlesdevs.photoncamera.util.Log;
+import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.capture.CaptureController;
@@ -14,6 +15,7 @@ import com.particlesdevs.photoncamera.util.FileManager;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 
 import static android.opengl.GLES20.GL_CLAMP_TO_EDGE;
 import static android.opengl.GLES20.GL_LINEAR;
@@ -48,19 +50,23 @@ public class RotateWatermark extends Node {
         try {
             File waterAiOffExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark_ai_off.png");
             File waterExternal = new File(FileManager.sPHOTON_TUNING_DIR,"watermark.png");
-            if (waterAiOffExternal.exists()) {
-                watermark = new GLImage(waterAiOffExternal);
+            if (SimpleStorageHelper.existsByAbsPath(waterAiOffExternal.getAbsolutePath())) {
+                try (InputStream is = SimpleStorageHelper.openInputStreamByAbsPath(waterAiOffExternal.getAbsolutePath())) {
+                    if (is != null) watermark = new GLImage(is);
+                }
             }
-            else if (waterExternal.exists()) {
-                watermark = new GLImage(waterExternal);
+            if (watermark == null && SimpleStorageHelper.existsByAbsPath(waterExternal.getAbsolutePath())) {
+                try (InputStream is = SimpleStorageHelper.openInputStreamByAbsPath(waterExternal.getAbsolutePath())) {
+                    if (is != null) watermark = new GLImage(is);
+                }
             }
-            else {
+            if (watermark == null) {
                 watermark = new GLImage(PhotonCamera.getAssetLoader().getInputStream("watermark/photoncamera_watermark.png"));
             }
             noise = new GLImage(PhotonCamera.getAssetLoader().getInputStream("noise.png"));
             glProg.setTexture("Watermark", new GLTexture(watermark,GL_LINEAR,GL_CLAMP_TO_EDGE,0));
             glProg.setTexture("Noise", new GLTexture(noise,GL_LINEAR,GL_REPEAT,0));
-        } catch (IOException e) {
+        } catch (Exception e) {
             Log.d(Name,"Failed to load watermark or noise texture:" + Log.getStackTraceString(e));
         }
 

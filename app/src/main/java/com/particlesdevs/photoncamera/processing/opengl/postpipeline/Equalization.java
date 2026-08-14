@@ -6,6 +6,7 @@ import android.graphics.Point;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import com.particlesdevs.photoncamera.util.Log;
+import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
 import com.particlesdevs.photoncamera.api.CameraMode;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
@@ -22,6 +23,7 @@ import com.particlesdevs.photoncamera.util.Utilities;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -77,11 +79,18 @@ public class Equalization extends Node {
         GLImage analyze_lutbm = null;
         GLTexture analyze_lut = null;
         boolean loaded = false;
-        if(customAnalyzelut.exists()){
-            analyze_lutbm = new GLImage(customAnalyzelut);
-            analyze_lut = new GLTexture(analyze_lutbm,GL_LINEAR,GL_CLAMP_TO_EDGE,0);
-            loaded = true;
-        } else {
+        if(SimpleStorageHelper.existsByAbsPath(customAnalyzelut.getAbsolutePath())){
+            try (InputStream is = SimpleStorageHelper.openInputStreamByAbsPath(customAnalyzelut.getAbsolutePath())) {
+                if (is != null) {
+                    analyze_lutbm = new GLImage(is);
+                    analyze_lut = new GLTexture(analyze_lutbm, GL_LINEAR, GL_CLAMP_TO_EDGE, 0);
+                    loaded = true;
+                }
+            } catch (Exception e) {
+                Log.e("Equalization", "Error loading custom analyze LUT: " + e.getMessage());
+            }
+        }
+        if(!loaded) {
             try {
                 analyze_lutbm = new GLImage(PhotonCamera.getAssetLoader().getInputStream("analyze_lut.png"));
                 analyze_lut = new GLTexture(analyze_lutbm,GL_LINEAR,GL_CLAMP_TO_EDGE,0);
@@ -89,7 +98,6 @@ public class Equalization extends Node {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
         }
         if(loaded)
             glProg.setTexture("LookupTable",analyze_lut);

@@ -10,8 +10,15 @@ import androidx.lifecycle.ViewModel;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.ui.camera.model.TimerFrameCountModel;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
+@HiltViewModel
 public class TimerFrameCountViewModel extends ViewModel {
     private final TimerFrameCountModel timerFrameCountModel;
+    private final com.particlesdevs.photoncamera.api.Settings settings;
+
     private final Handler changeFrameTimeCnt = new Handler(Looper.getMainLooper()) {
         @Override
         public void handleMessage(@NonNull Message msg) {
@@ -29,8 +36,10 @@ public class TimerFrameCountViewModel extends ViewModel {
         }
     };
 
-    public TimerFrameCountViewModel() {
+    @Inject
+    public TimerFrameCountViewModel(com.particlesdevs.photoncamera.api.Settings settings) {
         this.timerFrameCountModel = new TimerFrameCountModel();
+        this.settings = settings;
     }
 
     public TimerFrameCountModel getTimerFrameCountModel() {
@@ -39,7 +48,7 @@ public class TimerFrameCountViewModel extends ViewModel {
 
     public void setFrameTimeCnt(FrameCntTime frameCntTime) {
         Message msg = new Message();
-        switch (PhotonCamera.getSettings().selectedMode) {
+        switch (settings.selectedMode) {
             case NIGHT:
             case PHOTO:
             case MOTION:

@@ -44,31 +44,31 @@ import com.particlesdevs.photoncamera.util.log.ActivityLifecycleMonitor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.HiltAndroidApp;
+
+@HiltAndroidApp
 public class PhotonCamera extends Application {
     public static final boolean DEBUG = false;
     private static PhotonCamera sPhotonCamera;
     private static ProcessingLog latestProcessingLog;
-    //    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-//    private final ExecutorService executorService = Executors.newWorkStealingPool();
-    private final ExecutorService executorService = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r);
-        t.setPriority(Thread.MIN_PRIORITY);
-        return t;
-    });
+    
+    @Inject ExecutorService executorService;
+    @Inject Settings mSettings;
+    @Inject Gravity mGravity;
+    @Inject Gyro mGyro;
+    @Inject Vibration mVibration;
+    @Inject PreviewParameters mPreviewParameters;
+    @Inject SupportedDevice mSupportedDevice;
+    @Inject SettingsManager mSettingsManager;
+    @Inject AssetLoader mAssetLoader;
+    @Inject Debugger mDebugger;
+    @Inject AudioManager audioManager;
+
     private final Handler mainThreadHandler = HandlerCompat.createAsync(Looper.getMainLooper());
-    private Settings mSettings;
-    private Gravity mGravity;
-    private Gyro mGyro;
-    private Vibration mVibration;
-    //private Parameters mParameters;
-    private PreviewParameters mPreviewParameters;
     private CaptureController mCaptureController;
-    private SupportedDevice mSupportedDevice;
-    private SettingsManager mSettingsManager;
-    private AssetLoader mAssetLoader;
     private ObjectLoader objectLoader;
-    private Debugger mDebugger;
-    private AudioManager audioManager;
 
     @Nullable
     public static PhotonCamera getInstance(Context context) {
@@ -222,41 +222,21 @@ public class PhotonCamera extends Application {
 
     @Override
     public void onCreate() {
+        super.onCreate();
         registerActivityLifecycleCallbacks(new ActivityLifecycleMonitor());
         sPhotonCamera = this;
         Log.d("PhotonCamera", "Initializing PhotonCamera Modules");
         initModules();
-        super.onCreate();
     }
     private void initModules() {
-
         SimpleStorageHelper.init(this);
-
-        SensorManager sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        mGravity = new Gravity(sensorManager);
-
-        mGyro = new Gyro(sensorManager);
-
-        mVibration = new Vibration(this);
-
-        mSettingsManager = new SettingsManager(this);
-        mSupportedDevice = new SupportedDevice(mSettingsManager, this);
 
         MigrationManager.migrate(mSettingsManager);
 
         PreferenceKeys.initialise(mSettingsManager);
 
-        mSettings = new Settings();
-
-        //mParameters = new Parameters();
-        mPreviewParameters = new PreviewParameters();
-        mAssetLoader = new AssetLoader(this);
-        mDebugger = new Debugger();
-        
         // Initialize gallery icon visibility based on preference
         applyGalleryIconVisibility();
-        //test();
     }
     
     /**

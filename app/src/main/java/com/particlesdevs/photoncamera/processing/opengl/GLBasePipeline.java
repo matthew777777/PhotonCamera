@@ -6,9 +6,11 @@ import com.particlesdevs.photoncamera.util.Log;
 import com.particlesdevs.photoncamera.api.Settings;
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
 import com.particlesdevs.photoncamera.processing.render.Parameters;
+import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,20 +45,15 @@ public class GLBasePipeline implements AutoCloseable {
     public GLBasePipeline(String name){
         Name = name;
         Properties properties = new Properties();
-        try {
-            File init = new File(sPHOTON_TUNING_DIR, "PhotonCameraTuning.ini");
-            if(!init.exists()) {
-                init.createNewFile();
-                /*InputStream inputStream = PhotonCamera.getAssetLoader().getInputStream("tuning/PhotonCameraTuning.ini");
-                byte[] buffer = new byte[inputStream.available()];
-                inputStream.read(buffer);
-                OutputStream outputStream = new FileOutputStream(init);
-                outputStream.write(buffer);
-                outputStream.close();*/
+        File init = new File(sPHOTON_TUNING_DIR, "PhotonCameraTuning.ini");
+        try (InputStream is = SimpleStorageHelper.openInputStreamByAbsPath(init.getAbsolutePath())) {
+            if (is != null) {
+                properties.load(is);
+            } else {
+                Log.d("PostPipeline", "Tuning file not found or inaccessible: " + init.getAbsolutePath());
             }
-            properties.load(new FileInputStream(init));
         } catch (Exception e) {
-            Log.e("PostPipeline","Error at loading properties");
+            Log.e("PostPipeline", "Error at loading properties");
             e.printStackTrace();
         }
         mProp = properties;

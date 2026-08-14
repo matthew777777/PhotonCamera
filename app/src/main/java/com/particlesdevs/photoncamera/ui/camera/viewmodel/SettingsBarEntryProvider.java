@@ -34,6 +34,11 @@ import com.particlesdevs.photoncamera.ui.camera.views.settingsbar.SettingsBarLay
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
+@HiltViewModel
 public class SettingsBarEntryProvider extends ViewModel {
     private final SettingsBarEntryModel hdrxEntry = SettingsBarEntryModel.newEntry(R.id.hdrx_entry_layout, R.string.hdrx, SettingType.HDRX);
     private final SettingsBarEntryModel timerEntry = SettingsBarEntryModel.newEntry(R.id.timer_entry_layout, R.string.countdown_timer, SettingType.TIMER);
@@ -49,8 +54,9 @@ public class SettingsBarEntryProvider extends ViewModel {
     private final SettingsBarEntryModel histogramEntry = SettingsBarEntryModel.newEntry(R.id.histogram_entry_layout, R.string.histogram, SettingType.HISTOGRAM);
     private final SettingsBarEntryModel aeMeteringEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_entry_layout, R.string.ae_metering, SettingType.AE_METERING);
     private final SettingsBarEntryModel aeMeteringStdEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_std_entry_layout, R.string.ae_metering_std, SettingType.AE_METERING_STD);
-    private final List<SettingsBarEntryModel> allEntries = new ArrayList<>(8);
+    private final List<SettingsBarEntryModel> allEntries = new java.util.ArrayList<>(8);
 
+    @Inject
     public SettingsBarEntryProvider() {
 //        allEntries.add(hdrxEntry);
         allEntries.add(flashEntry);

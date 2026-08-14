@@ -2,6 +2,7 @@ package com.particlesdevs.photoncamera.processing.opengl.postpipeline;
 
 import android.graphics.Bitmap;
 import com.particlesdevs.photoncamera.util.Log;
+import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.capture.CaptureController;
@@ -14,6 +15,7 @@ import com.particlesdevs.photoncamera.util.RANSAC;
 import com.particlesdevs.photoncamera.util.Utilities;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -381,10 +383,16 @@ public class AWB extends Node {
         File awblut = new File(FileManager.sPHOTON_TUNING_DIR, "awb_lut.png");
         GLImage awb_lutbm;
         GLTexture awb_lut = null;
-        if (awblut.exists()) {
-            awb_lutbm = new GLImage(awblut);
-            awb_lut = new GLTexture(awb_lutbm, GL_LINEAR, GL_CLAMP_TO_EDGE, 0);
-            glProg.setDefine("LUT", true);
+        if (SimpleStorageHelper.existsByAbsPath(awblut.getAbsolutePath())) {
+            try (InputStream is = SimpleStorageHelper.openInputStreamByAbsPath(awblut.getAbsolutePath())) {
+                if (is != null) {
+                    awb_lutbm = new GLImage(is);
+                    awb_lut = new GLTexture(awb_lutbm, GL_LINEAR, GL_CLAMP_TO_EDGE, 0);
+                    glProg.setDefine("LUT", true);
+                }
+            } catch (Exception e) {
+                Log.e("AWB", "Error loading custom LUT: " + e.getMessage());
+            }
         }
         glProg.useAssetProgram("awbgetchroma");
         glProg.setTexture("InputBuffer", r1);

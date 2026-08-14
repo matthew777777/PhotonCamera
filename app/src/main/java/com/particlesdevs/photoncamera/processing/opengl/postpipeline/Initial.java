@@ -2,6 +2,7 @@
 
 import android.graphics.Point;
 import com.particlesdevs.photoncamera.util.Log;
+import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
 import com.particlesdevs.photoncamera.processing.opengl.GLFormat;
 import com.particlesdevs.photoncamera.processing.opengl.GLImage;
@@ -16,6 +17,7 @@ import com.particlesdevs.photoncamera.util.SplineInterpolator;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -290,12 +292,18 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
         GammaTexture = new GLTexture(gamma.length,1,
                 new GLFormat(GLFormat.DataType.FLOAT_16),BufferUtils.getFrom(gamma),GL_LINEAR,GL_CLAMP_TO_EDGE);
         File customlut = new File(FileManager.sPHOTON_TUNING_DIR,"initial_lut.png");
-        boolean loaded = false;
-        if(customlut.exists()){
-            lutbm = new GLImage(customlut);
-            glProg.setDefine("LUT",true);
-            lutLoaded = true;
-        } else {
+        if(SimpleStorageHelper.existsByAbsPath(customlut.getAbsolutePath())){
+            try (InputStream is = SimpleStorageHelper.openInputStreamByAbsPath(customlut.getAbsolutePath())) {
+                if (is != null) {
+                    lutbm = new GLImage(is);
+                    glProg.setDefine("LUT", true);
+                    lutLoaded = true;
+                }
+            } catch (Exception e) {
+                Log.e("Initial", "Error loading custom initial LUT: " + e.getMessage());
+            }
+        }
+        if(!lutLoaded) {
             try {
                 lutbm = new GLImage(PhotonCamera.getAssetLoader().getInputStream("initial_lut.png"));
                 lutLoaded = true;

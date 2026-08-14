@@ -111,6 +111,18 @@ public class SettingsBarEntryView extends LinearLayout {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, f, getContext().getResources().getDisplayMetrics());
     }
 
+    public void updateState(SettingsBarEntryModel entryModel) {
+        stateTextView.setText(entryModel.getStateTextStringId());
+        for (ImageButton button : imageButtons) {
+            for (SettingsBarButtonModel buttonModel : entryModel.getSettingsBarButtonModels()) {
+                if (button.getId() == buttonModel.getId()) {
+                    button.setSelected(buttonModel.isSelected());
+                    break;
+                }
+            }
+        }
+    }
+
     private int getResolvedAttrData(Context context, int attrId) {
         TypedValue outValue = new TypedValue();
         context.getTheme().resolveAttribute(attrId, outValue, true);

@@ -119,10 +119,10 @@ public class SettingsBarLayout extends RelativeLayout implements SettingsBarList
     @Override
     public void onEntryUpdated(SettingsBarEntryModel entryModel, SettingsBarButtonModel buttonModel) {
         vibration.Click();
-        for (SettingsBarButtonModel model : entryModel.getSettingsBarButtonModels()) {
-            findViewById(entryModel.getId()).findViewById(model.getId()).setSelected(model.isSelected());
+        View entryView = findViewById(entryModel.getId());
+        if (entryView instanceof SettingsBarEntryView) {
+            ((SettingsBarEntryView) entryView).updateState(entryModel);
         }
-        ((TextView) findViewById(entryModel.getId()).findViewById(android.R.id.summary)).setText(entryModel.getStateTextStringId());
     }
 
     public void removeEntries() {

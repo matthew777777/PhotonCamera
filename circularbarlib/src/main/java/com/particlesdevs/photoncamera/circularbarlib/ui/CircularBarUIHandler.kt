@@ -12,7 +12,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.particlesdevs.photoncamera.circularbarlib.R
+import com.particlesdevs.photoncamera.circularbarlib.databinding.ManualPaletteBinding
 import com.particlesdevs.photoncamera.circularbarlib.model.KnobModel
 import com.particlesdevs.photoncamera.circularbarlib.model.ManualModeModel
 import com.particlesdevs.photoncamera.circularbarlib.ui.views.knobview.KnobView
@@ -25,17 +25,18 @@ import kotlinx.coroutines.launch
  */
 class CircularBarUIHandler(
     private val activity: Activity,
+    binding: ManualPaletteBinding,
     private val knobModel: KnobModel,
     private val manualModeModel: ManualModeModel
 ) {
-    private val manualMode: RelativeLayout = activity.findViewById(R.id.manual_mode)
-    private val knobView: KnobView = activity.findViewById(R.id.knobView)
-    private val isoOption: TextView = activity.findViewById(R.id.iso_option_tv)
-    private val expOption: TextView = activity.findViewById(R.id.exposure_option_tv)
-    private val evOption: TextView = activity.findViewById(R.id.ev_option_tv)
-    private val focusOption: TextView = activity.findViewById(R.id.focus_option_tv)
-    private val wbOption: TextView = activity.findViewById(R.id.wb_option_tv)
-    private val buttonsContainer: LinearLayout = activity.findViewById(R.id.buttons_container)
+    private val manualMode: RelativeLayout = binding.manualMode
+    private val knobView: KnobView = binding.knobView
+    private val isoOption: TextView = binding.isoOptionTv
+    private val expOption: TextView = binding.exposureOptionTv
+    private val evOption: TextView = binding.evOptionTv
+    private val focusOption: TextView = binding.focusOptionTv
+    private val wbOption: TextView = binding.wbOptionTv
+    private val buttonsContainer: LinearLayout = binding.buttonsContainer
     
     private val textViews = listOf(isoOption, evOption, expOption, focusOption, wbOption)
     
@@ -116,8 +117,7 @@ class CircularBarUIHandler(
         
         launch {
             manualModeModel.selectedTextViewIdFlow.collect { id ->
-                val v = activity.findViewById<View>(id)
-                textViews.forEach { it.isSelected = (it == v) }
+                textViews.forEach { it.isSelected = (it.id == id) }
             }
         }
         

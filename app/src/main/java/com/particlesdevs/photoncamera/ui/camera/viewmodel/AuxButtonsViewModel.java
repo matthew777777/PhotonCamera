@@ -34,14 +34,23 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
 /**
  * ViewModel which connects {@link AuxButtonsModel} with {@link CameraFragment}
  */
+@HiltViewModel
 public class AuxButtonsViewModel extends ViewModel {
     private static final Comparator<CameraLensData> SORT_BY_ZOOM_FACTOR = (o1, o2) -> -Double.compare(o1.getZoomFactor(), o2.getZoomFactor());
     private final AuxButtonsModel auxButtonsModel = new AuxButtonsModel();
     private boolean initialized = false;
     private boolean isEnabled = true;
+
+    @Inject
+    public AuxButtonsViewModel() {
+    }
 
     public void initCameraLists(Map<String, CameraLensData> cameraLensDataMap) {
         if (!initialized) {

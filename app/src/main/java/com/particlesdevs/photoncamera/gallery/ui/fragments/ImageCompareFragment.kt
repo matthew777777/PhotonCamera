@@ -29,7 +29,9 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLConnection
 import java.nio.file.Files
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class ImageCompareFragment : Fragment() {
     private var toSync = true
     private val ssivListener = SSIVListenerImpl()

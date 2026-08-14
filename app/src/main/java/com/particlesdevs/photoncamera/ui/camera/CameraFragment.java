@@ -101,6 +101,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class CameraFragment extends Fragment implements BaseActivity.BackPressedListener {
     public static final int REQUEST_CAMERA_PERMISSION = 1;
     public static final String FRAGMENT_DIALOG = "dialog";
@@ -150,8 +155,14 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     private MediaPlayer endPlayer;
     public GLPreview textureView;
     private NotificationManagerCompat notificationManager;
-    private SettingsManager settingsManager;
-    private SupportedDevice supportedDevice;
+
+    @Inject SettingsManager settingsManager;
+    @Inject SupportedDevice supportedDevice;
+    @Inject com.particlesdevs.photoncamera.control.Gyro gyro;
+    @Inject com.particlesdevs.photoncamera.control.Gravity gravity;
+    @Inject com.particlesdevs.photoncamera.api.Settings settings;
+    @Inject com.particlesdevs.photoncamera.capture.CameraLifecycleManager cameraLifecycleManager;
+
     private SettingsBarEntryProvider settingsBarEntryProvider;
     private ManualModeConsole manualModeConsole;
     public float displayAspectRatio;
@@ -189,8 +200,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         activity = getActivity();
         assert activity != null;
         notificationManager = NotificationManagerCompat.from(activity);
-        settingsManager = Objects.requireNonNull(PhotonCamera.getInstance(activity)).getSettingsManager();
-        supportedDevice = Objects.requireNonNull(PhotonCamera.getInstance(activity)).getSupportedDevice();
     }
 
     @Override
@@ -242,7 +251,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         this.mCameraUIEventsListener = new CameraUIController(this);
         this.mCameraUIView.setCameraUIEventsListener(mCameraUIEventsListener);
         this.captureController = new CaptureController(activity, processExecutorService,
-                new CameraEventsListenerImpl());
+                new CameraEventsListenerImpl(), this.cameraFragmentBinding.layoutViewfinder.texture, cameraLifecycleManager);
         this.captureController.setManualModeConsole(manualModeConsole);
         this.captureController.getParamController().observeModel(this, this.manualModeConsole.getManualParamModel());
         this.textureView.setManualModeConsole(manualModeConsole);
@@ -250,7 +259,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         captureController.isDualSession = supportedDevice.specific.specificSetting.isDualSessionSupported;
         mHorizonIndicatorView = cameraFragmentBinding.layoutViewfinder.horizonIndicatorView;
         this.mSwipe = new Swipe(this);
-        var gyro = PhotonCamera.getGyro();
         if ((mHorizonIndicatorView != null) && (gyro != null)) {
             mHorizonIndicatorView
                     .updateDisplayRotation(getCameraFragmentViewModel().getCameraFragmentModel().getOrientation());
@@ -323,8 +331,8 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         mSwipe.init();
         this.mCameraUIView.refresh(CaptureController.isProcessing);
         AsyncTask.execute(() -> {
-            PhotonCamera.getGyro().register();
-            PhotonCamera.getGravity().register();
+            gyro.register();
+            gravity.register();
             burstPlayer = MediaPlayer.create(activity, R.raw.sound_burst2);
             endPlayer = MediaPlayer.create(activity, R.raw.sound_end);
             cameraFragmentViewModel.updateGalleryThumb(null);
@@ -334,7 +342,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         if (mHorizonIndicatorView != null) {
             mHorizonIndicatorView.setVisible(PreferenceKeys.isHorizonOn());
         }
-        captureController.startBackgroundThread();
         textureView.onResume();
         captureController.resumeCamera();
         initTouchFocus();
@@ -354,9 +361,9 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
     @Override
     public void onPause() {
-        PhotonCamera.getGravity().unregister();
-        PhotonCamera.getGyro().unregister();
-        PhotonCamera.getSettings().saveID();
+        gravity.unregister();
+        gyro.unregister();
+        settings.saveID();
         textureView.onPause();
         captureController.closeCamera();
         // stopBackgroundThread();
@@ -391,11 +398,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     public void onDestroy() {
         super.onDestroy();
         // Log.d(TAG, "onDestroy() called");
-        try {
-            captureController.stopBackgroundThread();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
         getParentFragmentManager().beginTransaction().remove(CameraFragment.this).commitAllowingStateLoss();
         for (Future<?> taskResult : captureController.taskResults) {
             try {
@@ -442,9 +444,9 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
                 stringMap.put("ISO", String.valueOf(expoPair.iso));
                 // stringMap.put("ISO_CR",
                 // String.valueOf(result.get(CaptureResult.SENSOR_SENSITIVITY)));
-                stringMap.put("Shakiness", String.valueOf(PhotonCamera.getGyro().getShakiness()));
-                stringMap.put("TripodShakiness", String.valueOf(PhotonCamera.getGyro().tripodShakiness));
-                stringMap.put("Tripod", String.valueOf(PhotonCamera.getGyro().getTripod()));
+                stringMap.put("Shakiness", String.valueOf(gyro.getShakiness()));
+                stringMap.put("TripodShakiness", String.valueOf(gyro.tripodShakiness));
+                stringMap.put("Tripod", String.valueOf(gyro.getTripod()));
                 stringMap.put("FrameNumber", String.valueOf(result.getFrameNumber()));
                 float[] temp = new float[3];
                 temp[0] = captureController.mPreviewTemp[0].floatValue();
@@ -540,37 +542,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     /**
      * Returns the ConstraintLayout object after adjusting the LayoutParams of Views
      * contained in it.
-     * Adjusts the relative position of layout_top-bar and camera_container (=
-     * viewfinder + rest of the buttons excluding layout_topbar)
-     * depending on the aspect ratio of device.
-     * This is done in order to re-organise the camera layout for long displays
-     * (having aspect ratio > 16:9)
-     *
-     * @param aspectRatio     the aspect ratio of device display given by (height in
-     *                        pixels / width in pixels)
-     * @param activity_layout here, the layout of activity_main
-     * @return Object of {@param activity_layout} after adjustments.
-     */
-    private ConstraintLayout getAdjustedLayout(float aspectRatio, ConstraintLayout activity_layout) {
-        ConstraintLayout camera_container = activity_layout.findViewById(R.id.camera_container);
-        ConstraintLayout.LayoutParams camera_containerLP = (ConstraintLayout.LayoutParams) camera_container
-                .getLayoutParams();
-        if (aspectRatio > 16f / 9f) {
-            DisplayMetrics displayMetrics = activity.getResources().getDisplayMetrics();
-            float dpHeight = displayMetrics.heightPixels / displayMetrics.density;
-            float dpWidth = displayMetrics.widthPixels / displayMetrics.density;
-
-            float dpmargin = (dpHeight - (dpWidth / 9f * 16f));
-            ConstraintLayout.LayoutParams layout_topbarLP = ((ConstraintLayout.LayoutParams) activity_layout
-                    .findViewById(R.id.layout_topbar).getLayoutParams());
-
-            layout_topbarLP.topMargin = (int) dpmargin;
-            camera_containerLP.bottomMargin = (int) dpmargin;
-            camera_containerLP.topToTop = -1;
-            camera_containerLP.topToBottom = R.id.layout_topbar;
-        }
-        return activity_layout;
-    }
 
     /**
      * Logs the device display properties
@@ -647,9 +618,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         startActivity(settingsIntent);
     }
 
-    public <T extends View> T findViewById(@IdRes int id) {
-        return activity.findViewById(id);
-    }
 
     public void showErrorDialog(String errorMsg) {
         ErrorDialog.newInstance(errorMsg).show(getChildFragmentManager(), FRAGMENT_DIALOG);
@@ -742,7 +710,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
         @Override
         public void onProcessingChanged(Object obj) {
-            if (PhotonCamera.getSettings().selectedMode == CameraMode.RAWVIDEO
+            if (settings.selectedMode == CameraMode.RAWVIDEO
                     && obj instanceof com.particlesdevs.photoncamera.processing.processor.RawVideoProcessor.RawVideoStats) {
                 com.particlesdevs.photoncamera.processing.processor.RawVideoProcessor.RawVideoStats stats = (com.particlesdevs.photoncamera.processing.processor.RawVideoProcessor.RawVideoStats) obj;
                 timerFrameCountViewModel.setFrameTimeCnt(
@@ -798,7 +766,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         @Override
         public void onCaptureStillPictureStarted(Object o) {
             cameraFragmentViewModel.setFrameSliderVisible(false);
-            if (PhotonCamera.getSettings().selectedMode != CameraMode.RAWVIDEO) {
+            if (settings.selectedMode != CameraMode.RAWVIDEO) {
                 mCameraUIView.setCaptureProgressBarOpacity(1.0f);
                 mCameraUIView.lockUIForBurst(true);
             }
@@ -826,7 +794,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
         @Override
         public void onFrameCaptureCompleted(Object o) {
-            if (PhotonCamera.getSettings().selectedMode != CameraMode.RAWVIDEO) {
+            if (settings.selectedMode != CameraMode.RAWVIDEO) {
                 mCameraUIView.incrementCaptureProgressBar(1);
                 if (PreferenceKeys.isCameraSoundsOn()) {
                     burstPlayer.start();

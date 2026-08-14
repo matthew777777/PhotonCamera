@@ -64,7 +64,7 @@ public class CameraUIViewImpl implements CameraUIView {
         this.mProcessingProgressBar = bottombuttons.processingProgressBar;
         this.mShutterButton = bottombuttons.shutterButton;
         this.mModePicker = cameraFragment.cameraFragmentBinding.layoutBottombar.modeSwitcher.modePickerView;
-        this.mVideoRecordingInfo = cameraFragment.cameraFragmentBinding.getRoot().findViewById(R.id.video_recording_info);
+        this.mVideoRecordingInfo = cameraFragment.cameraFragmentBinding.videoRecordingInfo;
         this.initListeners();
         this.initModeSwitcher();
         this.initFrameCountSlider();
@@ -170,8 +170,7 @@ public class CameraUIViewImpl implements CameraUIView {
         if (cameraFragment.displayAspectRatio <= 16f / 9f) {
             ConstraintLayout.LayoutParams camera_containerLP =
                     (ConstraintLayout.LayoutParams) cameraFragment.cameraFragmentBinding
-                            .textureHolder
-                            .findViewById(R.id.camera_container)
+                            .cameraContainer
                             .getLayoutParams();
             switch (mode) {
                 case RAWVIDEO:
@@ -280,9 +279,9 @@ public class CameraUIViewImpl implements CameraUIView {
 
         // Lock/unlock manual mode console - disable swipe gestures
         if (cameraFragment.cameraFragmentBinding != null) {
-            cameraFragment.cameraFragmentBinding.manualMode.post(() -> {
-                cameraFragment.cameraFragmentBinding.manualMode.setEnabled(!locked);
-                cameraFragment.cameraFragmentBinding.manualMode.setAlpha(locked ? 0.5f : 1.0f);
+            cameraFragment.cameraFragmentBinding.manualMode.getRoot().post(() -> {
+                cameraFragment.cameraFragmentBinding.manualMode.getRoot().setEnabled(!locked);
+                cameraFragment.cameraFragmentBinding.manualMode.getRoot().setAlpha(locked ? 0.5f : 1.0f);
             });
         }
 

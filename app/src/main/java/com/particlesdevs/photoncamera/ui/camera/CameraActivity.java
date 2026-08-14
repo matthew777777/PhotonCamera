@@ -22,6 +22,7 @@ import androidx.preference.PreferenceManager;
 import com.particlesdevs.photoncamera.R;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.app.base.BaseActivity;
+import com.particlesdevs.photoncamera.databinding.ActivityCameraBinding;
 import com.particlesdevs.photoncamera.settings.MigrationManager;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.anggrayudi.storage.contract.RequestStorageAccessContract;
@@ -35,8 +36,14 @@ import java.util.Arrays;
 
 import static android.os.Build.VERSION.SDK_INT;
 
+import javax.inject.Inject;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+
+@AndroidEntryPoint
 public class CameraActivity extends BaseActivity {
+    @Inject com.particlesdevs.photoncamera.api.Settings settings;
 
     private static final int CODE_REQUEST_PERMISSIONS = 1;
     private static final int CODE_REQUEST_MEDIA = 2;
@@ -66,20 +73,22 @@ public class CameraActivity extends BaseActivity {
     private boolean rationaleShownStorage = false;
     private boolean rationaleShownMedia = false;
     private boolean rationaleShownDcim = false;
+    private ActivityCameraBinding binding;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        binding = ActivityCameraBinding.inflate(getLayoutInflater());
         Log.d("CameraActivity", "Called onCreate()");
         // Hide system UI immediately to prevent flickering (like gallery view)
         hideSystemUI();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        setContentView(R.layout.activity_camera);
+        setContentView(binding.getRoot());
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         PreferenceManager.setDefaultValues(this, R.xml.preferences, MigrationManager.readAgain);
         PreferenceKeys.setDefaults(this);
-        PhotonCamera.getSettings().loadCache();
+        settings.loadCache();
 
         storageAccessLauncher = registerForActivityResult(
                 new RequestStorageAccessContract(this, StorageType.EXTERNAL, SimpleStorageHelper.DCIM_BASE_PATH),
@@ -305,9 +314,13 @@ public class CameraActivity extends BaseActivity {
             case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_VOLUME_DOWN:
                 if (action == KeyEvent.ACTION_DOWN) {
-                    View view = findViewById(R.id.shutter_button);
-                    if (view.isClickable())
-                        view.performClick();
+                    Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.container);
+                    if (fragment instanceof CameraFragment) {
+                        View shutter = ((CameraFragment) fragment).cameraFragmentBinding.layoutBottombar.bottomButtons.shutterButton;
+                        if (shutter.isClickable()) {
+                            shutter.performClick();
+                        }
+                    }
                 }
                 return true;
             default:

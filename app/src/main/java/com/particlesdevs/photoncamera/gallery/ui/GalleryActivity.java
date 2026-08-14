@@ -31,6 +31,9 @@ import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import java.util.ArrayList;
 import java.util.List;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class GalleryActivity extends BaseActivity {
     private ActivityGalleryBinding activityGalleryBinding;
     private GalleryViewModel viewModel;

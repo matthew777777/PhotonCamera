@@ -37,15 +37,21 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
 /**
  * The View Model class which updates the {@link ExifDialogModel}
  */
+@HiltViewModel
 public class ExifDialogViewModel extends AndroidViewModel {
     private static final String TAG = ExifDialogViewModel.class.getSimpleName();
     private final ExifDialogModel exifDialogModel;
     private final Handler histoHandler = new Handler(Looper.getMainLooper());
     private Runnable histoRunnable;
 
+    @Inject
     public ExifDialogViewModel(Application application) {
         super(application);
         this.exifDialogModel = new ExifDialogModel();

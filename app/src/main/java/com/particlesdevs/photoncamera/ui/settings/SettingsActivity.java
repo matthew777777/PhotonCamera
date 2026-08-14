@@ -36,6 +36,7 @@ import com.particlesdevs.photoncamera.R;
 import com.particlesdevs.photoncamera.api.CameraMode;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.app.base.BaseActivity;
+import com.particlesdevs.photoncamera.databinding.ActivitySettingsBinding;
 import com.particlesdevs.photoncamera.pro.SupportedDevice;
 import com.particlesdevs.photoncamera.settings.BackupRestoreUtil;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
@@ -56,15 +57,25 @@ import java.util.TimeZone;
 import static com.particlesdevs.photoncamera.settings.PreferenceKeys.Key.ALL_DEVICES_NAMES_KEY;
 import static com.particlesdevs.photoncamera.settings.PreferenceKeys.SCOPE_GLOBAL;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class SettingsActivity extends BaseActivity implements PreferenceFragmentCompat.OnPreferenceStartScreenCallback {
     public static boolean toRestartApp;
     private static int sCameraMode = -1;
+    private ActivitySettingsBinding binding;
+
+    @Inject SettingsManager settingsManager;
+    @Inject SupportedDevice supportedDevice;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         getDelegate().setLocalNightMode(PreferenceKeys.getThemeValue());
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_settings);
+        binding = ActivitySettingsBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
         
         // Get camera mode from intent
         sCameraMode = getIntent().getIntExtra("camera_mode", -1);
@@ -81,7 +92,7 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
     }
     
     private void setupWindowInsets() {
-        View settingsContainer = findViewById(R.id.settings_container);
+        View settingsContainer = binding.settingsContainer;
         if (settingsContainer != null) {
             ViewCompat.setOnApplyWindowInsetsListener(settingsContainer, (v, windowInsets) -> {
                 Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -132,15 +143,17 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
         super.onBackPressed();
     }
 
+    @AndroidEntryPoint
     public static class SettingsFragment extends PreferenceFragmentCompat implements SharedPreferences.OnSharedPreferenceChangeListener, PreferenceManager.OnPreferenceTreeClickListener {
         private static final String KEY_MAIN_PARENT_SCREEN = "prefscreen";
         private Activity activity;
-        private SettingsManager mSettingsManager;
         private Context mContext;
         private View mRootView;
-        private SupportedDevice supportedDevice;
         private boolean tunablePreferencesGenerated = false;
         private ActivityResultLauncher<String[]> lutImportLauncher;
+
+        @Inject SettingsManager mSettingsManager;
+        @Inject SupportedDevice supportedDevice;
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -152,8 +165,6 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
             super.onCreate(savedInstanceState);
             activity = getActivity();
             mContext = getContext();
-            mSettingsManager = Objects.requireNonNull(PhotonCamera.getInstance(activity)).getSettingsManager();
-            supportedDevice = Objects.requireNonNull(PhotonCamera.getInstance(activity)).getSupportedDevice();
             Objects.requireNonNull(getPreferenceScreen().getSharedPreferences())
                     .registerOnSharedPreferenceChangeListener(this);
 
@@ -330,8 +341,8 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
         }
 
         private void setupToolbar() {
-            if (activity != null) {
-                Toolbar toolbar = activity.findViewById(R.id.settings_toolbar);
+            if (activity instanceof SettingsActivity) {
+                Toolbar toolbar = ((SettingsActivity) activity).binding.settingsToolbar;
                 if (toolbar != null) {
                     CharSequence title = getPreferenceScreen().getTitle();
                     // Default to "Settings" if title is null

@@ -228,10 +228,6 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
     public final boolean mFlashEnabled = false;
     private CameraEventsListener cameraEventsListener;
-    /**
-     * A {@link Semaphore} to prevent the app from exiting before closing the camera.
-     */
-    private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
     private CameraManager mCameraManager;
     private CameraManager2 mCameraManager2;
     private Activity activity;
@@ -246,8 +242,6 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      * A reference to the opened {@link CameraDevice}.
      */
     public CameraDevice mCameraDevice;
-    /*A {@link Handler} for running tasks in the background.*/
-    public Handler mBackgroundHandler;
     /*An {@link ImageReader} that handles still image capture.*/
     public ImageReader mImageReaderPreview;
     public ImageReader mImageReaderRaw;
@@ -333,11 +327,11 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 //taskResults.add(result);
                 //processExecutor.execute(() -> mImageSaver.initProcess(reader));
                 mImageSaver.initProcess(reader);
-                //mBackgroundHandler.post(() -> mImageSaver.initProcess(reader));
+                //getBackgroundHandler().post(() -> mImageSaver.initProcess(reader));
                 //AsyncTask.execute(() -> mImageSaver.initProcess(reader));
             }
             else {
-                mBackgroundHandler.post(() -> mImageSaver.initProcess(reader));
+                getBackgroundHandler().post(() -> mImageSaver.initProcess(reader));
                 //mImageSaver.initProcess(reader);
                 //processExecutor.execute(() -> mImageSaver.initProcess(reader));
             }
@@ -383,7 +377,6 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     public Size mPreviewSize;
     public Size mBufferSize;
     /*An additional thread for running tasks that shouldn't block the UI.*/
-    private HandlerThread mBackgroundThread;
     /**
      * Timer to use with pre-capture sequence to ensure a timely capture if 3A convergence is
      * taking too long.
@@ -523,7 +516,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             // This method is called when the camera is opened.  We start camera preview here.
             Log.d(TAG, "CameraDevice onOpened(): " + cameraDevice.getId());
-            mCameraOpenCloseLock.release();
+            lifecycleManager.onCameraOpened(cameraDevice);
             mCameraDevice = cameraDevice;
             mImageSaver = new ImageSaver(cameraEventsListener);
             createCameraPreviewSession(false);
@@ -531,14 +524,12 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
         @Override
         public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-            mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
         }
 
         @Override
         public void onError(@NonNull CameraDevice cameraDevice, int error) {
-            mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
             showToast("onError() : cameraDevice = [" + cameraDevice + "], error = [" + error + "]");
@@ -610,7 +601,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         }
 
     };
-    public CaptureController(Activity activity, ExecutorService processExecutor, CameraEventsListener cameraEventsListener) {
+    private final CameraLifecycleManager lifecycleManager;
+    public CaptureController(Activity activity, ExecutorService processExecutor, CameraEventsListener cameraEventsListener, GLPreview textureView, CameraLifecycleManager lifecycleManager) {
         if(PhotonCamera.getSettings().previewFormat != 0) {
             mPreviewTargetFormat = PhotonCamera.getSettings().previewFormat;
         } else {
@@ -618,7 +610,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         }
         this.activity = activity;
         this.cameraEventsListener = cameraEventsListener;
-        this.mTextureView = activity.findViewById(R.id.texture);
+        this.mTextureView = textureView;
+        this.lifecycleManager = lifecycleManager;
         this.mCameraManager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         this.mCameraManager2 = new CameraManager2(mCameraManager, PhotonCamera.getInstance(activity).getSettingsManager());
         PreferenceKeys.addIds(mCameraManager2.getCameraIdList());
@@ -876,15 +869,12 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      */
     public void closeCamera() {
         try {
-            mCameraOpenCloseLock.acquire();
+            lifecycleManager.closeCamera();
             if (null != mCaptureSession) {
                 mCaptureSession.close();
                 mCaptureSession = null;
             }
-            if (null != mCameraDevice) {
-                mCameraDevice.close();
-                mCameraDevice = null;
-            }
+            mCameraDevice = null;
             if (null != mImageReaderPreview) {
                 if (!isProcessing) {
                     mImageReaderPreview.close();
@@ -904,47 +894,22 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 surface = null;
             }
             mState = STATE_CLOSED;
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while trying to lock camera closing.", e);
-        } finally {
-            mCameraOpenCloseLock.release();
+        } catch (Exception e) {
+            Log.e(TAG, "closeCamera error: " + e.getMessage());
         }
     }
 
     /**
-     * Starts a background thread and its {@link Handler}.
+     * Helper to get background handler from lifecycle manager.
      */
-    public void startBackgroundThread() {
-        if (mBackgroundThread == null) {
-            mBackgroundThread = new HandlerThread("CameraBackground");
-            mBackgroundThread.start();
-            mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
-            Log.d(TAG, "startBackgroundThread() called from \"" + Thread.currentThread().getName() + "\" Thread");
-        }
-        //mBackgroundHandler.post(mImageSaver);
-    }
-
-    /**
-     * Stops the background thread and its {@link Handler}.
-     */
-    public void stopBackgroundThread() {
-        if (mBackgroundThread == null)
-            return;
-        mBackgroundThread.quitSafely();
-        try {
-            mBackgroundThread.join();
-            mBackgroundThread = null;
-            mBackgroundHandler = null;
-            Log.d(TAG, "stopBackgroundThread() called from \"" + Thread.currentThread().getName() + "\" Thread");
-        } catch (InterruptedException e) {
-            Log.e(TAG, Log.getStackTraceString(e));
-        }
+    private Handler getBackgroundHandler() {
+        return lifecycleManager.getBackgroundHandler();
     }
 
 //    public void rebuildPreview() {
 //        try {
 ////            mCaptureSession.stopRepeating();
-//            mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+//            mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, getBackgroundHandler());
 //        } catch (CameraAccessException e) {
 //            Log.e(TAG, Log.getStackTraceString(e));
 //        }
@@ -963,7 +928,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         if(burst) return;
         try {
 //            mCaptureSession.stopRepeating();
-            mCaptureSession.setRepeatingRequest(mPreviewInputRequest = mPreviewRequestBuilder.build(), mCaptureCallback, mBackgroundHandler);
+            mCaptureSession.setRepeatingRequest(mPreviewInputRequest = mPreviewRequestBuilder.build(), mCaptureCallback, getBackgroundHandler());
         } catch (IllegalStateException | IllegalArgumentException | NullPointerException e) {
             Logger.warnShort(TAG, "Cannot rebuildPreviewBuilder()!", e);
         } catch (CameraAccessException e) {
@@ -974,8 +939,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     public void rebuildPreviewBuilderOneShot() {
         if(burst) return;
         try {
-            Log.d(TAG, "rebuildPreviewBuilderOneShot: " + mCaptureSession + " " + mPreviewRequestBuilder + " " + mCaptureCallback + " " + mBackgroundHandler);
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, mBackgroundHandler);
+            Log.d(TAG, "rebuildPreviewBuilderOneShot: " + mCaptureSession + " " + mPreviewRequestBuilder + " " + mCaptureCallback + " " + getBackgroundHandler());
+            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, getBackgroundHandler());
         } catch (IllegalStateException | IllegalArgumentException | NullPointerException e) {
             Logger.warnShort(TAG, "Cannot rebuildPreviewBuilderOneShot()!", e);
         } catch (CameraAccessException e) {
@@ -1088,7 +1053,6 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         Log.d(TAG, "restartCamera() called from \"" + Thread.currentThread().getName() + "\" Thread");
         CameraFragment.mSelectedMode = PhotonCamera.getSettings().selectedMode;
         try {
-            mCameraOpenCloseLock.acquire();
             if (mIsRecordingVideo) {
                 this.VideoEnd();
             }
@@ -1097,10 +1061,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 mCaptureSession.close();
                 mCaptureSession = null;
             }
-            if (null != mCameraDevice) {
-                mCameraDevice.close();
-                mCameraDevice = null;
-            }
+            lifecycleManager.closeCamera();
+            mCameraDevice = null;
             if (null != mImageReaderPreview) {
                 if (!isProcessing) {
                     mImageReaderPreview.close();
@@ -1122,17 +1084,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 surface.release();
                 surface = null;
             }
-            stopBackgroundThread();
+            
             cameraEventsListener.onCameraRestarted();
         } catch (Exception e) {
             Log.e(TAG, Log.getStackTraceString(e));
-            throw new RuntimeException("Interrupted while trying to lock camera restarting.", e);
-        } finally {
-            try {
-                mCameraOpenCloseLock.release();
-            } catch (Exception ignored) {
-                showToast("Failed to release camera");
-            }
         }
         String curID = PhotonCamera.getSettings().mCameraID;
         if(curID.contains("-")) {
@@ -1143,19 +1098,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             physicalID = logicalID;
         }
         
-        try {
-            if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
-                throw new RuntimeException("Time out waiting to lock camera opening.");
-            }
-            this.mCameraManager.openCamera(logicalID, mStateCallback, mBackgroundHandler);
-        } catch (CameraAccessException e) {
-            Log.e(TAG, Log.getStackTraceString(e));
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while trying to restart camera.", e);
-        }
-        //stopBackgroundThread();
+        lifecycleManager.openCamera(activity, logicalID, mStateCallback);
+        //
         //UpdateCameraCharacteristics(physicalID);
-        startBackgroundThread();
+        //
 
         Size optimal = getPreviewOutputSize(getSafeDisplay(), mCameraCharacteristics, CameraFragment.mSelectedMode);
 
@@ -1266,7 +1212,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         mState = STATE_WAITING_LOCK;
         try {
             mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
+                    getBackgroundHandler());
         } catch (CameraAccessException e) {
             Log.e(TAG, "Failed to start camera preview because it couldn't access camera", e);
         } catch (IllegalStateException e) {
@@ -1287,7 +1233,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             // Tell #mCaptureCallback to wait for the precapture sequence to be set.
             mState = STATE_WAITING_PRECAPTURE;
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
+                    getBackgroundHandler());
         } catch (CameraAccessException | IllegalStateException e) {
             Log.e(TAG, Log.getStackTraceString(e));
         }
@@ -1314,27 +1260,17 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             cameraEventsListener.onOpenCamera(this.mCameraManager);
             setUpCameraOutputs(width, height);
             configureTransform(width, height);
-            try {
-                if (!mCameraOpenCloseLock.tryAcquire(1000, TimeUnit.MILLISECONDS)) {
-                    throw new RuntimeException("Time out waiting to lock camera opening.");
-                }
-                physicalID = PhotonCamera.getSettings().mCameraID;
-                logicalID = PhotonCamera.getSettings().mCameraID;
-                // Split x-y, x - logical, y - physical
-                if(PhotonCamera.getSettings().mCameraID.contains("-")){
-                    String[] ids = PhotonCamera.getSettings().mCameraID.split("-");
-                    logicalID = ids[0];
-                    physicalID = ids[1];
-                    //isDualSession = true;
-                }
-                
-                this.mCameraManager.openCamera(logicalID, mStateCallback, mBackgroundHandler);
-            } catch (CameraAccessException e) {
-                Log.e(TAG, Log.getStackTraceString(e));
-            } catch (InterruptedException e) {
-                throw new RuntimeException("Interrupted while trying to lock camera opening.", e);
+            physicalID = PhotonCamera.getSettings().mCameraID;
+            logicalID = PhotonCamera.getSettings().mCameraID;
+            // Split x-y, x - logical, y - physical
+            if(PhotonCamera.getSettings().mCameraID.contains("-")){
+                String[] ids = PhotonCamera.getSettings().mCameraID.split("-");
+                logicalID = ids[0];
+                physicalID = ids[1];
+                //isDualSession = true;
             }
-    });
+            lifecycleManager.openCamera(activity, logicalID, mStateCallback);
+        });
     }
     public void UpdateCameraCharacteristics(String cameraId) {
         PhotonCamera.getSpecificSensor().selectSpecifics(Integer.parseInt(cameraId));
@@ -1370,7 +1306,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             mImageReaderPreview.close();
 
         mImageReaderPreview = ImageReader.newInstance(preview.getWidth(), preview.getHeight(), mPreviewTargetFormat, maxjpg);
-        mImageReaderPreview.setOnImageAvailableListener(mOnYuvImageAvailableListener, mBackgroundHandler);
+        mImageReaderPreview.setOnImageAvailableListener(mOnYuvImageAvailableListener, getBackgroundHandler());
             mBufferSize = getPreviewOutputSize(getSafeDisplay(),characteristics,PhotonCamera.getSettings().selectedMode);
 
         if(mImageReaderRaw != null)
@@ -1388,7 +1324,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         } else {
             mImageReaderRaw = ImageReader.newInstance(target.getWidth(), target.getHeight(), mTargetFormat, maxjpg);
         }
-        mImageReaderRaw.setOnImageAvailableListener(mOnRawImageAvailableListener, mBackgroundHandler);
+        mImageReaderRaw.setOnImageAvailableListener(mOnRawImageAvailableListener, getBackgroundHandler());
         // Find out if we need to swap dimension to get the preview size relative to sensor
         // coordinate.
         int displayRotation = PhotonCamera.getGravity().getRotation();
@@ -1572,17 +1508,17 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                 case NIGHT:
                                 case PHOTO:
                                 case MOTION:
-                                    mCaptureSession.captureBurst(captures, CaptureCallback, mBackgroundHandler);
+                                    mCaptureSession.captureBurst(captures, CaptureCallback, getBackgroundHandler());
                                     break;
                                 case UNLIMITED:
                                 case RAWVIDEO:
-                                    mCaptureSession.setRepeatingBurst(captures, CaptureCallback, mBackgroundHandler);
+                                    mCaptureSession.setRepeatingBurst(captures, CaptureCallback, getBackgroundHandler());
                                     break;
                             }
                         } else {
                             //if(mSelectedMode != CameraMode.VIDEO)
                             mCaptureSession.setRepeatingRequest(mPreviewInputRequest,
-                                    mCaptureCallback, mBackgroundHandler);
+                                    mCaptureCallback, getBackgroundHandler());
                             unlockFocus();
                         }
                     } catch (Exception e) {
@@ -1611,7 +1547,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 );
                 mCameraDevice.createCaptureSession(configuration);
             } else {
-                mCameraDevice.createCaptureSession(surfaces, stateCallback, mBackgroundHandler);
+                mCameraDevice.createCaptureSession(surfaces, stateCallback, getBackgroundHandler());
             }
         } catch (Exception e) {
             Log.e(TAG, Log.getStackTraceString(e));
@@ -1716,7 +1652,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             try {
                 mState = STATE_WAITING_NON_PRECAPTURE;
                 mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
-                        mBackgroundHandler);
+                        getBackgroundHandler());
             } catch (CameraAccessException e) {
                 Log.e(TAG, "Failed to start camera preview because it couldn't access camera", e);
             } catch (IllegalStateException e) {
@@ -1838,7 +1774,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                     Log.v("BurstCounter", "CaptureSequenceCompleted! FrameCount:" + finalFrameCount);
                     Log.v("BurstCounter", "CaptureSequenceCompleted! LastFrameNumber:" + lastFrameNumber);
                     Log.d(TAG, "SequenceCompleted");
-                    mBackgroundHandler.postDelayed(() -> {
+                    getBackgroundHandler().postDelayed(() -> {
                         while(mImageSaver.implementation.IMAGE_BUFFER.size() > PhotonCamera.getSettings().frameCount/2) {
                             try {
                                 Thread.sleep(1);
@@ -1864,7 +1800,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (isDualSession)
                 createCameraPreviewSession(true);
             else {
-                mCaptureSession.captureBurst(captures, CaptureCallback, mBackgroundHandler);
+                mCaptureSession.captureBurst(captures, CaptureCallback, getBackgroundHandler());
             }
 
         } catch (CameraAccessException e) {
@@ -1998,7 +1934,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         processExecutor.execute(() -> {
             try {
                 PhotonCamera.getGyro().CompleteSequence();
-                mBackgroundHandler.post(this::unlockFocus);
+                getBackgroundHandler().post(this::unlockFocus);
                 if (capturedCount == 0) {
                     Log.w(TAG, "ZSL ring buffer was empty, no frames to process");
                     cameraEventsListener.onProcessingFinished("ZSL buffer empty");
@@ -2257,7 +2193,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                     cnt++;
                             }
                             PhotonCamera.getGyro().CompleteSequence();
-                            mBackgroundHandler.post(() -> {
+                            getBackgroundHandler().post(() -> {
                                 if (!isDualSession)
                                     unlockFocus();
                                 else
@@ -2275,7 +2211,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                 cameraEventsListener.onProcessingError(e.getLocalizedMessage());
                             }
                         });
-                        /*mBackgroundHandler.post(() -> {
+                        /*getBackgroundHandler().post(() -> {
                                     while (PhotonCamera.getGyro().capturingNumber < finalFrameCount){
                                         try {
                                             Thread.sleep(1);
@@ -2285,7 +2221,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                     if (maxFrameCount[0] != -1) PhotonCamera.getGyro().CompleteGyroBurst();
                                     mImageSaver.runRaw(mCameraCharacteristics, mCaptureResult, new ArrayList<>(BurstShakiness), cameraRotation);
                                 });*/
-                        //mBackgroundHandler.post(() -> {mImageSaver.runRaw(mCameraCharacteristics, mCaptureResult, new ArrayList<>(BurstShakiness), cameraRotation);});
+                        //getBackgroundHandler().post(() -> {mImageSaver.runRaw(mCameraCharacteristics, mCaptureResult, new ArrayList<>(BurstShakiness), cameraRotation);});
                     }
                 }
             };
@@ -2299,15 +2235,15 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             mCaptureSession.abortCaptures();
                 switch (PhotonCamera.getSettings().selectedMode) {
                     case UNLIMITED:
-                        mCaptureSession.setRepeatingBurst(captures, CaptureCallback, mBackgroundHandler);
+                        mCaptureSession.setRepeatingBurst(captures, CaptureCallback, getBackgroundHandler());
                         break;
                     case RAWVIDEO:
-                        mCaptureSession.setRepeatingRequest(captures.get(0), CaptureCallback, mBackgroundHandler);
+                        mCaptureSession.setRepeatingRequest(captures.get(0), CaptureCallback, getBackgroundHandler());
                         break;
                     case NIGHT:
                     case PHOTO:
                     case MOTION:
-                        mCaptureSession.captureBurst(captures, CaptureCallback, mBackgroundHandler);
+                        mCaptureSession.captureBurst(captures, CaptureCallback, getBackgroundHandler());
                         break;
                 }
             }
@@ -2482,7 +2418,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     public void callUnlimitedEnd() {
         onUnlimited = false;
         //mImageSaver.unlimitedEnd();
-        mBackgroundHandler.post(() -> mImageSaver.processEnd());
+        getBackgroundHandler().post(() -> mImageSaver.processEnd());
         abortCaptures();
         createCameraPreviewSession(false);
         unlimitedStarted = false;

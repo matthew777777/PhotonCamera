@@ -5,9 +5,11 @@ import static com.particlesdevs.photoncamera.util.FileManager.sPHOTON_TUNING_DIR
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import com.particlesdevs.photoncamera.util.Log;
+import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Properties;
@@ -54,14 +56,15 @@ public class GLOneScript implements AutoCloseable {
         if(isTuningEnabled) {
             Log.d("GLOneScript", "Tuning enabled for script: " + name);
             Properties properties = new Properties();
-            try {
-                File init = new File(sPHOTON_TUNING_DIR, "PhotonCameraTuning.ini");
-                if(!init.exists()) {
-                    init.createNewFile();
+            File init = new File(sPHOTON_TUNING_DIR, "PhotonCameraTuning.ini");
+            try (InputStream is = SimpleStorageHelper.openInputStreamByAbsPath(init.getAbsolutePath())) {
+                if (is != null) {
+                    properties.load(is);
+                } else {
+                    Log.d("GLOneScript", "Tuning file not found or inaccessible: " + init.getAbsolutePath());
                 }
-                properties.load(new FileInputStream(init));
             } catch (Exception e) {
-                Log.e("GLOneScript","Error at loading properties:" + Log.getStackTraceString(e));
+                Log.e("GLOneScript", "Error at loading properties: " + Log.getStackTraceString(e));
             }
             mProp = properties;
         }

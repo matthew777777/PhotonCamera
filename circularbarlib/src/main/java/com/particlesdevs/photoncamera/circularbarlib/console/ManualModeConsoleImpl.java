@@ -15,6 +15,7 @@ import com.particlesdevs.photoncamera.circularbarlib.control.models.IsoModel;
 import com.particlesdevs.photoncamera.circularbarlib.control.models.ManualModel;
 import com.particlesdevs.photoncamera.circularbarlib.control.models.ShutterModel;
 import com.particlesdevs.photoncamera.circularbarlib.control.models.WbModel;
+import com.particlesdevs.photoncamera.circularbarlib.databinding.ManualPaletteBinding;
 import com.particlesdevs.photoncamera.circularbarlib.model.KnobModel;
 import com.particlesdevs.photoncamera.circularbarlib.model.ManualModeModel;
 import com.particlesdevs.photoncamera.circularbarlib.ui.CircularBarUIHandler;
@@ -71,7 +72,8 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
 
     @Override
     public void init(Activity activity, CameraCharacteristics cameraCharacteristics) {
-        uiHandler = new CircularBarUIHandler(activity, knobModel, manualModeModel);
+        ManualPaletteBinding binding = ManualPaletteBinding.bind(activity.findViewById(com.particlesdevs.photoncamera.circularbarlib.R.id.manual_mode));
+        uiHandler = new CircularBarUIHandler(activity, binding, knobModel, manualModeModel);
         addKnobs(activity, cameraCharacteristics);
         setupOnClickListeners();
         setAutoText();

@@ -22,10 +22,15 @@ import com.particlesdevs.photoncamera.ui.camera.CustomOrientationEventListener;
 import com.particlesdevs.photoncamera.ui.camera.model.CameraFragmentModel;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
 /**
  * Class get used to update the Models binded to the ui
  * it should not contain any ref to ui
  */
+@HiltViewModel
 public class CameraFragmentViewModel extends AndroidViewModel {
 
     private static final String TAG = CameraFragmentViewModel.class.getSimpleName();
@@ -37,6 +42,7 @@ public class CameraFragmentViewModel extends AndroidViewModel {
     private final Runnable hideSliderRunnable = () -> setFrameSliderVisible(false);
 
 
+    @Inject
     public CameraFragmentViewModel(@NonNull Application application) {
         super(application);
         cameraFragmentModel = new CameraFragmentModel();

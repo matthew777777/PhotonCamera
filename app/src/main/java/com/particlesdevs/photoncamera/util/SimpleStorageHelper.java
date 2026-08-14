@@ -222,6 +222,64 @@ public final class SimpleStorageHelper {
     }
 
     /**
+     * Checks if a file exists at the given absolute path via SAF.
+     */
+    public static boolean existsByAbsPath(String absolutePath) {
+        if (sContext == null || absolutePath == null) return false;
+        try {
+            File target = new File(absolutePath);
+            String fileName = target.getName();
+            String parentAbs = target.getParent();
+            if (parentAbs == null) return false;
+
+            String storageRoot = Environment.getExternalStorageDirectory().getAbsolutePath();
+            if (!parentAbs.startsWith(storageRoot)) return false;
+            String relativeParent = parentAbs.substring(storageRoot.length()).replaceAll("^/+", "");
+
+            DocumentFile parentDir = DocumentFileCompat.fromSimplePath(
+                    sContext, StorageId.PRIMARY, relativeParent, DocumentFileType.FOLDER, true);
+            if (parentDir == null || !parentDir.exists()) return false;
+
+            DocumentFile file = parentDir.findFile(fileName);
+            return file != null && file.exists();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Opens an InputStream for a file at the given absolute path via SAF.
+     * Required on Android 11+ for reading files in shared directories.
+     *
+     * @return readable {@link InputStream}, or {@code null} on failure
+     */
+    public static InputStream openInputStreamByAbsPath(String absolutePath) {
+        if (sContext == null || absolutePath == null) return null;
+        try {
+            File target = new File(absolutePath);
+            String fileName = target.getName();
+            String parentAbs = target.getParent();
+            if (parentAbs == null) return null;
+
+            String storageRoot = Environment.getExternalStorageDirectory().getAbsolutePath();
+            if (!parentAbs.startsWith(storageRoot)) return null;
+            String relativeParent = parentAbs.substring(storageRoot.length()).replaceAll("^/+", "");
+
+            DocumentFile parentDir = DocumentFileCompat.fromSimplePath(
+                    sContext, StorageId.PRIMARY, relativeParent, DocumentFileType.FOLDER, true);
+            if (parentDir == null || !parentDir.exists()) return null;
+
+            DocumentFile file = parentDir.findFile(fileName);
+            if (file == null || !file.exists()) return null;
+
+            return sContext.getContentResolver().openInputStream(file.getUri());
+        } catch (Exception e) {
+            Log.e(TAG, "openInputStreamByAbsPath: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Resolves the parent directory via SAF, deletes any pre-existing file with the same name,
      * and creates a new {@link DocumentFile} ready for writing.
      *

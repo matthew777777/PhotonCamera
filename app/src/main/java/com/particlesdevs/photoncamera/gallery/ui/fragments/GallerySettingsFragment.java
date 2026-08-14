@@ -24,6 +24,9 @@ import java.util.Iterator;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class GallerySettingsFragment extends PreferenceFragmentCompat {
     private GalleryViewModel viewModel;
 

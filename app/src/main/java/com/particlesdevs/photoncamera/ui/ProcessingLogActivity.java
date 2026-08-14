@@ -12,29 +12,33 @@ import androidx.appcompat.widget.Toolbar;
 import com.particlesdevs.photoncamera.R;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.app.base.BaseActivity;
+import com.particlesdevs.photoncamera.databinding.ActivityProcessingLogBinding;
 import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.util.Log;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class ProcessingLogActivity extends BaseActivity {
+    private ActivityProcessingLogBinding binding;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         getDelegate().setLocalNightMode(PreferenceKeys.getThemeValue());
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_processing_log);
+        binding = ActivityProcessingLogBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
 
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        toolbar.setNavigationOnClickListener(v -> finish());
+        setSupportActionBar(binding.toolbar);
+        binding.toolbar.setNavigationOnClickListener(v -> finish());
 
-        TextView logText = findViewById(R.id.log_text);
         ProcessingLog log = PhotonCamera.getLatestProcessingLog();
         if (log != null) {
             String content = log.toString() + "\n" + Log.getRelevantLogsSince(log.startTime);
-            logText.setText(content);
+            binding.logText.setText(content);
         } else {
-            logText.setText("No log data available. Capture a photo first.");
+            binding.logText.setText("No log data available. Capture a photo first.");
         }
     }
 

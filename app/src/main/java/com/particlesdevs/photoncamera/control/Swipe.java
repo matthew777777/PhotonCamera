@@ -35,7 +35,7 @@ public class Swipe {
         Log.d(TAG, "SwipeDetection - ON");
         manualModeConsole = cameraFragment.getManualModeConsole();
         cameraFragmentViewModel = cameraFragment.getCameraFragmentViewModel();
-        ocManual = cameraFragment.findViewById(R.id.open_close_manual);
+        ocManual = cameraFragment.cameraFragmentBinding.openCloseManual;
         manualModeConsole.setPanelVisibility(false);
         ocManual.animate().rotation(0).setDuration(250).start();
         ocManual.setOnClickListener((v) -> {
@@ -92,7 +92,7 @@ public class Swipe {
             }
         });
         View.OnTouchListener touchListener = (view, motionEvent) -> gestureDetector.onTouchEvent(motionEvent);
-        View holder = cameraFragment.findViewById(R.id.textureHolder);
+        View holder = cameraFragment.cameraFragmentBinding.textureHolder;
         Log.d(TAG, "input:" + holder);
         if (holder != null) holder.setOnTouchListener(touchListener);
     }
@@ -100,8 +100,8 @@ public class Swipe {
     private void startTouchToFocus(MotionEvent event) {
         //takes into consideration the top and bottom translation of camera_container(if it has been moved due to different display ratios)
         // for calculation of size of viewfinder RectF.(for touch focus detection)
-        ConstraintLayout camera_container = cameraFragment.findViewById(R.id.camera_container);
-        FrameLayout layout_viewfinder = cameraFragment.findViewById(R.id.layout_viewfinder);
+        ConstraintLayout camera_container = cameraFragment.cameraFragmentBinding.cameraContainer;
+        View layout_viewfinder = cameraFragment.cameraFragmentBinding.layoutViewfinder.getRoot();
         RectF viewfinderRect = new RectF(
                 layout_viewfinder.getLeft(),//left edge of viewfinder
                 camera_container.getY(), //y position of camera_container

@@ -41,7 +41,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import dagger.hilt.android.AndroidEntryPoint;
 
+
+@AndroidEntryPoint
 public class ImageLibraryFragment extends Fragment implements ImageGridAdapter.GridAdapterCallback {
     private static final String TAG = ImageViewerFragment.class.getSimpleName();
     private FragmentGalleryImageLibraryBinding fragmentGalleryImageLibraryBinding;

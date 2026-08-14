@@ -50,10 +50,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
+import dagger.hilt.android.AndroidEntryPoint;
+
 
 /**
  * Created by Vibhor Srivastava on 02-Dec-2020
  */
+@AndroidEntryPoint
 public class ImageViewerFragment extends Fragment {
     private static final String TAG = ImageViewerFragment.class.getSimpleName();
     private List<GalleryItem> galleryItems=new ArrayList<>(0);

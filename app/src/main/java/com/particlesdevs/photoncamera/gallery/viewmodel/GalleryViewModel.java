@@ -16,6 +16,11 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.lifecycle.HiltViewModel;
+
+@HiltViewModel
 public class GalleryViewModel extends AndroidViewModel {
     private final MutableLiveData<GalleryItem> allSelectedImagesFolder = new MutableLiveData<>(GalleryItem.createEmpty());
     private final MutableLiveData<List<GalleryItem>> selectedDisplayFolders = new MutableLiveData<>(new ArrayList<>(0));
@@ -32,6 +37,7 @@ public class GalleryViewModel extends AndroidViewModel {
         updatePendingLiveData.setValue(updatePending);
     }
 
+    @Inject
     public GalleryViewModel(@NonNull Application application) {
         super(application);
     }
