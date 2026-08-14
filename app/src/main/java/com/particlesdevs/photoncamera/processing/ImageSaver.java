@@ -76,7 +76,8 @@ public class ImageSaver {
             Image mImage;
             try {
                 mImage = mReader.acquireNextImage();
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to acquire next image: " + e.getMessage());
                 return;
             }
             if (mImage == null)
@@ -87,12 +88,18 @@ public class ImageSaver {
             Log.d(TAG,"Implementation:" + implementation);
             implementation.frameCount = desiredFrameCount;
             implementation.newBurst = newBurst;
-            implementation.addImage(mImage);
+            try {
+                implementation.addImage(mImage);
+            } catch (Exception e) {
+                Log.e(TAG, "Error adding image to implementation: " + e.getMessage());
+                mImage.close();
+            }
         } else {
             Image mImage;
             try {
                 mImage = mReader.acquireNextImage();
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to acquire next image (drain): " + e.getMessage());
                 return;
             }
             if (mImage == null)

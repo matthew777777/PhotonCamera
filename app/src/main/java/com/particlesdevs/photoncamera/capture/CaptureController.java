@@ -297,7 +297,13 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 //            msg.obj = reader;
 //            mImageSaver.processingHandler.sendMessage(msg);
             if (isZslMode()) {
-                Image img = reader.acquireNextImage();
+                Image img;
+                try {
+                    img = reader.acquireNextImage();
+                } catch (IllegalStateException e) {
+                    Log.e(TAG, "Failed to acquire next image: " + e.getMessage());
+                    return;
+                }
                 if (img == null) return;
                 if (mZslCapturing) {
                     img.close();
@@ -306,6 +312,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 synchronized (mZslBufferLock) {
                     mZslRingBuffer.addLast(img);
                     int maxFrames = Math.min(PhotonCamera.getSettings().frameCount, 37);
+                    // Ensure we don't exceed the ImageReader's capacity minus one to allow acquisition
+                    maxFrames = Math.min(maxFrames, reader.getMaxImages() - 1);
                     while (mZslRingBuffer.size() > maxFrames) {
                         Image old = mZslRingBuffer.pollFirst();
                         if (old != null) old.close();

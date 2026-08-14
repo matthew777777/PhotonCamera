@@ -15,30 +15,38 @@ public class RAW16Saver extends DefaultSaver{
     }
 
     public void addImage(Image image) {
-        switch (PhotonCamera.getSettings().selectedMode) {
-            case RAWVIDEO:
-                Log.d(TAG, "rawvideoaddImage: " + this + " " + mRawVideoProcessor);
-                mRawVideoProcessor.videoCycle(image);
-                //image.close();
-                bufferLock = false;
-                break;
-            case UNLIMITED:
-                Log.d(TAG, "unlimitedaddImage: " + this + " " + mUnlimitedProcessor);
-                mUnlimitedProcessor.unlimitedCycle(image);
+        try {
+            switch (PhotonCamera.getSettings().selectedMode) {
+                case RAWVIDEO:
+                    Log.d(TAG, "rawvideoaddImage: " + this + " " + mRawVideoProcessor);
+                    mRawVideoProcessor.videoCycle(image);
+                    // image.close() is handled inside videoCycle
+                    bufferLock = false;
+                    break;
+                case UNLIMITED:
+                    Log.d(TAG, "unlimitedaddImage: " + this + " " + mUnlimitedProcessor);
+                    mUnlimitedProcessor.unlimitedCycle(image);
+                    image.close();
+                    bufferLock = false;
+                    break;
+                default:
+                    Log.d(TAG, "start buffer size:" + IMAGE_BUFFER.size());
+                    image.getFormat();
+                    /*while (bufferLock){
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException ignored) {}
+                    }*/
+                    IMAGE_BUFFER.add(getFrame(image));
+                    image.close();
+                    bufferLock = false;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in addImage: " + e.getMessage());
+            try {
                 image.close();
-                bufferLock = false;
-                break;
-            default:
-                Log.d(TAG, "start buffer size:" + IMAGE_BUFFER.size());
-                image.getFormat();
-                /*while (bufferLock){
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException ignored) {}
-                }*/
-                IMAGE_BUFFER.add(getFrame(image));
-                image.close();
-                bufferLock = false;
+            } catch (Exception ignored) {}
+            bufferLock = false;
         }
     }
 }

@@ -36,12 +36,15 @@ public class JPEGSaver extends DefaultSaver {
                 IMAGE_BUFFER.clear();
                 buffer.get(bytes);
                 Files.write(jpgPath, bytes);
-                image.close();
+                // image.close() is already here in the original for frameCount == 1, 
+                // but we should ensure it's closed in all paths.
                 processingEventsListener.onProcessingFinished("JPEG: Single Frame, Not Processed!");
                 processingEventsListener.notifyImageSavedStatus(true, jpgPath);
             }
         } catch (IOException | NullPointerException e) {
             e.printStackTrace();
+        } finally {
+            image.close();
         }
     }
 }
