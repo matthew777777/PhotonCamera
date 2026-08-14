@@ -1,198 +1,195 @@
-package com.particlesdevs.photoncamera.gallery.ui.fragments;
+package com.particlesdevs.photoncamera.gallery.ui.fragments
 
-import android.content.ClipData;
-import android.content.Context;
-import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.PointF;
-import android.net.Uri;
-import android.os.Process;
-import android.os.*;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.Toast;
-import android.widget.ToggleButton;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.core.content.FileProvider;
-import androidx.databinding.DataBindingUtil;
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentTransaction;
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
-import com.particlesdevs.photoncamera.R;
-import com.particlesdevs.photoncamera.databinding.FragmentGalleryImageCompareBinding;
-import com.particlesdevs.photoncamera.gallery.compare.SSIVListener;
-import com.particlesdevs.photoncamera.gallery.compare.ScaleAndPan;
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.PointF
+import android.net.Uri
+import android.os.*
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Toast
+import android.widget.ToggleButton
+import androidx.core.content.FileProvider
+import androidx.databinding.DataBindingUtil
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import com.particlesdevs.photoncamera.R
+import com.particlesdevs.photoncamera.databinding.FragmentGalleryImageCompareBinding
+import com.particlesdevs.photoncamera.gallery.compare.SSIVListener
+import com.particlesdevs.photoncamera.gallery.compare.ScaleAndPan
+import com.particlesdevs.photoncamera.gallery.helper.Constants.*
+import kotlinx.coroutines.launch
+import java.io.File
+import java.net.URLConnection
+import java.nio.file.Files
 
-import java.io.File;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.URLConnection;
-import java.nio.file.Files;
-import java.util.Observable;
-
-import static com.particlesdevs.photoncamera.gallery.helper.Constants.*;
-
-/**
- * Created by Vibhor Srivastava on 09-Jan-2021
- */
-public class ImageCompareFragment extends Fragment {
-    private static boolean toSync = true;
-    private final SSIVListenerImpl ssivListener = new SSIVListenerImpl();
-    private final ImageViewerFragment fragment1 = new ImageViewerFragment();
-    private final ImageViewerFragment fragment2 = new ImageViewerFragment();
-    private File imagesDir;
-    private FragmentGalleryImageCompareBinding binding;
-    private Context mContext;
-    private final Handler shareHandler = new Handler(Looper.getMainLooper(), msg -> {
-        if (msg.obj instanceof Uri) shareUri((Uri) msg.obj);
-        hideButtons(false);
-        return true;
-    });
-
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setRetainInstance(true);
-        this.mContext = getContext();
-        createDir();
+class ImageCompareFragment : Fragment() {
+    private var toSync = true
+    private val ssivListener = SSIVListenerImpl()
+    private val fragment1 = ImageViewerFragment()
+    private val fragment2 = ImageViewerFragment()
+    private lateinit var imagesDir: File
+    private var binding: FragmentGalleryImageCompareBinding? = null
+    private lateinit var mContext: Context
+    
+    private val shareHandler = Handler(Looper.getMainLooper()) { msg ->
+        if (msg.obj is Uri) shareUri(msg.obj as Uri)
+        hideButtons(false)
+        true
     }
 
-    private void createDir() {
-        this.imagesDir = new File(mContext.getCacheDir(), "images");
-        this.imagesDir.mkdirs();
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        @Suppress("DEPRECATION")
+        retainInstance = true
+        mContext = requireContext()
+        createDir()
     }
 
-    @Nullable
-    @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        binding = DataBindingUtil.inflate(inflater, R.layout.fragment_gallery_image_compare, container, false);
-        return binding.getRoot();
+    private fun createDir() {
+        imagesDir = File(mContext.cacheDir, "images")
+        imagesDir.mkdirs()
     }
 
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        Bundle b = getArguments();
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        binding = DataBindingUtil.inflate(inflater, R.layout.fragment_gallery_image_compare, container, false)
+        return binding?.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        val b = arguments
         if (b != null) {
-            toSync = true;
-            binding.setOnSyncClick(this::onSyncClick);
-            binding.setOnShare(this::onShareClick);
-            FragmentTransaction trans = getChildFragmentManager().beginTransaction();
+            toSync = true
+            binding?.onSyncClick = View.OnClickListener { onSyncClick(it) }
+            binding?.onShare = View.OnClickListener { onShareClick(it) }
+            val trans = childFragmentManager.beginTransaction()
 
-            Bundle b1 = new Bundle();
-            b1.putString(MODE_KEY, COMPARE);
-            b1.putInt(IMAGE_POSITION_KEY, b.getInt(IMAGE1_KEY));
-            fragment1.setArguments(b1);
-            fragment1.setSsivListener(ssivListener);
-            trans.add(R.id.image_container1, fragment1, "image_container1");
+            val b1 = Bundle().apply {
+                putString(MODE_KEY, COMPARE)
+                putInt(IMAGE_POSITION_KEY, b.getInt(IMAGE1_KEY))
+            }
+            fragment1.arguments = b1
+            fragment1.setSsivListener(ssivListener)
+            trans.add(R.id.image_container1, fragment1, "image_container1")
 
-            Bundle b2 = new Bundle();
-            b2.putString(MODE_KEY, COMPARE);
-            b2.putInt(IMAGE_POSITION_KEY, b.getInt(IMAGE2_KEY));
-            fragment2.setArguments(b2);
-            fragment2.setSsivListener(ssivListener);
-            trans.add(R.id.image_container2, fragment2, "image_container2");
+            val b2 = Bundle().apply {
+                putString(MODE_KEY, COMPARE)
+                putInt(IMAGE_POSITION_KEY, b.getInt(IMAGE2_KEY))
+            }
+            fragment2.arguments = b2
+            fragment2.setSsivListener(ssivListener)
+            trans.add(R.id.image_container2, fragment2, "image_container2")
 
-            trans.commit();
+            trans.commit()
+            
+            // Start observing state flow only after views are created
+            ssivListener.startObserving()
         }
     }
 
-    private void onSyncClick(View view) {
-        toSync = ((ToggleButton) view).isChecked();
+    private fun onSyncClick(view: View) {
+        toSync = (view as ToggleButton).isChecked
     }
 
-    private void onShareClick(View view) {
-        hideButtons(true);
-        HandlerThread bmpThread = new HandlerThread("ScreenshotThread", Process.THREAD_PRIORITY_BACKGROUND);
-        bmpThread.start();
-        new Handler(bmpThread.getLooper()).post(() -> shareHandler.obtainMessage(0, saveBitmap(screenShot(binding.getRoot()))).sendToTarget());
-        bmpThread.quitSafely();
+    private fun onShareClick(view: View) {
+        hideButtons(true)
+        val bmpThread = HandlerThread("ScreenshotThread", Process.THREAD_PRIORITY_BACKGROUND)
+        bmpThread.start()
+        Handler(bmpThread.looper).post {
+            shareHandler.obtainMessage(0, saveBitmap(screenShot(binding!!.root))).sendToTarget()
+        }
+        bmpThread.quitSafely()
     }
 
-    private void shareUri(Uri uri) {
-        Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.putExtra(Intent.EXTRA_STREAM, uri);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setType(URLConnection.guessContentTypeFromName(uri.toString()));
-        intent.setClipData(ClipData.newUri(mContext.getContentResolver(), "", uri));
-        startActivity(Intent.createChooser(intent, null));
+    private fun shareUri(uri: Uri) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            type = URLConnection.guessContentTypeFromName(uri.toString())
+            clipData = ClipData.newUri(mContext.contentResolver, "", uri)
+        }
+        startActivity(Intent.createChooser(intent, null))
     }
 
-    private void hideButtons(boolean toHide) {
-        if (binding != null) binding.setHideButtons(toHide);
+    private fun hideButtons(toHide: Boolean) {
+        binding?.hideButtons = toHide
     }
 
-    private Uri saveBitmap(Bitmap bitmap) {
-        Uri uri = null;
+    private fun saveBitmap(bitmap: Bitmap): Uri? {
+        var uri: Uri? = null
         try {
-            File file = new File(imagesDir, "compare_screenshot.jpg");
-            OutputStream stream = Files.newOutputStream(file.toPath());
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream);
-            stream.flush();
-            stream.close();
-            uri = FileProvider.getUriForFile(mContext, mContext.getPackageName() + ".provider", file);
-        } catch (IOException | NullPointerException e) {
-            e.printStackTrace();
-            Toast.makeText(mContext, "Failed!", Toast.LENGTH_SHORT).show();
+            val file = File(imagesDir, "compare_screenshot.jpg")
+            val stream = Files.newOutputStream(file.toPath())
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+            stream.flush()
+            stream.close()
+            uri = FileProvider.getUriForFile(mContext, mContext.packageName + ".provider", file)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(mContext, "Failed!", Toast.LENGTH_SHORT).show()
         }
-        return uri;
+        return uri
     }
 
-    private Bitmap screenShot(View view) {
-        Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        view.draw(canvas);
-        return bitmap;
+    private fun screenShot(view: View): Bitmap {
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        view.draw(canvas)
+        return bitmap
     }
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        getParentFragmentManager().beginTransaction().remove(fragment1).remove(fragment2).commitAllowingStateLoss();
-        binding = null;
+    override fun onDestroy() {
+        super.onDestroy()
+        childFragmentManager.beginTransaction().remove(fragment1).remove(fragment2).commitAllowingStateLoss()
+        binding = null
     }
 
-    private class SSIVListenerImpl extends SSIVListener {
-        private final ScaleAndPan scaleAndPan = new ScaleAndPan();
-        private final Handler mainHandler = new Handler(Looper.getMainLooper());
-        private int idTouched = 0;
+    private inner class SSIVListenerImpl : SSIVListener() {
+        private val scaleAndPan = ScaleAndPan()
+        private var idTouched = 0
 
-        SSIVListenerImpl() {
-            scaleAndPan.addObserver(this::update);
-        }
-
-        @Override
-        public void onScaleChanged(float newScale, int origin) {
-            scaleAndPan.setOrigin(origin);
-            scaleAndPan.setScale(newScale);
-        }
-
-        @Override
-        public void onCenterChanged(PointF newCenter, int origin) {
-            scaleAndPan.setOrigin(origin);
-            scaleAndPan.setCenter(newCenter);
-        }
-
-        @Override
-        public void onTouched(int id) {
-            idTouched = id;
-        }
-
-        public void update(Observable o, Object arg) {
-            mainHandler.post(() -> {
-                if (toSync) {
-                    copyZoomPan(fragment1.getCurrentSSIV(), fragment2.getCurrentSSIV(), (ScaleAndPan) o);
+        fun startObserving() {
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    scaleAndPan.stateFlow.collect { state ->
+                        if (toSync) {
+                            val v1 = fragment1.currentSSIV
+                            val v2 = fragment2.currentSSIV
+                            if (v1 != null && v2 != null) {
+                                copyZoomPan(v1, v2, state)
+                            }
+                        }
+                        if (fragment1.isAdded) fragment1.updateScaleText()
+                        if (fragment2.isAdded) fragment2.updateScaleText()
+                    }
                 }
-                fragment1.updateScaleText();
-                fragment2.updateScaleText();
-            });
+            }
         }
 
-        private void copyZoomPan(SubsamplingScaleImageView v1, SubsamplingScaleImageView v2, ScaleAndPan scaleAndPan) {
-            if (v1.getId() == idTouched) v2.setScaleAndCenter(scaleAndPan.getScale(), scaleAndPan.getCenter());
-            if (v2.getId() == idTouched) v1.setScaleAndCenter(scaleAndPan.getScale(), scaleAndPan.getCenter());
+        override fun onScaleChanged(newScale: Float, origin: Int) {
+            scaleAndPan.origin = origin
+            scaleAndPan.scale = newScale
+        }
+
+        override fun onCenterChanged(newCenter: PointF, origin: Int) {
+            scaleAndPan.origin = origin
+            scaleAndPan.center = newCenter
+        }
+
+        override fun onTouched(id: Int) {
+            idTouched = id
+        }
+
+        private fun copyZoomPan(v1: SubsamplingScaleImageView, v2: SubsamplingScaleImageView, state: ScaleAndPan.State) {
+            if (v1.id == idTouched) state.center?.let { v2.setScaleAndCenter(state.scale, it) }
+            if (v2.id == idTouched) state.center?.let { v1.setScaleAndCenter(state.scale, it) }
         }
     }
 }

@@ -1,52 +1,38 @@
-package com.particlesdevs.photoncamera.gallery.compare;
+package com.particlesdevs.photoncamera.gallery.compare
 
-import android.graphics.PointF;
-
-import java.util.Observable;
+import android.graphics.PointF
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Simple observable class that stores current zoom and pan state
- * <p>
- * Created by Vibhor Srivastava 18 Jan 2021
+ * Modernized data class which stores current zoom and pan state
+ * using StateFlow for observation.
  */
-public class ScaleAndPan extends Observable {
-    private float scale;
-    private PointF center;
-    private int origin;
+class ScaleAndPan {
+    data class State(
+        val scale: Float = 0f,
+        val center: PointF? = null,
+        val origin: Int = 0
+    )
 
-    public ScaleAndPan() {
-    }
+    private val _stateFlow = MutableStateFlow(State())
+    val stateFlow = _stateFlow.asStateFlow()
 
-    public int getOrigin() {
-        return origin;
-    }
+    var scale: Float
+        get() = _stateFlow.value.scale
+        set(value) {
+            _stateFlow.value = _stateFlow.value.copy(scale = value)
+        }
 
-    public void setOrigin(int origin) {
-        this.origin = origin;
-        notifyObservers();
-    }
+    var center: PointF?
+        get() = _stateFlow.value.center
+        set(value) {
+            _stateFlow.value = _stateFlow.value.copy(center = value)
+        }
 
-    public float getScale() {
-        return scale;
-    }
-
-    public void setScale(float scale) {
-        this.scale = scale;
-        notifyObservers();
-    }
-
-    public PointF getCenter() {
-        return center;
-    }
-
-    public void setCenter(PointF center) {
-        this.center = center;
-        notifyObservers();
-    }
-
-    @Override
-    public void notifyObservers() {
-        setChanged();
-        super.notifyObservers();
-    }
+    var origin: Int
+        get() = _stateFlow.value.origin
+        set(value) {
+            _stateFlow.value = _stateFlow.value.copy(origin = value)
+        }
 }

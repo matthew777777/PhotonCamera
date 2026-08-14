@@ -1,209 +1,176 @@
-package com.particlesdevs.photoncamera.manual;
-/*
- * Class responsible for setting manual mode parameters to the camera preview.
- *
- *         Copyright (C) 2021  Vibhor Srivastava
- *         This program is free software: you can redistribute it and/or modify
- *         it under the terms of the GNU General Public License as published by
- *         the Free Software Foundation, either version 3 of the License, or
- *         (at your option) any later version.
- *
- *         This program is distributed in the hope that it will be useful,
- *         but WITHOUT ANY WARRANTY; without even the implied warranty of
- *         MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *         GNU General Public License for more details.
- *
- *         You should have received a copy of the GNU General Public License
- *         along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+package com.particlesdevs.photoncamera.manual
 
-import android.hardware.camera2.CaptureRequest;
-
-import com.particlesdevs.photoncamera.settings.PreferenceKeys;
-import com.particlesdevs.photoncamera.util.Log;
-
-import androidx.annotation.NonNull;
-
-import com.particlesdevs.photoncamera.circularbarlib.control.ManualParamModel;
-import com.particlesdevs.photoncamera.capture.CaptureController;
-import com.particlesdevs.photoncamera.processing.parameters.ExposureIndex;
-
-import java.util.Observable;
-import java.util.Observer;
+import android.hardware.camera2.CaptureRequest
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.particlesdevs.photoncamera.capture.CaptureController
+import com.particlesdevs.photoncamera.circularbarlib.control.ManualParamModel
+import com.particlesdevs.photoncamera.processing.parameters.ExposureIndex
+import com.particlesdevs.photoncamera.settings.PreferenceKeys
+import com.particlesdevs.photoncamera.util.Log
+import kotlinx.coroutines.launch
 
 /**
- * Observer class for {@link ManualParamModel}
- * This class is responsible for setting manual parameters to the camera preview
- * <p>
- * Created by Vibhor Srivastava on 07/Jan/2021
+ * Controller class responsible for setting manual mode parameters to the camera preview.
+ * Modernized to use Kotlin Coroutines and StateFlow.
  */
-public class ParamController implements Observer {
-    public int ISO = -1;
-    public int EV = 0;
-    public long SHUTTER = -1;
-    public float FOCUS = -1;
-    public double WB = ManualParamModel.WB_AUTO;
-    private static final String TAG = "ParamController";
-    private final CaptureController captureController;
-    private ManualParamModel manualParamModel;
+class ParamController(private val captureController: CaptureController) {
+    @JvmField var ISO: Int = -1
+    @JvmField var EV: Int = 0
+    @JvmField var SHUTTER: Long = -1L
+    @JvmField var FOCUS: Float = -1f
+    @JvmField var WB: Double = ManualParamModel.WB_AUTO
+    
+    private val TAG = "ParamController"
+    private var manualParamModel: ManualParamModel? = null
 
-    public ParamController(@NonNull CaptureController captureController) {
-        this.captureController = captureController;
+    fun observeModel(lifecycleOwner: LifecycleOwner, model: ManualParamModel) {
+        this.manualParamModel = model
+        lifecycleOwner.lifecycleScope.launch {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    model.isoFlow.collect { isoVal ->
+                        ISO = isoVal.toInt()
+                        setISO(ISO, model.currentExposureValue)
+                    }
+                }
+                launch {
+                    model.evFlow.collect { evVal ->
+                        EV = evVal.toInt()
+                        setEV(EV)
+                    }
+                }
+                launch {
+                    model.exposureFlow.collect { shutterVal ->
+                        SHUTTER = shutterVal.toLong()
+                        setShutter(SHUTTER, model.currentISOValue.toInt())
+                    }
+                }
+                launch {
+                    model.focusFlow.collect { focusVal ->
+                        FOCUS = focusVal.toFloat()
+                        setFocus(FOCUS)
+                    }
+                }
+                launch {
+                    model.wbFlow.collect { wbVal ->
+                        WB = wbVal
+                        setWB(WB)
+                    }
+                }
+                launch {
+                    model.panelInvisibilityEvent.collect {
+                        Log.d(TAG, "update: " + model.isManualMode())
+                        ISO = -1
+                        EV = 0
+                        SHUTTER = -1L
+                        FOCUS = -1f
+                        captureController.unlockFocus()
+                    }
+                }
+            }
+        }
     }
 
-    public void setShutter(long shutterNs, int currentISO) {
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+    fun setShutter(shutterNs: Long, currentISO: Int) {
+        val builder = captureController.mPreviewRequestBuilder
         if (builder == null) {
-            Log.w(TAG, "setShutter(): mPreviewRequestBuilder is null");
-            return;
+            Log.w(TAG, "setShutter(): mPreviewRequestBuilder is null")
+            return
         }
-        if (shutterNs == ManualParamModel.EXPOSURE_AUTO) {
-            if (currentISO == ManualParamModel.ISO_AUTO)//check if ISO is Auto
-            {
-                captureController.resetPreviewAEMode();
+        if (shutterNs == ManualParamModel.EXPOSURE_AUTO.toLong()) {
+            if (currentISO == ManualParamModel.ISO_AUTO.toInt()) {
+                captureController.resetPreviewAEMode()
             }
         } else {
-            builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-            builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, Math.min(shutterNs, ExposureIndex.sec / 5));
-            builder.set(CaptureRequest.SENSOR_SENSITIVITY, captureController.mPreviewIso);
+            builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+            builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, Math.min(shutterNs, ExposureIndex.sec / 5))
+            builder.set(CaptureRequest.SENSOR_SENSITIVITY, captureController.mPreviewIso)
         }
-        captureController.rebuildPreviewBuilder();
+        captureController.rebuildPreviewBuilder()
     }
 
-    public void setISO(int isoVal, double currentExposure) {
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+    fun setISO(isoVal: Int, currentExposure: Double) {
+        val builder = captureController.mPreviewRequestBuilder
         if (builder == null) {
-            Log.w(TAG, "setISO(): mPreviewRequestBuilder is null");
-            return;
+            Log.w(TAG, "setISO(): mPreviewRequestBuilder is null")
+            return
         }
-        if (isoVal == ManualParamModel.ISO_AUTO) {
-            if (currentExposure == ManualParamModel.EXPOSURE_AUTO) //check if Exposure is Auto
-            {
-                captureController.resetPreviewAEMode();
+        if (isoVal == ManualParamModel.ISO_AUTO.toInt()) {
+            if (currentExposure == ManualParamModel.EXPOSURE_AUTO) {
+                captureController.resetPreviewAEMode()
             }
         } else {
-            builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-            builder.set(CaptureRequest.SENSOR_SENSITIVITY, isoVal);
-            builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, captureController.mPreviewExposureTime);
+            builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+            builder.set(CaptureRequest.SENSOR_SENSITIVITY, isoVal)
+            builder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, captureController.mPreviewExposureTime)
         }
-        captureController.rebuildPreviewBuilder();
+        captureController.rebuildPreviewBuilder()
     }
 
-    public void setFocus(float focusDist) {
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+    fun setFocus(focusDist: Float) {
+        val builder = captureController.mPreviewRequestBuilder
         if (builder == null) {
-            Log.w(TAG, "setFocus(): mPreviewRequestBuilder is null");
-            return;
+            Log.w(TAG, "setFocus(): mPreviewRequestBuilder is null")
+            return
         }
-        if (focusDist == ManualParamModel.FOCUS_AUTO) {
-            builder.set(CaptureRequest.CONTROL_AF_MODE, PreferenceKeys.getAfMode());
+        if (focusDist == ManualParamModel.FOCUS_AUTO.toFloat()) {
+            builder.set(CaptureRequest.CONTROL_AF_MODE, PreferenceKeys.getAfMode())
         } else {
-            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-            builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDist);
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
+            builder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDist)
         }
-        captureController.rebuildPreviewBuilder();
+        captureController.rebuildPreviewBuilder()
     }
 
-    public void setEV(int ev) {
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+    fun setEV(ev: Int) {
+        val builder = captureController.mPreviewRequestBuilder
         if (builder == null) {
-            Log.w(TAG, "setEV(): mPreviewRequestBuilder is null");
-            return;
+            Log.w(TAG, "setEV(): mPreviewRequestBuilder is null")
+            return
         }
-        builder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, ev);
-        captureController.rebuildPreviewBuilder();
+        builder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, ev)
+        captureController.rebuildPreviewBuilder()
     }
 
-    public void setWB(double wbValue) {
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+    fun setWB(wbValue: Double) {
+        val builder = captureController.mPreviewRequestBuilder
         if (builder == null) {
-            Log.w(TAG, "setWB(): mPreviewRequestBuilder is null");
-            return;
+            Log.w(TAG, "setWB(): mPreviewRequestBuilder is null")
+            return
         }
-        if (wbValue == ManualParamModel.WB_AUTO) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
-        } else if (wbValue == ManualParamModel.WB_INCANDESCENT) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT);
-        } else if (wbValue == ManualParamModel.WB_FLUORESCENT) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT);
-        } else if (wbValue == ManualParamModel.WB_WARM_FLUORESCENT) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_WARM_FLUORESCENT);
-        } else if (wbValue == ManualParamModel.WB_DAYLIGHT) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT);
-        } else if (wbValue == ManualParamModel.WB_CLOUDY) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT);
-        } else if (wbValue == ManualParamModel.WB_TWILIGHT) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_TWILIGHT);
-        } else if (wbValue == ManualParamModel.WB_SHADE) {
-            builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_SHADE);
+        when (wbValue) {
+            ManualParamModel.WB_AUTO -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
+            ManualParamModel.WB_INCANDESCENT -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT)
+            ManualParamModel.WB_FLUORESCENT -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT)
+            ManualParamModel.WB_WARM_FLUORESCENT -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_WARM_FLUORESCENT)
+            ManualParamModel.WB_DAYLIGHT -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT)
+            ManualParamModel.WB_CLOUDY -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT)
+            ManualParamModel.WB_TWILIGHT -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_TWILIGHT)
+            ManualParamModel.WB_SHADE -> builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_SHADE)
         }
-        captureController.rebuildPreviewBuilder();
+        captureController.rebuildPreviewBuilder()
     }
 
-    public boolean isManualMode() {
-        if (manualParamModel != null)
-            return manualParamModel.isManualMode();
-        return false;
+    fun isManualMode(): Boolean {
+        return manualParamModel?.isManualMode() ?: false
     }
 
-    @Override
-    public void update(Observable observable, Object object) {
-        if (observable != null && object != null) {
-            ManualParamModel model = (ManualParamModel) observable;
-            manualParamModel = model;
-            if (object.equals(ManualParamModel.ID_ISO)) {
-                ISO = (int) model.getCurrentISOValue();
-                setISO((int) model.getCurrentISOValue(), model.getCurrentExposureValue());
-            }
-            if (object.equals(ManualParamModel.ID_EV)) {
-                EV = (int) model.getCurrentEvValue();
-                setEV((int) model.getCurrentEvValue());
-            }
-            if (object.equals(ManualParamModel.ID_SHUTTER)) {
-                SHUTTER = (long) model.getCurrentExposureValue();
-                setShutter((long) model.getCurrentExposureValue(), (int) model.getCurrentISOValue());
-            }
-            if (object.equals(ManualParamModel.ID_FOCUS)) {
-                FOCUS = (float) model.getCurrentFocusValue();
-                setFocus((float) model.getCurrentFocusValue());
-            }
-            if (object.equals(ManualParamModel.ID_WB)) {
-                WB = model.getCurrentWbValue();
-                setWB(model.getCurrentWbValue());
-            }
-            if(object.equals(ManualParamModel.PANEL_INVISIBILITY)) {
-                Log.d(TAG, "update: " + model.isManualMode());
-                ISO = -1;
-                EV = 0;
-                SHUTTER = -1;
-                FOCUS = -1;
-                captureController.unlockFocus();
-            }
-        }
+    fun setupPreview() {
+        val model = manualParamModel ?: return
+        if (ISO != -1) setISO(ISO, model.currentExposureValue)
+        if (EV != 0) setEV(EV)
+        if (SHUTTER != -1L) setShutter(SHUTTER, ISO)
+        if (FOCUS != -1f) setFocus(FOCUS)
     }
 
-    public void setupPreview() {
-        if (manualParamModel != null) {
-            if(ISO != -1)
-                setISO(ISO, manualParamModel.getCurrentExposureValue());
-            if(EV != 0)
-                setEV(EV);
-            if(SHUTTER != -1)
-                setShutter(SHUTTER, ISO);
-            if(FOCUS != -1)
-                setFocus(FOCUS);
-        }
+    fun getCurrentExposureValue(): Double {
+        return manualParamModel?.currentExposureValue ?: ManualParamModel.EXPOSURE_AUTO
     }
 
-    public double getCurrentExposureValue() {
-        if (manualParamModel != null)
-            return manualParamModel.getCurrentExposureValue();
-        return ManualParamModel.EXPOSURE_AUTO;
-    }
-
-    public double getCurrentISOValue() {
-        if (manualParamModel != null)
-            return manualParamModel.getCurrentISOValue();
-        return ManualParamModel.ISO_AUTO;
+    fun getCurrentISOValue(): Double {
+        return manualParamModel?.currentISOValue ?: ManualParamModel.ISO_AUTO
     }
 }

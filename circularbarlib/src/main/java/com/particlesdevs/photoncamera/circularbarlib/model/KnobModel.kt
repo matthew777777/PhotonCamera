@@ -1,63 +1,33 @@
-package com.particlesdevs.photoncamera.circularbarlib.model;
+package com.particlesdevs.photoncamera.circularbarlib.model
 
-import com.particlesdevs.photoncamera.circularbarlib.R;
-import com.particlesdevs.photoncamera.circularbarlib.control.models.ManualModel;
-import com.particlesdevs.photoncamera.circularbarlib.ui.views.knobview.KnobView;
-
-import java.util.Observable;
+import com.particlesdevs.photoncamera.circularbarlib.control.models.ManualModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The Observable data class responsible for the behaviour and appearance of {@link KnobView}
- * <p>
- * This model is attached to the said layout through DataBinding
- * for more information {@link R.layout#manual_palette }
- * <p>
- * Authors - Vibhor, KillerInk
+ * Modernized data class responsible for the behavior and appearance of KnobView
+ * using StateFlow for observation.
  */
-public class KnobModel extends Observable {
-    boolean knobResetCalled;
-    private boolean knobVisible;
-    private ManualModel<?> manualModel;
-
-    public ManualModel<?> getManualModel() {
-        return manualModel;
-    }
-
-    public void setManualModel(ManualModel<?> manualModel) {
-        this.manualModel = manualModel;
-        notifyObservers(KnobModelFields.MANUAL_MODEL);
-
-    }
-
-    public boolean isKnobResetCalled() {
-        return knobResetCalled;
-    }
-
-    public void setKnobResetCalled(boolean resetCalled) {
-        this.knobResetCalled = resetCalled;
-        notifyObservers(KnobModelFields.RESET);
-
-    }
-
-    public boolean isKnobVisible() {
-        return knobVisible;
-    }
-
-    public void setKnobVisible(boolean knobVisible) {
-        this.knobVisible = knobVisible;
-        notifyObservers(KnobModelFields.VISIBILITY);
-
-
-    }
-
-    @Override
-    public void notifyObservers(Object arg) {
-        setChanged();
-        super.notifyObservers(arg);
-
-    }
-
-    public enum KnobModelFields {
+class KnobModel {
+    enum class KnobModelFields {
         MANUAL_MODEL, VISIBILITY, RESET
     }
+
+    private val _manualModelFlow = MutableStateFlow<ManualModel<*>?>(null)
+    val manualModelFlow = _manualModelFlow.asStateFlow()
+    var manualModel: ManualModel<*>?
+        get() = _manualModelFlow.value
+        set(value) { _manualModelFlow.value = value }
+
+    private val _knobResetCalledFlow = MutableStateFlow(false)
+    val knobResetCalledFlow = _knobResetCalledFlow.asStateFlow()
+    var isKnobResetCalled: Boolean
+        get() = _knobResetCalledFlow.value
+        set(value) { _knobResetCalledFlow.value = value }
+
+    private val _knobVisibleFlow = MutableStateFlow(false)
+    val knobVisibleFlow = _knobVisibleFlow.asStateFlow()
+    var isKnobVisible: Boolean
+        get() = _knobVisibleFlow.value
+        set(value) { _knobVisibleFlow.value = value }
 }

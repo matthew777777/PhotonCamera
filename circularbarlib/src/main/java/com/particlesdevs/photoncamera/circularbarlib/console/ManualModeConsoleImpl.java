@@ -17,11 +17,9 @@ import com.particlesdevs.photoncamera.circularbarlib.control.models.ShutterModel
 import com.particlesdevs.photoncamera.circularbarlib.control.models.WbModel;
 import com.particlesdevs.photoncamera.circularbarlib.model.KnobModel;
 import com.particlesdevs.photoncamera.circularbarlib.model.ManualModeModel;
-import com.particlesdevs.photoncamera.circularbarlib.ui.ViewObserver;
+import com.particlesdevs.photoncamera.circularbarlib.ui.CircularBarUIHandler;
 import com.particlesdevs.photoncamera.circularbarlib.ui.views.knobview.KnobView;
 import com.particlesdevs.photoncamera.circularbarlib.ui.views.knobview.KnobItemInfo;
-
-import java.util.Observer;
 
 /**
  * Responsible for initialising and updating {@link KnobModel} and
@@ -40,7 +38,7 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
     private final KnobModel knobModel;
     private final ManualParamModel manualParamModel = new ManualParamModel();
     private ManualModel<?> mfModel, isoModel, expoTimeModel, evModel, wbModel, selectedModel;
-    private ViewObserver viewObserver;
+    private CircularBarUIHandler uiHandler;
 
     private ManualModeConsoleImpl() {
         this.manualModeModel = new ManualModeModel();
@@ -63,16 +61,6 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
     }
 
     @Override
-    public void addParamObserver(Observer observer) {
-        manualParamModel.addObserver(observer);
-    }
-
-    @Override
-    public void removeParamObservers() {
-        manualParamModel.deleteObservers();
-    }
-
-    @Override
     public ManualParamModel getManualParamModel() {
         return manualParamModel;
     }
@@ -83,8 +71,7 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
 
     @Override
     public void init(Activity activity, CameraCharacteristics cameraCharacteristics) {
-        viewObserver = new ViewObserver(activity);
-        addObserver();
+        uiHandler = new CircularBarUIHandler(activity, knobModel, manualModeModel);
         addKnobs(activity, cameraCharacteristics);
         setupOnClickListeners();
         setAutoText();
@@ -92,36 +79,21 @@ public class ManualModeConsoleImpl implements ManualModeConsole {
 
     @Override
     public void onResume() {
-        if (viewObserver != null) {
-            viewObserver.enableOrientationListener();
+        if (uiHandler != null) {
+            uiHandler.enableOrientationListener();
         }
-        addObserver();
     }
 
     @Override
     public void onPause() {
-        if (viewObserver != null) {
-            viewObserver.disableOrientationListener();
+        if (uiHandler != null) {
+            uiHandler.disableOrientationListener();
         }
-        removeObservers();
     }
 
     @Override
     public void onDestroy() {
         sInstance = null;
-    }
-
-    private void addObserver() {
-        if (viewObserver != null) {
-            removeObservers();
-            knobModel.addObserver(viewObserver);
-            manualModeModel.addObserver(viewObserver);
-        }
-    }
-
-    private void removeObservers() {
-        knobModel.deleteObservers();
-        manualModeModel.deleteObservers();
     }
 
     private void addKnobs(Context context, CameraCharacteristics cameraCharacteristics) {

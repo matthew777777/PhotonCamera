@@ -1,149 +1,93 @@
-package com.particlesdevs.photoncamera.circularbarlib.model;
+package com.particlesdevs.photoncamera.circularbarlib.model
 
-import android.view.View;
-
-import com.particlesdevs.photoncamera.circularbarlib.R;
-
-import java.util.Observable;
+import android.view.View
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The Observable data class responsible for the behaviour and appearance of {@link R.id#manual_mode} layout and its child elements
- * <p>
- * This model is attached to the said layout through DataBinding
- * for more information {@link R.layout#manual_palette }
- * <p>
- * Authors - Vibhor, KillerInk
+ * Modernized data class responsible for the behavior and appearance of manual_mode layout
+ * using StateFlow for observation.
  */
-public class ManualModeModel extends Observable {
-    private String focusText;
-    private String exposureText;
-    private String isoText;
-    private String evText;
-    private String wbText;
-    private View.OnClickListener focusTextClicked;
-    private View.OnClickListener exposureTextClicked;
-    private View.OnClickListener evTextClicked;
-    private View.OnClickListener isoTextClicked;
-    private View.OnClickListener wbTextClicked;
-    private boolean manualPanelVisible;
-    private int selectedTextViewId;
-
-    public int getSelectedTextViewId() {
-        return selectedTextViewId;
+class ManualModeModel {
+    enum class ManualModelFields {
+        FOCUS_TEXT, EXP_TEXT, ISO_TEXT, EV_TEXT, WB_TEXT, PANEL_VISIBILITY, SELECTED_TV, 
+        FOCUS_LISTENER, EXP_LISTENER, EV_LISTENER, ISO_LISTENER, WB_LISTENER
     }
 
-    public void setCheckedTextViewId(int selectedTextViewId) {
-        this.selectedTextViewId = selectedTextViewId;
-        notifyObservers(ManualModelFields.SELECTED_TV);
-    }
+    private val _focusText = MutableStateFlow("")
+    val focusTextFlow = _focusText.asStateFlow()
+    var focusText: String
+        get() = _focusText.value
+        set(value) { _focusText.value = value }
 
-    public boolean isManualPanelVisible() {
-        return manualPanelVisible;
-    }
+    private val _exposureText = MutableStateFlow("")
+    val exposureTextFlow = _exposureText.asStateFlow()
+    var exposureText: String
+        get() = _exposureText.value
+        set(value) { _exposureText.value = value }
 
-    public void setManualPanelVisible(boolean manualPanelVisible) {
-        this.manualPanelVisible = manualPanelVisible;
-        notifyObservers(ManualModelFields.PANEL_VISIBILITY);
-    }
+    private val _isoText = MutableStateFlow("")
+    val isoTextFlow = _isoText.asStateFlow()
+    var isoText: String
+        get() = _isoText.value
+        set(value) { _isoText.value = value }
 
-    public View.OnClickListener getFocusTextClicked() {
-        return focusTextClicked;
-    }
+    private val _evText = MutableStateFlow("")
+    val evTextFlow = _evText.asStateFlow()
+    var evText: String
+        get() = _evText.value
+        set(value) { _evText.value = value }
 
-    public void setFocusTextClicked(View.OnClickListener focusTextClicked) {
-        this.focusTextClicked = focusTextClicked;
-        notifyObservers(ManualModelFields.FOCUS_LISTENER);
-    }
+    private val _wbText = MutableStateFlow("")
+    val wbTextFlow = _wbText.asStateFlow()
+    var wbText: String
+        get() = _wbText.value
+        set(value) { _wbText.value = value }
 
-    public View.OnClickListener getExposureTextClicked() {
-        return exposureTextClicked;
-    }
+    private val _focusTextClicked = MutableStateFlow<View.OnClickListener?>(null)
+    val focusTextClickedFlow = _focusTextClicked.asStateFlow()
+    var focusTextClicked: View.OnClickListener?
+        get() = _focusTextClicked.value
+        set(value) { _focusTextClicked.value = value }
 
-    public void setExposureTextClicked(View.OnClickListener exposureTextClicked) {
-        this.exposureTextClicked = exposureTextClicked;
-        notifyObservers(ManualModelFields.EXP_LISTENER);
-    }
+    private val _exposureTextClicked = MutableStateFlow<View.OnClickListener?>(null)
+    val exposureTextClickedFlow = _exposureTextClicked.asStateFlow()
+    var exposureTextClicked: View.OnClickListener?
+        get() = _exposureTextClicked.value
+        set(value) { _exposureTextClicked.value = value }
 
-    public View.OnClickListener getEvTextClicked() {
-        return evTextClicked;
-    }
+    private val _evTextClicked = MutableStateFlow<View.OnClickListener?>(null)
+    val evTextClickedFlow = _evTextClicked.asStateFlow()
+    var evTextClicked: View.OnClickListener?
+        get() = _evTextClicked.value
+        set(value) { _evTextClicked.value = value }
 
-    public void setEvTextClicked(View.OnClickListener evTextClicked) {
-        this.evTextClicked = evTextClicked;
-        notifyObservers(ManualModelFields.EV_LISTENER);
-    }
+    private val _isoTextClicked = MutableStateFlow<View.OnClickListener?>(null)
+    val isoTextClickedFlow = _isoTextClicked.asStateFlow()
+    var isoTextClicked: View.OnClickListener?
+        get() = _isoTextClicked.value
+        set(value) { _isoTextClicked.value = value }
 
-    public View.OnClickListener getIsoTextClicked() {
-        return isoTextClicked;
-    }
+    private val _wbTextClicked = MutableStateFlow<View.OnClickListener?>(null)
+    val wbTextClickedFlow = _wbTextClicked.asStateFlow()
+    var wbTextClicked: View.OnClickListener?
+        get() = _wbTextClicked.value
+        set(value) { _wbTextClicked.value = value }
 
-    public void setIsoTextClicked(View.OnClickListener isoTextClicked) {
-        this.isoTextClicked = isoTextClicked;
-        notifyObservers(ManualModelFields.ISO_LISTENER);
-    }
+    private val _manualPanelVisible = MutableStateFlow(false)
+    val manualPanelVisibleFlow = _manualPanelVisible.asStateFlow()
+    var isManualPanelVisible: Boolean
+        get() = _manualPanelVisible.value
+        set(value) { _manualPanelVisible.value = value }
 
-    public View.OnClickListener getWbTextClicked() {
-        return wbTextClicked;
-    }
-
-    public void setWbTextClicked(View.OnClickListener wbTextClicked) {
-        this.wbTextClicked = wbTextClicked;
-        notifyObservers(ManualModelFields.WB_LISTENER);
-    }
-
-    public String getFocusText() {
-        return focusText;
-    }
-
-    public void setFocusText(String focusText) {
-        this.focusText = focusText;
-        notifyObservers(ManualModelFields.FOCUS_TEXT);
-    }
-
-    public String getExposureText() {
-        return exposureText;
-    }
-
-    public void setExposureText(String exposureText) {
-        this.exposureText = exposureText;
-        notifyObservers(ManualModelFields.EXP_TEXT);
-
-    }
-
-    public String getIsoText() {
-        return isoText;
-    }
-
-    public void setIsoText(String isoText) {
-        this.isoText = isoText;
-        notifyObservers(ManualModelFields.ISO_TEXT);
-    }
-
-    public String getEvText() {
-        return evText;
-    }
-
-    public void setEvText(String evText) {
-        this.evText = evText;
-        notifyObservers(ManualModelFields.EV_TEXT);
-    }
-
-    public String getWbText() {
-        return wbText;
-    }
-
-    public void setWbText(String wbText) {
-        this.wbText = wbText;
-        notifyObservers(ManualModelFields.WB_TEXT);
-    }
-
-    @Override
-    public void notifyObservers(Object arg) {
-        setChanged();
-        super.notifyObservers(arg);
-    }
-
-    public enum ManualModelFields {
-        FOCUS_TEXT, EXP_TEXT, ISO_TEXT, EV_TEXT, WB_TEXT, PANEL_VISIBILITY, SELECTED_TV, FOCUS_LISTENER, EXP_LISTENER, EV_LISTENER, ISO_LISTENER, WB_LISTENER
+    private val _selectedTextViewId = MutableStateFlow(-1)
+    val selectedTextViewIdFlow = _selectedTextViewId.asStateFlow()
+    var selectedTextViewId: Int
+        get() = _selectedTextViewId.value
+        set(value) { _selectedTextViewId.value = value }
+        
+    // Bridge for Java/DataBinding if needed
+    fun setCheckedTextViewId(id: Int) {
+        selectedTextViewId = id
     }
 }

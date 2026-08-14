@@ -217,6 +217,7 @@ public class ImageViewerFragment extends Fragment {
     }
 
     public CustomSSIV getCurrentSSIV() {
+        if (viewPager == null || adapter == null) return null;
         return viewPager.findViewById(adapter.getSsivId(viewPager.getCurrentItem()));
     }
 
@@ -345,13 +346,15 @@ public class ImageViewerFragment extends Fragment {
 
     public void updateScaleText() {
         SubsamplingScaleImageView view = getCurrentSSIV();
-        if (view != null) {
+        if (view != null && fragmentGalleryImageViewerBinding != null) {
             fragmentGalleryImageViewerBinding.setScale(String.format(Locale.ROOT, "%.0f%%", (view.getScale() * 100)));
         }
     }
 
     public void resetScaleText() {
-        fragmentGalleryImageViewerBinding.setScale("");
+        if (fragmentGalleryImageViewerBinding != null) {
+            fragmentGalleryImageViewerBinding.setScale("");
+        }
     }
 
     private void updateExif() {

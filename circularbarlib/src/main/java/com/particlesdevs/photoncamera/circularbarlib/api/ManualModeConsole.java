@@ -5,8 +5,6 @@ import android.hardware.camera2.CameraCharacteristics;
 
 import com.particlesdevs.photoncamera.circularbarlib.control.ManualParamModel;
 
-import java.util.Observer;
-
 public interface ManualModeConsole {
 
     void init(Activity activity, CameraCharacteristics cameraCharacteristics);
@@ -17,11 +15,7 @@ public interface ManualModeConsole {
 
     void onDestroy();
 
-    void addParamObserver(Observer observer);
-
     ManualParamModel getManualParamModel();
-
-    void removeParamObservers();
 
     void setPanelVisibility(boolean visible);
 
