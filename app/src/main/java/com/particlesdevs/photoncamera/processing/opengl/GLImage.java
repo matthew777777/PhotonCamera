@@ -3,6 +3,7 @@ package com.particlesdevs.photoncamera.processing.opengl;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Point;
+import com.particlesdevs.photoncamera.util.Log;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -64,6 +65,10 @@ public class GLImage implements AutoCloseable {
         return getBufferedImage(4);
     }
     public Bitmap getBufferedImage(int channels){
+        if (size.x <= 0 || size.y <= 0) {
+            Log.e(TAG, "getBufferedImage: Invalid size: " + size.x + "x" + size.y);
+            return null;
+        }
         byteBuffer.position(0);
         GLFormat bitmapF = new GLFormat(GLFormat.DataType.UNSIGNED_8, channels);
         Bitmap preview = Bitmap.createBitmap(size.x, size.y, bitmapF.getBufferedImageConfig());

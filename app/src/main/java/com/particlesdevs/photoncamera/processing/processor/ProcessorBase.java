@@ -46,6 +46,7 @@ public abstract class ProcessorBase {
     protected ParseExif.ExifData exifData;
     protected int cameraRotation;
     public Bitmap overlay(Bitmap bmp1, Bitmap bmp2, int cnt) {
+        if(bmp1 == null || bmp1.getWidth() <= 0 || bmp1.getHeight() <= 0) return bmp1;
         if(bmp2 == null) return bmp1;
         Bitmap bmOverlay = Bitmap.createBitmap(bmp1.getWidth(), bmp1.getHeight(), bmp1.getConfig());
         Canvas canvas = new Canvas(bmOverlay);
@@ -56,6 +57,7 @@ public abstract class ProcessorBase {
         return bmOverlay;
     }
     public Bitmap overlay(Bitmap bmp1, Bitmap[] bmp2) {
+        if(bmp1 == null || bmp1.getWidth() <= 0 || bmp1.getHeight() <= 0) return bmp1;
         if(bmp2 == null || bmp2.length == 0) return bmp1;
         int prevS = 0;
         Bitmap bmOverlay = Bitmap.createBitmap(bmp1.getWidth(), bmp1.getHeight(), bmp1.getConfig());

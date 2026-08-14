@@ -20,6 +20,7 @@
 
 package com.particlesdevs.photoncamera.ui.camera.viewmodel;
 
+import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModel;
 
@@ -109,8 +110,9 @@ public class SettingsBarEntryProvider extends ViewModel {
         updateEntry(aeMeteringStdEntry, PreferenceKeys.getAeMeteringStd());
     }
 
-    public void addObserver(Observer<TopBarSettingsData<?, ?>> observer) {
-        allEntries.forEach(settingsBarEntryModel -> settingsBarEntryModel.getTopBarSettingsData().observeForever(observer));
+    public void addObserver(LifecycleOwner lifecycleOwner, Observer<TopBarSettingsData<?, ?>> observer) {
+        if (observer == null) return;
+        allEntries.forEach(settingsBarEntryModel -> settingsBarEntryModel.getTopBarSettingsData().observe(lifecycleOwner, observer));
     }
 
     public void removeObserver(Observer<TopBarSettingsData<?, ?>> observer) {

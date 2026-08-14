@@ -115,8 +115,20 @@ public class HdrxProcessor extends ProcessorBase {
 
         long startTime = System.currentTimeMillis();
         Log.d(TAG, "ApplyHdrX() mImageFramesToProcess.size():" + mImageFramesToProcess.size());
+        if (mImageFramesToProcess.isEmpty()) {
+            Log.e(TAG, "ApplyHdrX: mImageFramesToProcess is empty");
+            callback.onFailed();
+            processingEventsListener.onProcessingError("No images to process");
+            return;
+        }
         int width = mImageFramesToProcess.get(0).width;
         int height = mImageFramesToProcess.get(0).height;
+        if (width <= 0 || height <= 0) {
+            Log.e(TAG, "ApplyHdrX: Invalid image dimensions: " + width + "x" + height);
+            callback.onFailed();
+            processingEventsListener.onProcessingError("Invalid image dimensions");
+            return;
+        }
         Log.d(TAG, "APPLY HDRX: buffer:" + mImageFramesToProcess.get(0).buffer.asShortBuffer().remaining());
         Log.d(TAG, "Api WhiteLevel:" + characteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL));
         Log.d(TAG, "Api BlackLevel:" + characteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN));
@@ -317,6 +329,13 @@ public class HdrxProcessor extends ProcessorBase {
 
         long jpgStart = System.currentTimeMillis();
         Bitmap img = pipeline.Run(output, processingParameters, processingLog);
+        if (img == null) {
+            Log.e(TAG, "ApplyHdrX: PostPipeline returned null bitmap");
+            Allocator.free(output);
+            callback.onFailed();
+            processingEventsListener.onProcessingError("Pipeline processing failed");
+            return;
+        }
         processingLog.jpgTimeMs = System.currentTimeMillis() - jpgStart;
         processingLog.totalTimeMs = System.currentTimeMillis() - totalStartTime;
 

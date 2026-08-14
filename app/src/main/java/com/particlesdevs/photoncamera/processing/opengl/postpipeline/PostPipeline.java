@@ -148,6 +148,10 @@ public class PostPipeline extends GLBasePipeline {
             cropSize =  new Point(rawSliced);
         }
         Point rotatedSize = getRotatedCoords(rawSliced);
+        if (rotatedSize.x <= 0 || rotatedSize.y <= 0) {
+            Log.e("PostPipeline", "Invalid rotatedSize: " + rotatedSize.x + "x" + rotatedSize.y);
+            return null;
+        }
         if (PhotonCamera.getSettings().energySaving || mParameters.rawSize.x * mParameters.rawSize.y < ResolutionSolution.smallRes) {
             GLDrawParams.TileSize = 8;
         } else {

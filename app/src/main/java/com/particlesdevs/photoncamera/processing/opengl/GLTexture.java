@@ -202,6 +202,10 @@ public class GLTexture implements AutoCloseable {
         return buffer;
     }
     public Bitmap toBitmap(){
+        if (mSize.x <= 0 || mSize.y <= 0) {
+            Log.e("GLTexture", "toBitmap: Invalid size: " + mSize.x + "x" + mSize.y);
+            return null;
+        }
         ByteBuffer buffer = textureBuffer(mFormat);
         Bitmap bmp = Bitmap.createBitmap(mSize.x, mSize.y, Bitmap.Config.ARGB_8888);
         bmp.copyPixelsFromBuffer(buffer);

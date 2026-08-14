@@ -12,6 +12,8 @@ import com.particlesdevs.photoncamera.pro.SupportedDevice
 import com.particlesdevs.photoncamera.processing.render.PreviewParameters
 import com.particlesdevs.photoncamera.settings.SettingsManager
 import com.particlesdevs.photoncamera.util.AssetLoader
+import com.particlesdevs.photoncamera.capture.CameraLifecycleManager
+import com.particlesdevs.photoncamera.capture.CaptureProcessor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -99,5 +101,11 @@ object AppModule {
                 priority = Thread.MIN_PRIORITY
             }
         }
+    }
+
+    @Provides
+    @Singleton
+    fun provideCaptureProcessor(lifecycleManager: CameraLifecycleManager): CaptureProcessor {
+        return CaptureProcessor(lifecycleManager)
     }
 }

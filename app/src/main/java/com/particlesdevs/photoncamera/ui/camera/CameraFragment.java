@@ -162,6 +162,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     @Inject com.particlesdevs.photoncamera.control.Gravity gravity;
     @Inject com.particlesdevs.photoncamera.api.Settings settings;
     @Inject com.particlesdevs.photoncamera.capture.CameraLifecycleManager cameraLifecycleManager;
+    @Inject com.particlesdevs.photoncamera.capture.CaptureProcessor captureProcessor;
 
     private SettingsBarEntryProvider settingsBarEntryProvider;
     private ManualModeConsole manualModeConsole;
@@ -225,6 +226,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         timerFrameCountViewModel = new ViewModelProvider(this).get(TimerFrameCountViewModel.class);
         manualModeConsole = ManualInstanceProvider.getNewManualModeConsole();
         settingsBarEntryProvider = new ViewModelProvider(this).get(SettingsBarEntryProvider.class);
+        mCameraUIEventsListener = new CameraUIController(this);
         auxButtonsViewModel = new ViewModelProvider(this).get(AuxButtonsViewModel.class);
         surfaceView = cameraFragmentBinding.layoutViewfinder.surfaceView;
         textureView = cameraFragmentBinding.layoutViewfinder.texture;
@@ -248,10 +250,9 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     @Override
     public void onViewCreated(@NonNull final View view, Bundle savedInstanceState) {
         this.mCameraUIView = new CameraUIViewImpl(this);
-        this.mCameraUIEventsListener = new CameraUIController(this);
         this.mCameraUIView.setCameraUIEventsListener(mCameraUIEventsListener);
         this.captureController = new CaptureController(activity, processExecutorService,
-                new CameraEventsListenerImpl(), this.cameraFragmentBinding.layoutViewfinder.texture, cameraLifecycleManager);
+                new CameraEventsListenerImpl(), this.cameraFragmentBinding.layoutViewfinder.texture, cameraLifecycleManager, captureProcessor);
         this.captureController.setManualModeConsole(manualModeConsole);
         this.captureController.getParamController().observeModel(this, this.manualModeConsole.getManualParamModel());
         this.textureView.setManualModeConsole(manualModeConsole);
@@ -283,7 +284,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
     private void initSettingsBar() {
         settingsBarEntryProvider.createEntries();
-        settingsBarEntryProvider.addObserver(mCameraUIEventsListener);
+        settingsBarEntryProvider.addObserver(getViewLifecycleOwner(), mCameraUIEventsListener);
         settingsBarEntryProvider.addEntries(cameraFragmentBinding.settingsBar);
     }
 
@@ -405,7 +406,6 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
             } catch (ExecutionException | InterruptedException ignored) {
             }
         }
-        settingsBarEntryProvider.removeObserver(mCameraUIEventsListener);
         cameraFragmentBinding = null;
         mCameraUIView.destroy();
         mCameraUIView = null;
