@@ -8,7 +8,7 @@ import androidx.preference.ListPreference;
 import com.particlesdevs.photoncamera.util.FileManager;
 import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
-import org.apache.commons.io.FileUtils;
+import com.particlesdevs.photoncamera.util.FileUtils;
 
 import java.util.Arrays;
 

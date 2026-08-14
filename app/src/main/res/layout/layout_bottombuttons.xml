@@ -155,7 +155,7 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 >
 
-            <de.hdodenhof.circleimageview.CircleImageView
+            <com.google.android.material.imageview.ShapeableImageView
                     android:id="@+id/gallery_image_button"
                     android:layout_gravity="center"
                     android:layout_width="44dp"
@@ -164,6 +164,8 @@
                     android:onClick="@{bottom_bar_click_listener}"
                     imageFromBitmap="@{uimodel.bitmap}"
                     bindRotate="@{uimodel}"
+                    app:shapeAppearanceOverlay="@style/CircleAppearance"
+                    android:scaleType="centerCrop"
                     />
 
             <ImageView

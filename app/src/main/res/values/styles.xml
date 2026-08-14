@@ -85,4 +85,8 @@
         <item name="backgroundTint">?colorPrimary</item>
     </style>
 
+    <style name="CircleAppearance">
+        <item name="cornerSize">50%</item>
+    </style>
+
 </resources>

@@ -22,7 +22,7 @@ import com.particlesdevs.photoncamera.gallery.compare.SSIVListener;
 import com.particlesdevs.photoncamera.gallery.model.GalleryItem;
 import com.particlesdevs.photoncamera.gallery.views.CustomSSIV;
 
-import org.apache.commons.io.FileUtils;
+import com.particlesdevs.photoncamera.util.FileUtils;
 
 import java.util.List;
 

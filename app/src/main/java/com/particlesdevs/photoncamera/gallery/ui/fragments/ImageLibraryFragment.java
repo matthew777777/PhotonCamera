@@ -35,7 +35,7 @@ import com.particlesdevs.photoncamera.gallery.interfaces.OnItemInteractionListen
 import com.particlesdevs.photoncamera.gallery.model.GalleryItem;
 import com.particlesdevs.photoncamera.gallery.viewmodel.GalleryViewModel;
 
-import org.apache.commons.io.FileUtils;
+import com.particlesdevs.photoncamera.util.FileUtils;
 
 import java.util.ArrayList;
 import java.util.List;

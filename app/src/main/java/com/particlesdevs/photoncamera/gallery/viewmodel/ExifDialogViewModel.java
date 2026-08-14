@@ -29,7 +29,7 @@ import com.particlesdevs.photoncamera.gallery.model.ExifDialogModel;
 import com.particlesdevs.photoncamera.gallery.views.Histogram;
 import com.particlesdevs.photoncamera.util.Utilities;
 
-import org.apache.commons.io.FileUtils;
+import com.particlesdevs.photoncamera.util.FileUtils;
 
 import java.io.IOException;
 import java.io.InputStream;

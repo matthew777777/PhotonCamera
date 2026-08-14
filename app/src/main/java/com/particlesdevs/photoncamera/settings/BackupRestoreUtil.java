@@ -15,7 +15,7 @@ import com.particlesdevs.photoncamera.util.FileManager;
 import com.particlesdevs.photoncamera.util.Log;
 import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
 
-import org.apache.commons.io.FileUtils;
+import com.particlesdevs.photoncamera.util.FileUtils;
 
 import java.io.File;
 import java.io.FileReader;

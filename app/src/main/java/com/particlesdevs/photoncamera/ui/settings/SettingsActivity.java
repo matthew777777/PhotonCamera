@@ -113,9 +113,7 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
         
         // Note: Tunable preferences are already generated in onPreferenceTreeClick before reaching here
         
-        FragmentTransaction ft = getSupportFragmentManager().beginTransaction()
-                .setCustomAnimations(R.anim.animate_slide_left_enter, R.anim.animate_slide_left_exit
-                        , R.anim.animate_card_enter, R.anim.animate_slide_right_exit);
+        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
         SettingsFragment fragment = new SettingsFragment();
         Bundle args = new Bundle();
         args.putString(PreferenceFragmentCompat.ARG_PREFERENCE_ROOT, preferenceScreen.getKey());

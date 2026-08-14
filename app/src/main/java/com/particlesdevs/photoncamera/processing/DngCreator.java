@@ -11,7 +11,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 
-import de.hdodenhof.circleimageview.BuildConfig;
+import com.particlesdevs.photoncamera.BuildConfig;
 
 public class DngCreator {
     private long nativePtr;
