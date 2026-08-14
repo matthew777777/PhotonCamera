@@ -59,8 +59,6 @@ out vec3 Output;
 #define FUSION 0
 #define luminocity(x) dot(x.rgb, vec3(0.299, 0.587, 0.114))
 #define MINP 1.0
-#define NOISEO 0.0
-#define NOISES 0.0
 #define LUT 0
 #define CONTRAST 1.0
 #define SHADOWS 0.0
@@ -71,7 +69,9 @@ out vec3 Output;
 #define FUSIONNORM 64.0
 #define VIGNETTE 0.0
 #define LTMMIX 0.0
-#define NOISE_PROT 5.0
+uniform float noiseS;
+uniform float noiseO;
+uniform float noise_prot;
 #import coords
 #import interpolation
 #import gaussian
@@ -416,9 +416,9 @@ vec3 applyColorSpace(vec3 pRGB,float tonemapGain, float gainsVal){
     float br = (pRGB.r+pRGB.g+pRGB.b)/3.0;
     //pRGB /= br;
     //float vignetteFactor = mix(0.0,VIGNETTE,clamp(br*100.0 - 0.01,0.0,1.0));
-    float noise = sqrt(NOISES + NOISEO + 1e-8);
+    float noise = sqrt(noiseS + noiseO + 1e-8);
     // Noise floor protection factor
-    float protection = br * br / (br * br + noise * noise * NOISE_PROT * NOISE_PROT + 1e-9);
+    float protection = br * br / (br * br + noise * noise * noise_prot * noise_prot + 1e-9);
     float protectedTonemapGain = mix(1.0, tonemapGain, protection);
 
     //float vignetteFactor = smoothstep(0.0,min(noise, 0.1),br)*VIGNETTE;

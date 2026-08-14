@@ -212,9 +212,6 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
         glProg.setDefine("SATURATIONCONST",saturationConst);
         glProg.setDefine("SATURATIONGAUSS",saturationGauss);
         glProg.setDefine("SATURATIONRED",  saturationRed);
-        glProg.setDefine("NOISEO",  basePipeline.noiseO);
-        glProg.setDefine("NOISES",  basePipeline.noiseS);
-        glProg.setDefine("NOISE_PROT", noiseFloorProtection);
         glProg.setDefine("EPS", eps);
 
         if(postlut != null && postlut.exists()){
@@ -330,6 +327,9 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
         glProg.setTexture("IntenseCurve",interpolatedCurve);
         glProg.setTexture("GainMap", ((PostPipeline)basePipeline).GainMap);
         glProg.setVar("toneMapCoeffs", -2.f+2.f*toneMix, 3.f-3.f*toneMix, toneMix, 0.f);
+        glProg.setVar("noiseS",  basePipeline.noiseS);
+        glProg.setVar("noiseO",  basePipeline.noiseO);
+        glProg.setVar("noise_prot", noiseFloorProtection);
         Log.d(Name,"sensorToIntermediate: "+ Arrays.toString(basePipeline.mParameters.sensorToProPhoto));
         glProg.setVar("sensorToIntermediate",basePipeline.mParameters.sensorToProPhoto);
         Log.d(Name,"intermediateToSRGB: "+ Arrays.toString(cct));

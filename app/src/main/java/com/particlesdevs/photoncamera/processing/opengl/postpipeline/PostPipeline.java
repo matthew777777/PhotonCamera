@@ -246,6 +246,9 @@ public class PostPipeline extends GLBasePipeline {
         Log.d("PostPipeline", "Adding Bayer2Float");
         add(new Bayer2Float());
         
+        Log.d("PostPipeline", "Adding ExposureFusionBayer2");
+        add(new ExposureFusionBayer2());
+        
         // Stage 4: Highlight Recovery (Inpaint Opposed)
         Log.d("PostPipeline", "Adding HighlightRecovery");
         HighlightRecovery hr = new HighlightRecovery();
