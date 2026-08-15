@@ -12,6 +12,7 @@ import com.particlesdevs.photoncamera.processing.opengl.GLProg;
 import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 import com.particlesdevs.photoncamera.processing.opengl.scripts.GLHistogram;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
+import com.particlesdevs.photoncamera.util.DebugTimeline;
 import com.particlesdevs.photoncamera.util.Log;
 
 import androidx.annotation.NonNull;
@@ -76,6 +77,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     }
 
     public void onDrawFrame(GL10 unused) {
+        DebugTimeline.INSTANCE.log("Preview onDrawFrame start");
         if (!mGLInit) return;
 
         synchronized (this) {
@@ -104,6 +106,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 updateHistogram();
             }
         }
+        DebugTimeline.INSTANCE.log("Preview onDrawFrame end");
     }
 
     private void updateHistogram() {
@@ -255,6 +258,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     }
 
     public synchronized void onFrameAvailable(SurfaceTexture st) {
+        DebugTimeline.INSTANCE.log("Preview onFrameAvailable");
         mUpdateST = true;
         mView.requestRender();
     }

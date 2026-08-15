@@ -4,6 +4,7 @@ import android.graphics.Point;
 import android.util.Pair;
 
 import com.particlesdevs.photoncamera.processing.opengl.GLBuffer;
+import com.particlesdevs.photoncamera.util.DebugTimeline;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.Log;
 
@@ -280,6 +281,7 @@ public class PyramidMerging extends GLOneScript {
 
     @Override
     public void Run() {
+        DebugTimeline.INSTANCE.log("PyramidMerging.Run start");
         com.particlesdevs.photoncamera.settings.TunableInjector.inject(this);
         glUtils = new GLUtils(glOne.glProcessing);
         Point alignmentOutputSize = new Point(parameters.alignmentSize.x * parameters.tilesX,
@@ -801,6 +803,7 @@ public class PyramidMerging extends GLOneScript {
         glOne.glProcessing.drawBlocksToOutput();
         Output = glOne.glProcessing.mOutBuffer;
         AfterRun();
+        DebugTimeline.INSTANCE.log("PyramidMerging.Run end");
     }
 
     @Override

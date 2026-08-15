@@ -78,6 +78,7 @@ import com.particlesdevs.photoncamera.api.CameraReflectionApi;
 import com.particlesdevs.photoncamera.api.Settings;
 import com.particlesdevs.photoncamera.api.VendorTagUtils;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
+import com.particlesdevs.photoncamera.util.DebugTimeline;
 import com.particlesdevs.photoncamera.circularbarlib.api.ManualModeConsole;
 import com.particlesdevs.photoncamera.control.GyroBurst;
 import com.particlesdevs.photoncamera.control.TouchFocus;
@@ -293,6 +294,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     private final CameraCaptureSession.CaptureCallback mCaptureCallback = new CameraCaptureSession.CaptureCallback() {
 
         private void process(CaptureResult result) {
+            DebugTimeline.INSTANCE.log("Capture callback process() state=" + getMState() + " frame=" + result.getFrameNumber());
             debugCallback.process();
             switch (getMState()) {
                 case PreviewManager.STATE_PREVIEW:
@@ -1558,6 +1560,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      * Initiate a still image capture.
      */
     public void takePicture() {
+        DebugTimeline.INSTANCE.log("takePicture() shutter pressed");
         if (getMPreviewRequestBuilder() == null || getMCaptureSession() == null) {
             Log.w(TAG, "takePicture(): camera not ready, ignoring shutter press");
             return;
@@ -1755,7 +1758,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             }
             float focus = mFocus;
             double frametime = ExposureIndex.time2sec(IsoExpoSelector.GenerateExpoPair(-1, this).exposure);
-            //this.getMCaptureSession().stopRepeating();
+            
             if (isDualSession) {
                 if (mTargetFormat != mPreviewTargetFormat) {
                     if (getMImageReaderRaw() != null)
@@ -1767,9 +1770,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             } else {
                 if (getMImageReaderRaw() != null)
                     captureBuilder.addTarget(getMImageReaderRaw().getSurface());
-                CameraMode selectedMode = PhotonCamera.getSettings().selectedMode;
-                if (frametime > 0.06 && !isDualSession || selectedMode == CameraMode.RAWVIDEO || selectedMode == CameraMode.UNLIMITED || (!IsoExpoSelector.HDR)) {
-                    if (getSurface() != null) captureBuilder.addTarget(getSurface());
+                
+                // ALWAYS add preview surface to capture requests to prevent viewfinder freeze
+                if (getSurface() != null) {
+                    captureBuilder.addTarget(getSurface());
                 }
             }
             Camera2ApiAutoFix.applyEnergySaving();
@@ -2018,8 +2022,6 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (isDualSession)
                 createCameraPreviewSession(true);
             else {
-                getMCaptureSession().stopRepeating();
-                getMCaptureSession().abortCaptures();
                 switch (PhotonCamera.getSettings().selectedMode) {
                     case UNLIMITED:
                         getMCaptureSession().setRepeatingBurst(captures, CaptureCallback, getBackgroundHandler());

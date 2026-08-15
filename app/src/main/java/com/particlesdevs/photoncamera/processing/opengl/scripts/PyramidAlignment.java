@@ -3,6 +3,7 @@ package com.particlesdevs.photoncamera.processing.opengl.scripts;
 import android.graphics.Point;
 
 import com.particlesdevs.photoncamera.processing.opengl.GLOneScript;
+import com.particlesdevs.photoncamera.util.DebugTimeline;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.Log;
 
@@ -174,6 +175,7 @@ public class PyramidAlignment implements AutoCloseable {
     GLUtils.Pyramid pyramidAlter;
 
     public void Run() {
+        DebugTimeline.INSTANCE.log("PyramidAlignment.Run start");
         com.particlesdevs.photoncamera.settings.TunableInjector.inject(this);
         Point rawHalf = new Point(parameters.rawSize.x/2,parameters.rawSize.y/2);
         Result = new GLTexture(size,new GLFormat(GLFormat.DataType.FLOAT_16,4), null, GL_NEAREST, GL_CLAMP_TO_EDGE);
@@ -378,6 +380,7 @@ public class PyramidAlignment implements AutoCloseable {
         }
         histTexture.close();
         alterTexture.close();
+        DebugTimeline.INSTANCE.log("PyramidAlignment.Run end");
     }
 
     @Override

@@ -17,6 +17,7 @@ import com.particlesdevs.photoncamera.processing.parameters.ExposureIndex
 import com.particlesdevs.photoncamera.processing.parameters.FrameNumberSelector
 import com.particlesdevs.photoncamera.processing.parameters.IsoExpoSelector
 import com.particlesdevs.photoncamera.ui.camera.viewmodel.TimerFrameCountViewModel
+import com.particlesdevs.photoncamera.util.DebugTimeline
 import com.particlesdevs.photoncamera.util.Allocator
 import com.particlesdevs.photoncamera.util.Log
 import java.util.*
@@ -44,10 +45,12 @@ class CaptureProcessor @Inject constructor(
     var imageSaver: ImageSaver? = null
     
     val yuvImageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
+        DebugTimeline.log("yuvImageAvailableListener")
         imageSaver?.initProcess(reader)
     }
 
     val rawImageAvailableListener = ImageReader.OnImageAvailableListener { reader ->
+        DebugTimeline.log("rawImageAvailableListener")
         if (isZslMode()) {
             val img: Image?
             try {
@@ -71,6 +74,7 @@ class CaptureProcessor @Inject constructor(
                     val old = zslRingBuffer.pollFirst()
                     old?.close()
                 }
+                DebugTimeline.log("ZSL buffer size: ${zslRingBuffer.size} / $safeMax")
             }
             return@OnImageAvailableListener
         }
@@ -89,6 +93,7 @@ class CaptureProcessor @Inject constructor(
         previewResult: CaptureResult?,
         sensorOrientation: Int
     ) {
+        DebugTimeline.log("triggerZslCapture start")
         if (isZslCapturing || CaptureController.isProcessing) {
             Log.w(TAG, "ZSL: capture already in progress, ignoring")
             return
@@ -221,6 +226,7 @@ class CaptureProcessor @Inject constructor(
                     exposures, 
                     ArrayList(controller.mCaptureResults)
                 )
+                DebugTimeline.log("ZSL runRaw finished in background")
             } catch (e: Exception) {
                 Log.e(TAG, "ZSL runRaw error: ${Log.getStackTraceString(e)}")
                 controller.cameraEventsListener.onProcessingError(e.localizedMessage)

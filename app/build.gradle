@@ -5,6 +5,7 @@ apply plugin: 'com.google.dagger.hilt.android'
 //apply plugin: "io.github.wurensen.android-aspectjx"
 Properties versionProps = new Properties()
 android {
+    compileSdk pcam_compileSdk.toInteger()
     signingConfigs {
         debug {
             storeFile file('../key/PcamLeak.jks')
@@ -42,15 +43,14 @@ android {
     }
 
     defaultConfig {
-        compileSdk 36
         applicationId 'com.particlesdevs.photoncamera.community'
-        minSdkVersion 26
-        targetSdkVersion 35
+        minSdkVersion pcam_minSdk.toInteger()
+        targetSdkVersion pcam_targetSdk.toInteger()
         versionCode versionBuild
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             //noinspection ChromeOsAbiSupport
-            abiFilters "arm64-v8a", "armeabi-v7a"
+            abiFilters "arm64-v8a"
         }
         versionName '0.97'
         versionProps['VERSION_NAME'] = versionName
@@ -91,11 +91,11 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.toVersion(pcam_javaVersion)
+        targetCompatibility = JavaVersion.toVersion(pcam_javaVersion)
     }
     kotlinOptions {
-        jvmTarget = '17'
+        jvmTarget = pcam_javaVersion
     }
     lint {
         abortOnError false

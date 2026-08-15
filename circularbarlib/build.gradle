@@ -5,10 +5,10 @@ plugins {
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdk 36
+    compileSdk pcam_compileSdk.toInteger()
 
     defaultConfig {
-        minSdkVersion 26
+        minSdkVersion pcam_minSdk.toInteger()
         //Waiting for api 32 sources
         //noinspection OldTargetApi
 
@@ -27,18 +27,18 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.toVersion(pcam_javaVersion)
+        targetCompatibility JavaVersion.toVersion(pcam_javaVersion)
     }
     kotlinOptions {
-        jvmTarget = '17'
+        jvmTarget = pcam_javaVersion
     }
     namespace 'com.particlesdevs.photoncamera.circularbarlib'
     lint {
-        targetSdk 35
+        targetSdk pcam_targetSdk.toInteger()
     }
     testOptions {
-        targetSdk 35
+        targetSdk pcam_targetSdk.toInteger()
     }
 }
 
