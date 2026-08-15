@@ -1,4 +1,5 @@
 package com.particlesdevs.photoncamera.processing.parameters;
+import com.particlesdevs.photoncamera.app.PhotonCamera;
 
 import android.graphics.Rect;
 import android.hardware.camera2.CameraCharacteristics;
@@ -303,7 +304,7 @@ public class IsoExpoSelector {
 
         // Digital zoom factor
         float zoom = 1.0f;
-        CaptureResult result = CaptureController.mPreviewCaptureResult;
+        CaptureResult result = PhotonCamera.getCaptureController().getMPreviewCaptureResult();
         if (result != null) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                 Float zoomRatio = result.get(CaptureResult.CONTROL_ZOOM_RATIO);

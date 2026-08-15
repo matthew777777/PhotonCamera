@@ -1,4 +1,5 @@
 package com.particlesdevs.photoncamera.debugclient;
+import com.particlesdevs.photoncamera.app.PhotonCamera;
 
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
@@ -130,7 +131,7 @@ public class DebugClient {
     }
 
     public static String previewKeyValue(CaptureResult.Key<?> key) {
-        Object obj = CaptureController.mPreviewCaptureResult.get(key);
+        Object obj = PhotonCamera.getCaptureController().getMPreviewCaptureResult().get(key);
         return getObjectString(obj);
     }
     //Keys
@@ -152,7 +153,7 @@ public class DebugClient {
         ArrayList<CaptureRequest.Key<?>> captureKeys = new ArrayList<>(controller.mPreviewInputRequest.getKeys());
         ArrayList<CaptureRequest.Key<?>> captureRequestKeys = new ArrayList<>(CaptureController.mPreviewCaptureRequest.getKeys());
         List<CameraCharacteristics.Key<?>> keys = CaptureController.mCameraCharacteristics.getKeys();
-        List<CaptureResult.Key<?>> resultKeys = CaptureController.mPreviewCaptureResult.getKeys();
+        List<CaptureResult.Key<?>> resultKeys = PhotonCamera.getCaptureController().getMPreviewCaptureResult().getKeys();
         //DebugParameters debugParameters = PhotonCamera.getDebugger().debugParameters;
         */
 

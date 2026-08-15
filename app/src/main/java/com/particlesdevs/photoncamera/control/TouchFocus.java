@@ -123,11 +123,11 @@ public class TouchFocus {
     }
 
     private MeteringRectangle calculateMeteringRectangle(int x, int y) {
-        if (captureController.mImageReaderPreview == null) {
+        if (captureController.getMImageReaderPreview() == null) {
             Log.w(TAG, "calculateMeteringRectangle(): mImageReaderPreview is null, camera not ready yet");
             return null;
         }
-        Point size = new Point(captureController.mImageReaderPreview.getWidth(), captureController.mImageReaderPreview.getHeight());
+        Point size = new Point(captureController.getMImageReaderPreview().getWidth(), captureController.getMImageReaderPreview().getHeight());
         Point CurUi = new Point(textureView.getWidth(), textureView.getHeight());
         Rect activeArray = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
         Size sizee;
@@ -167,7 +167,7 @@ public class TouchFocus {
 
     private void triggerAutoFocus(MeteringRectangle[] rectaf, MeteringRectangle[] rectae) {
         if (CaptureController.burst) return;
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+        CaptureRequest.Builder builder = captureController.getMPreviewRequestBuilder();
         if (builder == null) {
             Log.w(TAG, "triggerAutoFocus(): mPreviewRequestBuilder is null");
             return;
@@ -203,7 +203,7 @@ public class TouchFocus {
 
     private void resetAutoFocus() {
         if (CaptureController.burst) return;
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+        CaptureRequest.Builder builder = captureController.getMPreviewRequestBuilder();
         if (builder == null) {
             Log.w(TAG, "resetAutoFocus(): mPreviewRequestBuilder is null");
             return;

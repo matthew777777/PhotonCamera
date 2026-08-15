@@ -1,4 +1,5 @@
 package com.particlesdevs.photoncamera.debugclient;
+import com.particlesdevs.photoncamera.app.PhotonCamera;
 
 import android.hardware.camera2.CaptureRequest;
 
@@ -12,7 +13,7 @@ class PreviewRequestKeys implements Command {
     private ArrayList<CaptureRequest.Key<?>> captureRequestKeys;
 
     public PreviewRequestKeys(String[] str) {
-        captureRequestKeys = new ArrayList<>(CaptureController.mPreviewCaptureRequest.getKeys());
+        captureRequestKeys = new ArrayList<>(PhotonCamera.getCaptureController().getMPreviewCaptureRequest().getKeys());
     }
 
     @Override

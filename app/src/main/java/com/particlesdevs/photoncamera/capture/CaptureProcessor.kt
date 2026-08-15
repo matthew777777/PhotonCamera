@@ -29,7 +29,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class CaptureProcessor @Inject constructor(
-    private val lifecycleManager: CameraLifecycleManager
+    private val lifecycleManager: CameraLifecycleManager,
+    private val previewManager: PreviewManager
 ) {
     private val TAG = "CaptureProcessor"
     
@@ -214,7 +215,7 @@ class CaptureProcessor @Inject constructor(
                 saver.runRaw(
                     characteristics, 
                     previewResult, 
-                    CaptureController.mPreviewCaptureRequest,
+                    previewManager.previewCaptureRequest,
                     ArrayList(burstShakiness), 
                     controller.cameraRotation, 
                     exposures, 

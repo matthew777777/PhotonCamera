@@ -163,6 +163,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     @Inject com.particlesdevs.photoncamera.api.Settings settings;
     @Inject com.particlesdevs.photoncamera.capture.CameraLifecycleManager cameraLifecycleManager;
     @Inject com.particlesdevs.photoncamera.capture.CaptureProcessor captureProcessor;
+    @Inject com.particlesdevs.photoncamera.capture.PreviewManager previewManager;
 
     private SettingsBarEntryProvider settingsBarEntryProvider;
     private ManualModeConsole manualModeConsole;
@@ -252,7 +253,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         this.mCameraUIView = new CameraUIViewImpl(this);
         this.mCameraUIView.setCameraUIEventsListener(mCameraUIEventsListener);
         this.captureController = new CaptureController(activity, processExecutorService,
-                new CameraEventsListenerImpl(), this.cameraFragmentBinding.layoutViewfinder.texture, cameraLifecycleManager, captureProcessor);
+                new CameraEventsListenerImpl(), this.cameraFragmentBinding.layoutViewfinder.texture, cameraLifecycleManager, captureProcessor, previewManager);
         this.captureController.setManualModeConsole(manualModeConsole);
         this.captureController.getParamController().observeModel(this, this.manualModeConsole.getManualParamModel());
         this.textureView.setManualModeConsole(manualModeConsole);
@@ -484,12 +485,12 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     }
 
     private RectF getScreenRectFromMeteringRect(MeteringRectangle meteringRectangle) {
-        if (captureController.mImageReaderPreview == null)
+        if (captureController.getMImageReaderPreview() == null)
             return new RectF();
         Size size = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
         if (size == null) {
-            size = new Size(captureController.mImageReaderPreview.getWidth(),
-                    captureController.mImageReaderPreview.getHeight());
+            size = new Size(captureController.getMImageReaderPreview().getWidth(),
+                    captureController.getMImageReaderPreview().getHeight());
         }
         float left = (((float) meteringRectangle.getY() / size.getHeight()) * (textureView.getWidth()));
         float top = (((float) meteringRectangle.getX() / size.getWidth()) * (textureView.getHeight()));

@@ -50,7 +50,7 @@ public class PostPipeline extends GLBasePipeline {
         int rotation = mParameters.cameraRotation;
         String TAG = "ParseExif";
         Log.d(TAG, "Gravity rotation:" + PhotonCamera.getGravity().getRotation());
-        Log.d(TAG, "Sensor rotation:" + PhotonCamera.getCaptureController().mSensorOrientation);
+        Log.d(TAG, "Sensor rotation:" + PhotonCamera.getCaptureController().getMSensorOrientation());
         return rotation;
     }
 

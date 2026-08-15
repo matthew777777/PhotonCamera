@@ -52,7 +52,7 @@ public class ParseExif {
         int rotation = PhotonCamera.getCaptureController().cameraRotation;
         String TAG = "ParseExif";
         Log.d(TAG, "Gravity rotation:" + PhotonCamera.getGravity().getRotation());
-        Log.d(TAG, "Sensor rotation:" + PhotonCamera.getCaptureController().mSensorOrientation);
+        Log.d(TAG, "Sensor rotation:" + PhotonCamera.getCaptureController().getMSensorOrientation());
         int orientation = ORIENTATION_NORMAL;
         switch (rotation) {
             case 90:
@@ -145,7 +145,7 @@ public class ParseExif {
 
     public static int getOrientation(int cameraRotation) {
         Log.d(TAG, "Gravity rotation:" + PhotonCamera.getGravity().getRotation());
-        Log.d(TAG, "Sensor rotation:" + PhotonCamera.getCaptureController().mSensorOrientation);
+        Log.d(TAG, "Sensor rotation:" + PhotonCamera.getCaptureController().getMSensorOrientation());
         int orientation = ORIENTATION_NORMAL;
         switch (cameraRotation) {
             case 90:

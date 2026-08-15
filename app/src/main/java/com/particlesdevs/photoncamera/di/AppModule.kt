@@ -14,6 +14,7 @@ import com.particlesdevs.photoncamera.settings.SettingsManager
 import com.particlesdevs.photoncamera.util.AssetLoader
 import com.particlesdevs.photoncamera.capture.CameraLifecycleManager
 import com.particlesdevs.photoncamera.capture.CaptureProcessor
+import com.particlesdevs.photoncamera.capture.PreviewManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -105,7 +106,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideCaptureProcessor(lifecycleManager: CameraLifecycleManager): CaptureProcessor {
-        return CaptureProcessor(lifecycleManager)
+    fun provideCaptureProcessor(lifecycleManager: CameraLifecycleManager, previewManager: PreviewManager): CaptureProcessor {
+        return CaptureProcessor(lifecycleManager, previewManager)
+    }
+
+    @Provides
+    @Singleton
+    fun providePreviewManager(lifecycleManager: CameraLifecycleManager): PreviewManager {
+        return PreviewManager(lifecycleManager)
     }
 }

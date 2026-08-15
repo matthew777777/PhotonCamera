@@ -1,4 +1,5 @@
 package com.particlesdevs.photoncamera.debugclient;
+import com.particlesdevs.photoncamera.app.PhotonCamera;
 
 import android.hardware.camera2.CaptureResult;
 
@@ -14,7 +15,7 @@ class PreviewKeys implements Command {
 
     public PreviewKeys(String[] str) {
         commands = str;
-        resultKeys = CaptureController.mPreviewCaptureResult.getKeys();
+        resultKeys = PhotonCamera.getCaptureController().getMPreviewCaptureResult().getKeys();
     }
 
     @Override

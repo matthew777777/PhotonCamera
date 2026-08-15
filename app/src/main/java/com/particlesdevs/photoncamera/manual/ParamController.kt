@@ -12,11 +12,16 @@ import com.particlesdevs.photoncamera.settings.PreferenceKeys
 import com.particlesdevs.photoncamera.util.Log
 import kotlinx.coroutines.launch
 
+import com.particlesdevs.photoncamera.capture.PreviewManager
+
 /**
  * Controller class responsible for setting manual mode parameters to the camera preview.
  * Modernized to use Kotlin Coroutines and StateFlow.
  */
-class ParamController(private val captureController: CaptureController) {
+class ParamController(
+    private val captureController: CaptureController,
+    private val previewManager: PreviewManager
+) {
     @JvmField var ISO: Int = -1
     @JvmField var EV: Int = 0
     @JvmField var SHUTTER: Long = -1L
