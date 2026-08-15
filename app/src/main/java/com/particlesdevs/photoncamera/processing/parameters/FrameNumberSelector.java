@@ -23,6 +23,7 @@ public class FrameNumberSelector {
         if (PhotonCamera.getSettings().selectedMode == CameraMode.UNLIMITED || PhotonCamera.getSettings().selectedMode == CameraMode.RAWVIDEO) frameCount = -1;
         if(PhotonCamera.getSettings().DebugData || PhotonCamera.getSettings().saveEachBracket) frameCount = frames;
         throwCount = (frameCount-throwCount);
+        if (frameCount == 0) frameCount = 1;
         return frameCount;
     }
 }

@@ -1408,11 +1408,19 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                         case NIGHT:
                                         case PHOTO:
                                         case MOTION:
-                                            getMCaptureSession().captureBurst(captures, CaptureCallback, getBackgroundHandler());
+                                            if (captures != null && !captures.isEmpty()) {
+                                                getMCaptureSession().captureBurst(captures, CaptureCallback, getBackgroundHandler());
+                                            } else {
+                                                Log.e(TAG, "captureBurst: captures list is empty!");
+                                            }
                                             break;
                                         case UNLIMITED:
                                         case RAWVIDEO:
-                                            getMCaptureSession().setRepeatingBurst(captures, CaptureCallback, getBackgroundHandler());
+                                            if (captures != null && !captures.isEmpty()) {
+                                                getMCaptureSession().setRepeatingBurst(captures, CaptureCallback, getBackgroundHandler());
+                                            } else {
+                                                Log.e(TAG, "setRepeatingBurst: captures list is empty!");
+                                            }
                                             break;
                                     }
                                 } else {
@@ -1727,7 +1735,13 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (isDualSession)
                 createCameraPreviewSession(true);
             else {
-                getMCaptureSession().captureBurst(captures, CaptureCallback, getBackgroundHandler());
+                if (captures != null && !captures.isEmpty()) {
+                    getMCaptureSession().captureBurst(captures, CaptureCallback, getBackgroundHandler());
+                } else {
+                    Log.e(TAG, "debugCapture: captures list is empty!");
+                    burst = false;
+                    unlockFocus();
+                }
             }
 
         } catch (CameraAccessException e) {
@@ -2022,6 +2036,12 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (isDualSession)
                 createCameraPreviewSession(true);
             else {
+                if (captures == null || captures.isEmpty()) {
+                    Log.e(TAG, "captureStillPicture: captures list is empty!");
+                    burst = false;
+                    unlockFocus();
+                    return;
+                }
                 switch (PhotonCamera.getSettings().selectedMode) {
                     case UNLIMITED:
                         getMCaptureSession().setRepeatingBurst(captures, CaptureCallback, getBackgroundHandler());

@@ -70,7 +70,11 @@ public class HdrxProcessor extends ProcessorBase {
         this.imageFile = imageFile;
         this.dngFile = dngFile;
         this.exifData = exifData;
-        this.BurstShakiness = new ArrayList<>(BurstShakiness);
+        if (BurstShakiness != null) {
+            this.BurstShakiness = new ArrayList<>(BurstShakiness);
+        } else {
+            this.BurstShakiness = new ArrayList<>();
+        }
         this.imageFormat = imageFormat;
         this.cameraRotation = cameraRotation;
         this.mImageFramesToProcess = imageBuffer;
@@ -121,6 +125,12 @@ public class HdrxProcessor extends ProcessorBase {
             processingEventsListener.onProcessingError("No images to process");
             return;
         }
+        if (exposures == null) {
+            Log.e(TAG, "ApplyHdrX: exposures map is null");
+            callback.onFailed();
+            processingEventsListener.onProcessingError("Exposure data missing");
+            return;
+        }
         int width = mImageFramesToProcess.get(0).width;
         int height = mImageFramesToProcess.get(0).height;
         if (width <= 0 || height <= 0) {
@@ -136,14 +146,25 @@ public class HdrxProcessor extends ProcessorBase {
         processingParameters.FillConstParameters(characteristics, new Point(width, height));
         // sort by timestamp first
         mImageFramesToProcess.sort(Comparator.comparingLong(ImageFrame::getTimestamp));
-        double minExpo = exposures.get(mImageFramesToProcess.get(0).getTimestamp());
-        for (int i = 1; i < mImageFramesToProcess.size(); i++) {
-            minExpo = Math.min(minExpo, exposures.get(mImageFramesToProcess.get(i).getTimestamp()));
+
+        double minExpo = Double.MAX_VALUE;
+        for (ImageFrame frame : mImageFramesToProcess) {
+            Double expo = exposures.get(frame.getTimestamp());
+            if (expo != null) {
+                minExpo = Math.min(minExpo, expo);
+            }
+        }
+        if (minExpo == Double.MAX_VALUE) {
+            minExpo = 1.0;
         }
         Log.d(TAG, "Wrapper.init");
         ArrayList<ImageFrame> images = new ArrayList<>();
         int ISO = 0;
         int normalFrames = 0;
+        if (BurstShakiness.isEmpty()) {
+            Log.w(TAG, "ApplyHdrX: BurstShakiness is empty, adding default");
+            BurstShakiness.add(new GyroBurst(1));
+        }
         if(BurstShakiness.size() < mImageFramesToProcess.size()){
             Log.d(TAG,"Warning: Gyro data size:"+BurstShakiness.size()+" is less than image size:"+mImageFramesToProcess.size());
         }
@@ -151,13 +172,22 @@ public class HdrxProcessor extends ProcessorBase {
         processingLog.startTime = totalStartTime;
         for (int i = 0; i < mImageFramesToProcess.size(); i++) {
             ImageFrame frame = mImageFramesToProcess.get(i);
-            frame.frameGyro = BurstShakiness.get(i%BurstShakiness.size()); // cyclic for safety
-            //frame.image = mImageFramesToProcess.get(i);
-            //Log.d(TAG,"Timestamp:"+frame.image.getTimestamp());
-            //frame.pair = IsoExpoSelector.pairs.get(i % IsoExpoSelector.patternSize);
-            frame.pair = IsoExpoSelector.fullpairs.get(i);
+            frame.frameGyro = BurstShakiness.get(i % BurstShakiness.size()); // cyclic for safety
+
+            if (i >= IsoExpoSelector.fullpairs.size()) {
+                Log.e(TAG, "ApplyHdrX: No fullpair for frame at index " + i);
+                continue;
+            }
+            frame.pair = new IsoExpoSelector.ExpoPair(IsoExpoSelector.fullpairs.get(i));
+
+            Double expo = exposures.get(frame.getTimestamp());
+            if (expo == null) {
+                Log.e(TAG, "ApplyHdrX: Missing exposure for frame " + i + " timestamp " + frame.getTimestamp());
+                continue;
+            }
+
             frame.number = i;
-            frame.pair.layerMpy = (float) (exposures.get(mImageFramesToProcess.get(i).getTimestamp()) / minExpo);
+            frame.pair.layerMpy = (float) (expo / minExpo);
             int ev = (int) Math.round(Math.log(frame.pair.layerMpy) / Math.log(2.0));
             processingLog.frameInfos.add(new ProcessingLog.FrameInfo(i, ev, (int)frame.pair.iso,
                     ExposureIndex.sec2string(ExposureIndex.time2sec(frame.pair.exposure)),
@@ -176,9 +206,15 @@ public class HdrxProcessor extends ProcessorBase {
             images.add(frame);
             ISO += frame.pair.iso;
         }
-        ISO /= mImageFramesToProcess.size();
+        if (images.isEmpty()) {
+            Log.e(TAG, "ApplyHdrX: No valid images to process");
+            callback.onFailed();
+            processingEventsListener.onProcessingError("No valid images to process");
+            return;
+        }
+        ISO /= images.size();
 
-        processingParameters.FillDynamicParameters(captureResult, captureRequest,ISO);
+        processingParameters.FillDynamicParameters(captureResult, captureRequest, ISO);
         processingParameters.cameraRotation = cameraRotation;
 
         ParseExif.syncWithParameters(exifData, processingParameters);
@@ -186,7 +222,7 @@ public class HdrxProcessor extends ProcessorBase {
         imageFrameDeblur.firstFrameGyro = images.get(0).frameGyro.clone();
         for (int i = 0; i < images.size(); i++)
             imageFrameDeblur.processDeblurPosition(images.get(i));
-        if (mImageFramesToProcess.size() >= 3)
+        if (images.size() >= 3)
             images.sort((img1, img2) -> Float.compare(img1.frameGyro.shakiness, img2.frameGyro.shakiness));
         double unluckypickiness = 1.05;
         float unluckyavr = 0;
