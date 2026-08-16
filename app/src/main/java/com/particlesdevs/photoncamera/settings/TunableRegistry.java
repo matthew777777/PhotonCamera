@@ -26,5 +26,8 @@ public final class TunableRegistry {
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.ABLC.class,
         com.particlesdevs.photoncamera.processing.render.Parameters.class,
         com.particlesdevs.photoncamera.processing.ImageSaverSettings.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.ModernInitial.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.ModernAutoExposure.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.ModernToneMapping.class,
     };
 }

@@ -61,7 +61,7 @@ public class PreferenceKeys {
         Resources resources = context.getResources();
 
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_HDRX, resources.getBoolean(R.bool.pref_hdrx_mode_default));
-        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_PIPELINE, false);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_PIPELINE, resources.getBoolean(R.bool.pref_experimental_jpeg_pipeline_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SHOW_ROUND_EDGE, resources.getBoolean(R.bool.pref_show_roundedge_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SHOW_HISTOGRAM, resources.getBoolean(R.bool.pref_show_histogram_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EIS_PHOTO, resources.getBoolean(R.bool.pref_eis_photo_default));
@@ -86,8 +86,9 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_CROP_169, true);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_QUALITY, 100);
 
-        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_CORE_BALANCING, false);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_CORE_BALANCING, resources.getBoolean(R.bool.pref_modern_core_balancing_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_EXPOSURE_COMPENSATION, "0.0");
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_TONE_MAPPER, "0");
 
         settingsManager.setDefaults(Key.CAMERA_ID, resources.getString(R.string.camera_id_default), new String[]{"0", "1"});
         settingsManager.setDefaults(Key.TONEMAP, resources.getString(R.string.tonemap_default), new String[]{resources.getString(R.string.tonemap_default)});
@@ -370,6 +371,10 @@ public class PreferenceKeys {
         return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_MODERN_EXPOSURE_COMPENSATION);
     }
 
+    public static int getModernToneMapper() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_MODERN_TONE_MAPPER);
+    }
+
     public static void setHdrX(boolean value) {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_HDRX, value);
     }
@@ -602,6 +607,7 @@ public class PreferenceKeys {
          */
         KEY_MODERN_CORE_BALANCING(R.string.pref_modern_core_balancing_key),
         KEY_MODERN_EXPOSURE_COMPENSATION(R.string.pref_modern_exposure_compensation_key),
+        KEY_MODERN_TONE_MAPPER(R.string.pref_modern_tone_mapper_key),
 
         /**
          * Other Keys

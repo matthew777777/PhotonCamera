@@ -166,6 +166,8 @@
     <string name="pref_modern_core_balancing_key" translatable="false">pref_modern_core_balancing_key</string>
     <string name="modern_exposure_compensation">Modern Exposure Compensation</string>
     <string name="pref_modern_exposure_compensation_key" translatable="false">pref_modern_exposure_compensation_key</string>
+    <string name="modern_tone_mapper">Tone Mapping</string>
+    <string name="pref_modern_tone_mapper_key" translatable="false">pref_modern_tone_mapper_key</string>
 
     <!-- Metering mode strings -->
     <string name="ae_metering">MTK Metering</string>

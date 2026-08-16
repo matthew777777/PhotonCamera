@@ -257,7 +257,7 @@
             android:title="@string/hdrx">
         <com.particlesdevs.photoncamera.ui.settings.custompreferences.ManagedSwitchPreference
                 android:key="@string/pref_experimental_jpeg_pipeline_key"
-                android:defaultValue="false"
+                android:defaultValue="true"
                 android:layout="@layout/preference_with_margin"
                 android:title="@string/experimental_jpeg_pipeline"
                 android:summary="@string/experimental_jpeg_pipeline_summary"
@@ -286,7 +286,7 @@
                 />
         <com.particlesdevs.photoncamera.ui.settings.custompreferences.ManagedSwitchPreference
                 android:key="@string/pref_modern_core_balancing_key"
-                android:defaultValue="false"
+                android:defaultValue="true"
                 android:layout="@layout/preference_with_margin"
                 android:title="@string/modern_core_balancing"
                 android:summary="@string/modern_core_balancing_summary"
@@ -301,6 +301,17 @@
                 app:minValue="-5.0"
                 app:stepPerUnit="10.0"
                 android:icon="@drawable/ic_tune_black_24dp"
+                app:dependency="@string/pref_modern_core_balancing_key"
+                />
+        <ListPreference
+                android:layout="@layout/preference_with_margin"
+                android:key="@string/pref_modern_tone_mapper_key"
+                android:title="@string/modern_tone_mapper"
+                app:useSimpleSummaryProvider="true"
+                android:icon="@drawable/ic_tune_black_24dp"
+                android:entries="@array/modern_tone_mapper_entries"
+                android:entryValues="@array/modern_tone_mapper_entryvalues"
+                android:defaultValue="0"
                 app:dependency="@string/pref_modern_core_balancing_key"
                 />
         <ListPreference

@@ -33,6 +33,7 @@ public class Settings {
     public double compressor;
     public double gain;
     public double shadows;
+    public int modernToneMapper;
     public int rawSaver;
     public boolean QuadBayer;
     public int cfaPattern;
@@ -113,6 +114,7 @@ public class Settings {
         gamma = parseGammaArray();
         mCameraID = PreferenceKeys.getCameraID();
         theme = PreferenceKeys.getThemeValue();
+        modernToneMapper = PreferenceKeys.getModernToneMapper();
         IsoExpoSelector.HDR = PreferenceKeys.getBracketingMode() > 0 || saveEachBracket;
     }
 
