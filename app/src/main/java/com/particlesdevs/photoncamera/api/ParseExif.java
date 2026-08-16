@@ -50,23 +50,11 @@ public class ParseExif {
         ExifData data = new ExifData();
 
         int rotation = PhotonCamera.getCaptureController().cameraRotation;
+        data.ORIENTATION = String.valueOf(getOrientation(rotation));
+        
         String TAG = "ParseExif";
-        Log.d(TAG, "Gravity rotation:" + PhotonCamera.getGravity().getRotation());
-        Log.d(TAG, "Sensor rotation:" + PhotonCamera.getCaptureController().getMSensorOrientation());
-        int orientation = ORIENTATION_NORMAL;
-        switch (rotation) {
-            case 90:
-                orientation = ExifInterface.ORIENTATION_ROTATE_90;
-                break;
-            case 180:
-                orientation = ExifInterface.ORIENTATION_ROTATE_180;
-                break;
-            case 270:
-                orientation = ExifInterface.ORIENTATION_ROTATE_270;
-                break;
-        }
         Log.d(TAG, "rotation:" + rotation);
-        Log.d(TAG, "orientation:" + orientation);
+        Log.d(TAG, "orientation:" + data.ORIENTATION);
 
         Integer iso = result.get(SENSOR_SENSITIVITY);
         int isonum = 100;
@@ -114,6 +102,7 @@ public class ParseExif {
         data.F_NUMBER = String.valueOf(parameters.aperture);
         data.APERTURE_VALUE = String.valueOf(parameters.aperture);
         data.EXPOSURE_TIME = getTime((long) (parameters.exposureTime * 1000000000L));
+        data.ORIENTATION = String.valueOf(getOrientation(parameters.cameraRotation));
         data.IMAGE_DESCRIPTION = parameters.toString();
     }
 
@@ -139,6 +128,7 @@ public class ParseExif {
         inter.setAttribute(TAG_COLOR_SPACE, data.COLOR_SPACE);
         inter.setAttribute(TAG_EXIF_VERSION, data.EXIF_VERSION);
         inter.setAttribute(TAG_IMAGE_DESCRIPTION, data.IMAGE_DESCRIPTION);
+        inter.setAttribute(TAG_ORIENTATION, data.ORIENTATION);
         if (data.WHITE_BALANCE != null) inter.setAttribute(TAG_WHITE_BALANCE, data.WHITE_BALANCE);
         return inter;
     }
@@ -171,6 +161,7 @@ public class ParseExif {
         public String COLOR_SPACE;
         public String EXIF_VERSION;
         public String IMAGE_DESCRIPTION;
+        public String ORIENTATION;
         public String DATETIME;
         public String EXPOSURE_TIME;
         public String F_NUMBER;

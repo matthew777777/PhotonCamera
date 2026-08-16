@@ -13,6 +13,8 @@ import com.particlesdevs.photoncamera.gallery.model.GalleryItem;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -27,6 +29,7 @@ public class GalleryViewModel extends AndroidViewModel {
 
     private final MutableLiveData<List<GalleryItem>> currentFolderImages = new MutableLiveData<>(new ArrayList<>(0));
     private final MutableLiveData<Boolean> updatePendingLiveData=new MutableLiveData<>(false);
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
 
     public MutableLiveData<Boolean> getUpdatePending() {
@@ -43,23 +46,31 @@ public class GalleryViewModel extends AndroidViewModel {
     }
 
     public void fetchAllMedia() {
-        List<GalleryItem> allFolders=GalleryFileOperations._fetchSelectedFolders(getApplication().getContentResolver()).stream().map((Function<GalleryFileOperations.ImagesFolder, GalleryItem>) imagesFolder -> {
-            GalleryItem folder = new GalleryItem(imagesFolder.getTopImage());
-            imagesFolder.getAllImageFiles().forEach(imageFile -> folder.getFiles().add(new GalleryItem(imageFile)));
-            folder.setDisplayName(imagesFolder.getFolderName());
-            return folder;
-        }).collect(Collectors.toList());
-        
-        ArrayList<ImageFile> all = (ArrayList<ImageFile>) GalleryFileOperations.extractAllSelectedImages();
-        if (!all.isEmpty()) {
-            GalleryItem ALL_Folder = new GalleryItem(all.get(0));
-            ALL_Folder.setDisplayName("ALL");
-            ALL_Folder.getFiles().addAll(all.stream().map(GalleryItem::new).collect(Collectors.toList()));
-            allSelectedImagesFolder.setValue(ALL_Folder);
+        executor.execute(() -> {
+            List<GalleryItem> allFolders = GalleryFileOperations._fetchSelectedFolders(getApplication().getContentResolver()).stream().map((Function<GalleryFileOperations.ImagesFolder, GalleryItem>) imagesFolder -> {
+                GalleryItem folder = new GalleryItem(imagesFolder.getTopImage());
+                imagesFolder.getAllImageFiles().forEach(imageFile -> folder.getFiles().add(new GalleryItem(imageFile)));
+                folder.setDisplayName(imagesFolder.getFolderName());
+                return folder;
+            }).collect(Collectors.toList());
 
-            allFolders.add(0, ALL_Folder);
-        }
-        selectedDisplayFolders.setValue(allFolders);
+            ArrayList<ImageFile> all = (ArrayList<ImageFile>) GalleryFileOperations.extractAllSelectedImages();
+            if (!all.isEmpty()) {
+                GalleryItem ALL_Folder = new GalleryItem(all.get(0));
+                ALL_Folder.setDisplayName("ALL");
+                ALL_Folder.getFiles().addAll(all.stream().map(GalleryItem::new).collect(Collectors.toList()));
+                allSelectedImagesFolder.postValue(ALL_Folder);
+
+                allFolders.add(0, ALL_Folder);
+            }
+            selectedDisplayFolders.postValue(allFolders);
+        });
+    }
+
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        executor.shutdown();
     }
 
     public LiveData<GalleryItem> getAllSelectedImageFolder() {

@@ -21,32 +21,27 @@ public class RAW16Saver extends DefaultSaver{
                     Log.d(TAG, "rawvideoaddImage: " + this + " " + mRawVideoProcessor);
                     mRawVideoProcessor.videoCycle(image);
                     // image.close() is handled inside videoCycle
-                    bufferLock = false;
+                    bufferSemaphore.release();
                     break;
                 case UNLIMITED:
                     Log.d(TAG, "unlimitedaddImage: " + this + " " + mUnlimitedProcessor);
                     mUnlimitedProcessor.unlimitedCycle(image);
                     image.close();
-                    bufferLock = false;
+                    bufferSemaphore.release();
                     break;
                 default:
                     Log.d(TAG, "start buffer size:" + IMAGE_BUFFER.size());
                     image.getFormat();
-                    /*while (bufferLock){
-                        try {
-                            Thread.sleep(1);
-                        } catch (InterruptedException ignored) {}
-                    }*/
                     IMAGE_BUFFER.add(getFrame(image));
                     image.close();
-                    bufferLock = false;
+                    bufferSemaphore.release();
             }
         } catch (Exception e) {
             Log.e(TAG, "Error in addImage: " + e.getMessage());
             try {
                 image.close();
             } catch (Exception ignored) {}
-            bufferLock = false;
+            bufferSemaphore.release();
         }
     }
 }

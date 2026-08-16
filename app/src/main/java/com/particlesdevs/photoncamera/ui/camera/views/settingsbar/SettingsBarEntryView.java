@@ -77,8 +77,14 @@ public class SettingsBarEntryView extends LinearLayout {
     }
 
     public void setSettingsBarEntryModel(SettingsBarEntryModel entryModel) {
-        titleTextView.setText(entryModel.getTitleStringId());
-        stateTextView.setText(entryModel.getStateTextStringId());
+        if (entryModel.getTitleStringId() != 0) {
+            titleTextView.setText(entryModel.getTitleStringId());
+        }
+        if (entryModel.getStateTextStringId() != 0) {
+            stateTextView.setText(entryModel.getStateTextStringId());
+        } else {
+            stateTextView.setText("");
+        }
 
         imageButtons.clear();
         if (entryModel.getSettingsBarButtonModels() != null) {
@@ -112,7 +118,11 @@ public class SettingsBarEntryView extends LinearLayout {
     }
 
     public void updateState(SettingsBarEntryModel entryModel) {
-        stateTextView.setText(entryModel.getStateTextStringId());
+        if (entryModel.getStateTextStringId() != 0) {
+            stateTextView.setText(entryModel.getStateTextStringId());
+        } else {
+            stateTextView.setText("");
+        }
         for (ImageButton button : imageButtons) {
             for (SettingsBarButtonModel buttonModel : entryModel.getSettingsBarButtonModels()) {
                 if (button.getId() == buttonModel.getId()) {

@@ -56,3 +56,9 @@
 
 # Missing class rules
 -dontwarn org.apache.commons.lang.functor.Predicate
+
+# ===== System Hooks & Performance Monitors =====
+# Keep methods used by OEM performance monitors (e.g. MediaTek TurboSched)
+-keepclassmembers class * {
+    public void setSchedAffinity(...);
+}

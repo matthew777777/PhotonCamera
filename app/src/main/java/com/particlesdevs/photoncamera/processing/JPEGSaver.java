@@ -16,19 +16,14 @@ public class JPEGSaver extends DefaultSaver {
     }
 
     public void addImage(Image image) {
-        ByteBuffer buffer = image.getPlanes()[0].getBuffer();
         try {
+            ByteBuffer buffer = image.getPlanes()[0].getBuffer();
             IMAGE_BUFFER.add(getFrame(image));
             byte[] bytes = new byte[buffer.remaining()];
             if (IMAGE_BUFFER.size() == PhotonCamera.getCaptureController().mMeasuredFrameCnt && PhotonCamera.getSettings().frameCount != 1) {
                 Path jpgPath = ImagePath.newImageFilePath();
                 buffer.duplicate().get(bytes);
                 Files.write(jpgPath, bytes);
-
-//                hdrxProcessor.start(dngFile, jpgFile, IMAGE_BUFFER, mImage.getFormat(),
-//                        CaptureController.mCameraCharacteristics, CaptureController.mCaptureResult,
-//                        () -> clearImageReader(mReader));
-
                 IMAGE_BUFFER.clear();
             }
             if (PhotonCamera.getSettings().frameCount == 1) {
@@ -36,8 +31,6 @@ public class JPEGSaver extends DefaultSaver {
                 IMAGE_BUFFER.clear();
                 buffer.get(bytes);
                 Files.write(jpgPath, bytes);
-                // image.close() is already here in the original for frameCount == 1, 
-                // but we should ensure it's closed in all paths.
                 processingEventsListener.onProcessingFinished("JPEG: Single Frame, Not Processed!");
                 processingEventsListener.notifyImageSavedStatus(true, jpgPath);
             }
@@ -45,6 +38,7 @@ public class JPEGSaver extends DefaultSaver {
             e.printStackTrace();
         } finally {
             image.close();
+            bufferSemaphore.release();
         }
     }
 }

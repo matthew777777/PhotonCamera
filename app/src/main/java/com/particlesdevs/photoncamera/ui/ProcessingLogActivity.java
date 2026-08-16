@@ -17,11 +17,15 @@ import com.particlesdevs.photoncamera.processing.ProcessingLog;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.util.Log;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import dagger.hilt.android.AndroidEntryPoint;
 
 @AndroidEntryPoint
 public class ProcessingLogActivity extends BaseActivity {
     private ActivityProcessingLogBinding binding;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -35,11 +39,20 @@ public class ProcessingLogActivity extends BaseActivity {
 
         ProcessingLog log = PhotonCamera.getLatestProcessingLog();
         if (log != null) {
-            String content = log.toString() + "\n" + Log.getRelevantLogsSince(log.startTime);
-            binding.logText.setText(content);
+            binding.logText.setText("Loading log details...");
+            executor.execute(() -> {
+                String content = log.toString() + "\n" + Log.getRelevantLogsSince(log.startTime);
+                runOnUiThread(() -> binding.logText.setText(content));
+            });
         } else {
             binding.logText.setText("No log data available. Capture a photo first.");
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        executor.shutdown();
     }
 
     @Override

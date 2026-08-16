@@ -37,7 +37,7 @@ class CaptureProcessor @Inject constructor(
     
     private val zslRingBuffer = ArrayDeque<Image>()
     private val zslBufferLock = Any()
-    
+
     @Volatile
     var isZslCapturing = false
         private set
@@ -185,7 +185,7 @@ class CaptureProcessor @Inject constructor(
         controller.cameraEventsListener.onFrameCountSet(actualCount)
         controller.cameraEventsListener.onCaptureStillPictureStarted("ZSLCaptureStarted!")
         controller.cameraEventsListener.onBurstPrepared(null)
-        
+
         val frametime = ExposureIndex.time2sec(IsoExpoSelector.GenerateExpoPair(-1, controller).exposure)
         for (i in 0 until actualCount) {
             controller.cameraEventsListener.onFrameCaptureStarted(null)
@@ -215,15 +215,15 @@ class CaptureProcessor @Inject constructor(
                     controller.cameraEventsListener.onProcessingFinished("ZSL buffer empty")
                     return@execute
                 }
-                saver.implementation.bufferLock = false
+                saver.implementation.bufferSemaphore.release()
                 saver.updateFrameCount(actualCount)
                 saver.runRaw(
-                    characteristics, 
-                    previewResult, 
+                    characteristics,
+                    previewResult,
                     previewManager.previewCaptureRequest,
-                    ArrayList(burstShakiness), 
-                    controller.cameraRotation, 
-                    exposures, 
+                    ArrayList(burstShakiness),
+                    cameraRotation,
+                    exposures,
                     ArrayList(controller.mCaptureResults)
                 )
                 DebugTimeline.log("ZSL runRaw finished in background")

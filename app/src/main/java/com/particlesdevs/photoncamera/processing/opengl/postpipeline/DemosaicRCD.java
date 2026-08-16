@@ -19,7 +19,7 @@ public class DemosaicRCD extends Node {
 
     @Tunable(
         title = "Debug Mode", 
-        category = "DemosaicRCD", 
+        category = "Demosaic", 
         min = 0, 
         max = 18, 
         defaultValue = 0, 
@@ -30,7 +30,7 @@ public class DemosaicRCD extends Node {
 
     @Tunable(
         title = "Artifact Correction",
-        category = "DemosaicRCD",
+        category = "Demosaic",
         defaultValue = 1,
         min = 0,
         max = 1,
@@ -39,24 +39,24 @@ public class DemosaicRCD extends Node {
     )
     boolean rcdArtifactCorrection = true;
 
-    @Tunable(title = "Edge Sensitivity", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
+    @Tunable(title = "Edge Sensitivity", category = "Demosaic", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
     float rcdEdgeSensitivity = 1.0f;
 
-    @Tunable(title = "Direction Confidence", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 0.5f)
+    @Tunable(title = "Direction Confidence", category = "Demosaic", min = 0.0f, max = 2.0f, defaultValue = 0.5f)
     float rcdDirectionConfidence = 0.5f;
 
-    @Tunable(title = "Ratio Robustness", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
+    @Tunable(title = "Ratio Robustness", category = "Demosaic", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
     float rcdRatioRobustness = 1.0f;
 
-    @Tunable(title = "Ratio Edge Protection", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
+    @Tunable(title = "Ratio Edge Protection", category = "Demosaic", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
     float rcdRatioEdgeProtection = 1.0f;
 
-    @Tunable(title = "Chroma Correction Strength", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 0.5f)
+    @Tunable(title = "Chroma Correction Strength", category = "Demosaic", min = 0.0f, max = 2.0f, defaultValue = 0.5f)
     float rcdChromaCorrectionStrength = 0.5f;
 
     @Tunable(
         title = "Epsilon",
-        category = "DemosaicRCD",
+        category = "Demosaic",
         min = 0.0001f,
         max = 0.01f,
         defaultValue = 0.001f,
@@ -67,7 +67,7 @@ public class DemosaicRCD extends Node {
 
     @Tunable(
         title = "Pass Through",
-        category = "DemosaicRCD",
+        category = "Demosaic",
         min = 0,
         max = 1,
         defaultValue = 0,
@@ -78,7 +78,7 @@ public class DemosaicRCD extends Node {
 
     @Tunable(
         title = "Debug Stage",
-        category = "DemosaicRCD",
+        category = "Demosaic",
         min = 1,
         max = 10,
         defaultValue = 6,

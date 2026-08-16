@@ -14,13 +14,16 @@ import com.particlesdevs.photoncamera.processing.processor.ProcessorBase;
 import com.particlesdevs.photoncamera.util.Allocator;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.concurrent.Semaphore;
 
 public class SaverImplementation {
     private static final String TAG = "SaverImplementation";
-    public volatile boolean bufferLock = true;
+    public final Semaphore bufferSemaphore = new Semaphore(0);
     public volatile boolean newBurst = false;
-    public static ArrayList<ImageFrame> IMAGE_BUFFER = new ArrayList<>();
+    public static final List<ImageFrame> IMAGE_BUFFER = Collections.synchronizedList(new ArrayList<>());
     public int frameCount = 0;
     private int imageFormat;
     public final ProcessingEventsListener processingEventsListener;

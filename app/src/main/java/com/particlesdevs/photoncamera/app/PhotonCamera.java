@@ -235,8 +235,8 @@ public class PhotonCamera extends Application {
 
         PreferenceKeys.initialise(mSettingsManager);
 
-        // Initialize gallery icon visibility based on preference
-        applyGalleryIconVisibility();
+        // Initialize gallery icon visibility based on preference in background
+        executorService.execute(this::applyGalleryIconVisibility);
     }
     
     /**
@@ -293,5 +293,19 @@ public class PhotonCamera extends Application {
         executorService.shutdownNow();
         mCaptureController = null;
         sPhotonCamera = null;
+    }
+
+    /**
+     * Satisfy system performance monitors (e.g., MediaTek TurboSched).
+     * The OS calls this via reflection to suggest CPU core affinity for the app.
+     */
+    @androidx.annotation.Keep
+    public void setSchedAffinity(int[] list) {
+        Log.d("PhotonCamera", "System setSchedAffinity(int[]) called");
+    }
+
+    @androidx.annotation.Keep
+    public void setSchedAffinity() {
+        Log.d("PhotonCamera", "System setSchedAffinity() called");
     }
 }

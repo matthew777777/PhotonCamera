@@ -23,6 +23,27 @@ public class NativeEngine {
     public static synchronized void initialize() {
         if (!initialized) {
             Log.d(TAG, "Initializing NativeEngine and setting up hidden API exemptions");
+            try {
+                // Use Java-based meta-reflection bypass for higher reliability on SDK 30+
+                // This makes the system believe the call is coming from an internal source
+                Method forName = Class.class.getDeclaredMethod("forName", String.class);
+                Method getDeclaredMethod = Class.class.getDeclaredMethod("getDeclaredMethod", String.class, Class[].class);
+
+                Class<?> vmRuntimeClass = (Class<?>) forName.invoke(null, "dalvik.system.VMRuntime");
+                Method getRuntime = (Method) getDeclaredMethod.invoke(vmRuntimeClass, "getRuntime", new Class[0]);
+                Object vmRuntime = getRuntime != null ? getRuntime.invoke(null) : null;
+
+                if (vmRuntime != null) {
+                    Method setHiddenApiExemptions = (Method) getDeclaredMethod.invoke(vmRuntimeClass, "setHiddenApiExemptions", new Class[]{String[].class});
+                    if (setHiddenApiExemptions != null) {
+                        setHiddenApiExemptions.invoke(vmRuntime, new Object[]{new String[]{"L"}});
+                        Log.i(TAG, "Hidden API exemptions applied via Java Meta-Reflection");
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Java-based Hidden API bypass failed, falling back to native: " + e.getMessage());
+            }
+            
             nativeInitialize();
             initialized = true;
         }

@@ -6,6 +6,7 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.media.Image;
+import androidx.exifinterface.media.ExifInterface;
 import com.particlesdevs.photoncamera.util.Log;
 import com.particlesdevs.photoncamera.api.ParseExif;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
@@ -104,58 +105,51 @@ public class UnlimitedProcessor extends ProcessorBase {
 
     private void processUnlimited() {
         callback.onStarted();
-//        parameters.path = ImageSaver.jpgFilePathToSave.getAbsolutePath();
         processingEventsListener.onProcessingStarted("Unlimited");
-        averageRaw.FinalScript();
-        ByteBuffer unlimitedBuffer = averageRaw.Output;
-        averageRaw.close();
-        averageRaw = null;
+        try {
+            averageRaw.FinalScript();
+            ByteBuffer unlimitedBuffer = averageRaw.Output;
+            averageRaw.close();
+            averageRaw = null;
 
-        IncreaseWLBL(parameters);
+            IncreaseWLBL(parameters);
 
-        if (saveRAW >= 1) {
-
-            processingEventsListener.onProcessingFinished("Unlimited rawSaver Processing Finished");
-            unlimitedBuffer.position(0);
-
-            boolean imageSaved = ImageSaver.Util.saveStackedRaw(dngFile, unlimitedBuffer, parameters);
-
-            processingEventsListener.notifyImageSavedStatus(imageSaved, dngFile);
-            if (saveRAW == 2) {
-                processingEventsListener.onProcessingFinished("Unlimited RAW Processing Finished");
-                callback.onFinished();
-                return;
+            if (saveRAW >= 1) {
+                processingEventsListener.onProcessingFinished("Unlimited rawSaver Processing Finished");
+                unlimitedBuffer.position(0);
+                boolean imageSaved = ImageSaver.Util.saveStackedRaw(dngFile, unlimitedBuffer, parameters);
+                processingEventsListener.notifyImageSavedStatus(imageSaved, dngFile);
+                if (saveRAW == 2) {
+                    processingEventsListener.onProcessingFinished("Unlimited RAW Processing Finished");
+                    callback.onFinished();
+                    return;
+                }
             }
+
+            PostPipeline pipeline = new PostPipeline();
+            try {
+                Bitmap bitmap = pipeline.Run(unlimitedBuffer, parameters);
+                processingEventsListener.onProcessingFinished("Unlimited JPG Processing Finished");
+                imageFile = Paths.get(imageFile.toAbsolutePath() + ".jpg");
+
+                boolean isExperimental = PreferenceKeys.isExperimentalJpegPipelineOn();
+                int chromaSubsampling = PreferenceKeys.getJpegChromaSubsampling();
+                int jpgQuality = isExperimental ? PhotonCamera.getSettings().experimentalJpegQuality : ImageSaver.JPG_QUALITY;
+                boolean use444 = isExperimental && (chromaSubsampling == 1);
+
+                exifData.ORIENTATION = String.valueOf(ExifInterface.ORIENTATION_NORMAL);
+                boolean imageSaved = ImageSaver.Util.saveBitmapAsJPG(imageFile, bitmap,
+                        jpgQuality, exifData, use444);
+
+                processingEventsListener.notifyImageSavedStatus(imageSaved, imageFile);
+            } finally {
+                pipeline.close();
+            }
+            callback.onFinished();
+        } catch (Exception e) {
+            Log.e(TAG, "processUnlimited error: " + Log.getStackTraceString(e));
+            callback.onFailed();
         }
-
-
-        PostPipeline pipeline = new PostPipeline();
-        Bitmap bitmap = pipeline.Run(unlimitedBuffer, parameters);
-
-        processingEventsListener.onProcessingFinished("Unlimited JPG Processing Finished");
-        imageFile = Paths.get(imageFile.toAbsolutePath() + ".jpg");
-
-        boolean isExperimental = PreferenceKeys.isExperimentalJpegPipelineOn();
-        int chromaSubsampling = PreferenceKeys.getJpegChromaSubsampling();
-        int jpgQuality = isExperimental ? PhotonCamera.getSettings().experimentalJpegQuality : ImageSaver.JPG_QUALITY;
-        boolean use444 = isExperimental && (chromaSubsampling == 1);
-
-        if (isExperimental) {
-            Log.d(TAG, "ExperimentalJPEG (Unlimited):");
-            Log.d(TAG, "quality = " + jpgQuality);
-            Log.d(TAG, "chromaSubsampling = " + (use444 ? "4:4:4" : "4:2:0"));
-            Log.d(TAG, "encoder = " + (use444 ? "stb_image_write" : "Android Bitmap.compress"));
-        }
-
-        boolean imageSaved = ImageSaver.Util.saveBitmapAsJPG(imageFile, bitmap,
-                jpgQuality, exifData, use444);
-
-        processingEventsListener.notifyImageSavedStatus(imageSaved, imageFile);
-
-        pipeline.close();
-
-        callback.onFinished();
-
     }
 
     public void unlimitedEnd() {

@@ -36,9 +36,14 @@ public class DefaultSaver extends SaverImplementation {
         super.runRaw(imageFormat, characteristics, captureResult,captureRequest, burstShakiness, cameraRotation, exposures, captureResults);
         //Wait for one frame at least.
         Log.d(TAG, "Acquiring:" + IMAGE_BUFFER.size());
-        while (bufferLock || IMAGE_BUFFER.isEmpty()){}
+        try {
+            if (IMAGE_BUFFER.isEmpty()) {
+                bufferSemaphore.acquire();
+            }
+        } catch (InterruptedException e) {
+            Log.e(TAG, "Interrupted while waiting for buffer: " + e.getMessage());
+        }
         Log.d(TAG, "Acquired:" + IMAGE_BUFFER.size());
-        bufferLock = true;
         Log.d(TAG,"Size:"+IMAGE_BUFFER.size());
         
         if (PhotonCamera.getSettings().saveEachBracket && IMAGE_BUFFER.size() > 1) {
@@ -70,7 +75,6 @@ public class DefaultSaver extends SaverImplementation {
             }
             IMAGE_BUFFER.clear();
             IMAGE_BUFFER.addAll(remain);
-            bufferLock = false;
             processingCallback.onFinished();
             return;
         }
@@ -95,15 +99,18 @@ public class DefaultSaver extends SaverImplementation {
         );
         ArrayList<ImageFrame> slicedBuffer = new ArrayList<>();
         ArrayList<ImageFrame> imagebuffer = new ArrayList<>();
-        for(int i =0; i<frameCount;i++){
-            slicedBuffer.add(IMAGE_BUFFER.get(i));
+        synchronized (IMAGE_BUFFER) {
+            for(int i =0; i<frameCount;i++){
+                if (i < IMAGE_BUFFER.size()) {
+                    slicedBuffer.add(IMAGE_BUFFER.get(i));
+                }
+            }
+            for(int i = frameCount; i<IMAGE_BUFFER.size();i++){
+                imagebuffer.add(IMAGE_BUFFER.get(i));
+            }
+            IMAGE_BUFFER.clear();
+            IMAGE_BUFFER.addAll(imagebuffer);
         }
-        for(int i = frameCount; i<IMAGE_BUFFER.size();i++){
-            imagebuffer.add(IMAGE_BUFFER.get(i));
-        }
-        IMAGE_BUFFER.clear();
-        IMAGE_BUFFER = imagebuffer;
-        bufferLock = false;
         for(int i =0; i<slicedBuffer.size();i++){
             if (slicedBuffer.get(i) == null) {
                 slicedBuffer.remove(i);

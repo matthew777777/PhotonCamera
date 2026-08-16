@@ -364,5 +364,19 @@ public class CameraActivity extends BaseActivity {
                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
     }
 
+    /**
+     * OEM Hook for MediaTek TurboSched.
+     */
+    @androidx.annotation.Keep
+    public void setSchedAffinity(int[] list) {
+    }
+
+    /**
+     * OEM Hook for MediaTek TurboSched (no-arg variant).
+     */
+    @androidx.annotation.Keep
+    public void setSchedAffinity() {
+    }
+
 }
 

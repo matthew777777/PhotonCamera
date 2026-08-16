@@ -220,7 +220,7 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
     }
 
     public void refresh() {
-        drawOnCanvas(mHolder);
+        post(() -> drawOnCanvas(mHolder));
     }
 
     private void drawOnCanvas(SurfaceHolder surfaceHolder) {
@@ -229,18 +229,21 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
             if (canvas == null) {
                 Log.e(TAG, "Canvas is null");
             } else {
-                canvas.drawColor(0, PorterDuff.Mode.CLEAR);//Clears the canvas
-                drawGrid(canvas);
-                drawRoundEdges(canvas);
-                drawHistogram(canvas);
-                drawAFRect(canvas);
-                drawAERect(canvas);
-                drawAFDebugText(canvas);
-                surfaceHolder.unlockCanvasAndPost(canvas);
-                isCanvasDrawn = true;
+                try {
+                    canvas.drawColor(0, PorterDuff.Mode.CLEAR);//Clears the canvas
+                    drawGrid(canvas);
+                    drawRoundEdges(canvas);
+                    drawHistogram(canvas);
+                    drawAFRect(canvas);
+                    drawAERect(canvas);
+                    drawAFDebugText(canvas);
+                    isCanvasDrawn = true;
+                } finally {
+                    surfaceHolder.unlockCanvasAndPost(canvas);
+                }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "Error drawing on hardware canvas: " + e.getMessage());
         }
     }
 
@@ -249,22 +252,30 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
         aeRectToDraw = null;
         debugText = null;
         // Don't nullify histogramData here to prevent flickering
-        try {
-            Canvas canvas = mHolder.lockHardwareCanvas();
-            if (canvas != null) {
-                canvas.drawColor(0, PorterDuff.Mode.CLEAR);
-                mHolder.unlockCanvasAndPost(canvas);
+        post(() -> {
+            try {
+                Canvas canvas = mHolder.lockHardwareCanvas();
+                if (canvas != null) {
+                    try {
+                        canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+                    } finally {
+                        mHolder.unlockCanvasAndPost(canvas);
+                    }
+                }
+                // Clear twice to handle double buffering
+                canvas = mHolder.lockHardwareCanvas();
+                if (canvas != null) {
+                    try {
+                        canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+                    } finally {
+                        mHolder.unlockCanvasAndPost(canvas);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error clearing hardware canvas: " + e.getMessage());
             }
-            // Clear twice to handle double buffering
-            canvas = mHolder.lockHardwareCanvas();
-            if (canvas != null) {
-                canvas.drawColor(0, PorterDuff.Mode.CLEAR);
-                mHolder.unlockCanvasAndPost(canvas);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        isCanvasDrawn = false;
+            isCanvasDrawn = false;
+        });
     }
 
     public void forceClear() {

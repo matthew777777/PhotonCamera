@@ -329,11 +329,22 @@ public class Log {
                     // Filter: within 60 seconds before and 20 seconds after capture start
                     if (entryTime < startTime - 60000 || entryTime > startTime + 20000) continue;
 
+                    // Quick tag check before expensive substring/trim
                     int slashIdx = line.indexOf('/', 23);
                     int colonIdx = line.indexOf(':', slashIdx);
                     if (slashIdx == -1 || colonIdx == -1) continue;
 
                     String tag = line.substring(slashIdx + 1, colonIdx).trim();
+                    boolean tagPossiblyRelevant = false;
+                    char firstChar = Character.toLowerCase(tag.charAt(0));
+                    if (firstChar == 'i' || firstChar == 'h' || firstChar == 'p' || 
+                        firstChar == 'c' || firstChar == 'b' || firstChar == 'g' || 
+                        firstChar == 'd' || firstChar == 'a') {
+                        tagPossiblyRelevant = true;
+                    }
+
+                    if (!tagPossiblyRelevant) continue;
+
                     String message = line.substring(colonIdx + 1).trim();
 
                     boolean relevant = false;
