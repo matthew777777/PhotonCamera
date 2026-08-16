@@ -86,6 +86,9 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_CROP_169, true);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_QUALITY, 100);
 
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_CORE_BALANCING, false);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_EXPOSURE_COMPENSATION, "0.0");
+
         settingsManager.setDefaults(Key.CAMERA_ID, resources.getString(R.string.camera_id_default), new String[]{"0", "1"});
         settingsManager.setDefaults(Key.TONEMAP, resources.getString(R.string.tonemap_default), new String[]{resources.getString(R.string.tonemap_default)});
         settingsManager.setDefaults(Key.GAMMA, resources.getString(R.string.gamma_default), new String[]{resources.getString(R.string.gamma_default)});
@@ -359,6 +362,14 @@ public class PreferenceKeys {
         return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_QUALITY);
     }
 
+    public static boolean isModernCoreBalancingOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_MODERN_CORE_BALANCING);
+    }
+
+    public static float getModernExposureCompensation() {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_MODERN_EXPOSURE_COMPENSATION);
+    }
+
     public static void setHdrX(boolean value) {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_HDRX, value);
     }
@@ -585,6 +596,12 @@ public class PreferenceKeys {
         KEY_EXPERIMENTAL_JPEG_PIPELINE(R.string.pref_experimental_jpeg_pipeline_key),
         KEY_JPEG_CHROMA_SUBSAMPLING(R.string.pref_jpeg_chroma_subsampling_key),
         KEY_EXPERIMENTAL_JPEG_QUALITY(R.string.pref_experimental_jpeg_quality_key),
+
+        /**
+         * Modern Core Balancing
+         */
+        KEY_MODERN_CORE_BALANCING(R.string.pref_modern_core_balancing_key),
+        KEY_MODERN_EXPOSURE_COMPENSATION(R.string.pref_modern_exposure_compensation_key),
 
         /**
          * Other Keys
