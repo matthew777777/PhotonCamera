@@ -79,7 +79,7 @@ public class Demosaic3 extends Node {
         WorkingTexture = basePipeline.main3;
         glProg.setDefine("greenmin",greenMin);
         glProg.setDefine("greenmax",greenMax);
-        if (PreferenceKeys.isExperimentalJpegPipelineOn()) {
+        if (PreferenceKeys.isExperimentalJpegPipelineOn() || PreferenceKeys.isModernCoreBalancingOn()) {
             glProg.setDefine("NO_CLAMP", true);
         }
         glProg.setLayout(tile,tile,1);

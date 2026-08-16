@@ -173,6 +173,13 @@
     <string name="experimental_jpeg_quality">Experimental JPEG Quality</string>
     <string name="pref_experimental_jpeg_quality_key" translatable="false">pref_experimental_jpeg_quality_key</string>
 
+    <!-- Modern Core Balancing -->
+    <string name="modern_core_balancing">Modern Core Balancing</string>
+    <string name="modern_core_balancing_summary">Enable modern scene-referred HDR pipeline for Initial and AutoExposure stages.</string>
+    <string name="pref_modern_core_balancing_key" translatable="false">pref_modern_core_balancing_key</string>
+    <string name="modern_exposure_compensation">Modern Exposure Compensation</string>
+    <string name="pref_modern_exposure_compensation_key" translatable="false">pref_modern_exposure_compensation_key</string>
+
     <!-- Metering mode strings -->
     <string name="ae_metering_std_off">Auto</string>
     <string name="ae_metering_std_center">Center Weighted</string>

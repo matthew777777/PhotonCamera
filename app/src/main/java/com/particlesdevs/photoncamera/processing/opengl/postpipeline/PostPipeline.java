@@ -218,9 +218,14 @@ public class PostPipeline extends GLBasePipeline {
         //add(new AWB());
         //add(new Equalization());
 
-        add(new Initial());
-
-        add(new AutoExposure());
+        if (PreferenceKeys.isModernCoreBalancingOn()) {
+            add(new ModernInitial());
+            add(new ModernAutoExposure());
+            add(new ModernToneMapping());
+        } else {
+            add(new Initial());
+            add(new AutoExposure());
+        }
 
 
         //add(new GlobalToneMapping());
@@ -264,20 +269,25 @@ public class PostPipeline extends GLBasePipeline {
         // Black Level Correction (dynamic) - Moved after Demosaic to match RGB expectation
         Log.d("PostPipeline", "Adding ABLC");
         add(new ABLC());
-        
-        // Stage 3: Capture Sharpening (RawTherapee-inspired)
-        Log.d("PostPipeline", "Adding ExperimentalCaptureSharpening");
-        ExperimentalCaptureSharpening cs = new ExperimentalCaptureSharpening();
-        cs.passThrough = 1; // DEBUG: ENABLE CAPTURE SHARPENING
-        add(cs);
+
+        // Lens Correction
+        Log.d("PostPipeline", "Adding CorrectingFlow");
+        add(new CorrectingFlow());
         
         // Standard stages to complete the pipeline
-        Log.d("PostPipeline", "Adding Initial");
-        add(new Initial());
-        Log.d("PostPipeline", "Adding AutoExposure");
-        add(new AutoExposure());
-        Log.d("PostPipeline", "Adding Sharpen2");
-        add(new Sharpen2());
+        if (PreferenceKeys.isModernCoreBalancingOn()) {
+            Log.d("PostPipeline", "Adding ModernInitial");
+            add(new ModernInitial());
+            Log.d("PostPipeline", "Adding ModernAutoExposure");
+            add(new ModernAutoExposure());
+            Log.d("PostPipeline", "Adding ModernToneMapping");
+            add(new ModernToneMapping());
+        } else {
+            Log.d("PostPipeline", "Adding Initial");
+            add(new Initial());
+            Log.d("PostPipeline", "Adding AutoExposure");
+            add(new AutoExposure());
+        }
 
         Log.d("PostPipeline", "Adding RotateWatermark");
         add(new RotateWatermark(getRotation()));

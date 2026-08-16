@@ -284,6 +284,25 @@
                 android:icon="@drawable/ic_tune_black_24dp"
                 app:dependency="@string/pref_experimental_jpeg_pipeline_key"
                 />
+        <com.particlesdevs.photoncamera.ui.settings.custompreferences.ManagedSwitchPreference
+                android:key="@string/pref_modern_core_balancing_key"
+                android:defaultValue="false"
+                android:layout="@layout/preference_with_margin"
+                android:title="@string/modern_core_balancing"
+                android:summary="@string/modern_core_balancing_summary"
+                android:icon="@drawable/ic_tune_black_24dp"
+                />
+        <com.particlesdevs.photoncamera.ui.settings.custompreferences.UniversalSeekBarPreference
+                android:key="@string/pref_modern_exposure_compensation_key"
+                android:layout="@layout/preference_seekbar"
+                android:title="@string/modern_exposure_compensation"
+                android:defaultValue="0.0"
+                app:maxValue="5.0"
+                app:minValue="-5.0"
+                app:stepPerUnit="10.0"
+                android:icon="@drawable/ic_tune_black_24dp"
+                app:dependency="@string/pref_modern_core_balancing_key"
+                />
         <ListPreference
                 android:layout="@layout/preference_with_margin"
                 android:key="@string/pref_save_raw_key"

@@ -91,7 +91,11 @@ void main() {
                 Output = gains.b*(Output-level.b-BLB)/(1.0-level.b);
             }
         }
+    #ifndef NO_CLAMP
     Output = clamp(Output/balance,0.0,1.0);
+    #else
+    Output = Output/balance;
+    #endif
     #endif
     #if TESTPATTERN == 1
         ivec2 diag = ivec2(xy.x+xy.y,xy.x-xy.y);

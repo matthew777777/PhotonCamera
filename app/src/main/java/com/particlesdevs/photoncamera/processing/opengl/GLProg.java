@@ -76,6 +76,10 @@ public class GLProg implements AutoCloseable {
         Defines.add(new String[]{DefineName,DefineVal});
         changedDef = true;
     }
+    public void clearDefines() {
+        Defines.clear();
+        changedDef = true;
+    }
     public void useAssetProgram(String name){
         useAssetProgram(name,false);
     }
