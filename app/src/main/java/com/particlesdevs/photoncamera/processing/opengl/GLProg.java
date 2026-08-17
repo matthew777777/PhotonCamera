@@ -26,7 +26,7 @@ public class GLProg implements AutoCloseable {
     private final ByteBuffer mFlushBuffer = ByteBuffer.allocateDirect(4 * 4 * 4096);
     private final List<Integer> mPrograms = new ArrayList<>();
     private final Map<String, Integer> mProgramCache = new HashMap<>();
-    private final int vertexShader;
+    private int vertexShader = -1;
     private final GLSquareModel mSquare = new GLSquareModel();
     public int mCurrentProgramActive;
     private final Map<String, Integer> mTextureBinds = new HashMap<>();
@@ -35,16 +35,15 @@ public class GLProg implements AutoCloseable {
     public boolean closed = true;
     public boolean isCompute = false;
     public int currentShader;
-    public final static String glVersion = "#version 310 es\n";
+    public final static String glVersion = "#version 300 es\n";
     final String vertexShaderSource = glVersion +
             "precision mediump float;\n" +
-            "in vec4 vPosition;\n" +
+            "layout(location = 0) in vec4 vPosition;\n" +
             "void main() {\n" +
             "gl_Position = vPosition;\n" +
             "}\n";
 
     public GLProg() {
-        this.vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
         mFlushBuffer.mark();
     }
     boolean changedDef = false;
@@ -142,6 +141,9 @@ public class GLProg implements AutoCloseable {
             int program;
             int nShader;
             if(!compute) {
+                if (vertexShader == -1) {
+                    vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
+                }
                 nShader = compileShader(GL_FRAGMENT_SHADER, shader);
                 program = createProgram(vertexShader, nShader);
             } else {

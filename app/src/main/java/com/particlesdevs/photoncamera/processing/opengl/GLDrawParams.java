@@ -8,7 +8,6 @@ import static android.opengl.EGL14.EGL_DEFAULT_DISPLAY;
 import static android.opengl.EGL14.EGL_DEPTH_SIZE;
 import static android.opengl.EGL14.EGL_GREEN_SIZE;
 import static android.opengl.EGL14.EGL_NONE;
-import static android.opengl.EGL14.EGL_OPENGL_ES2_BIT;
 import static android.opengl.EGL14.EGL_PBUFFER_BIT;
 import static android.opengl.EGL14.EGL_RED_SIZE;
 import static android.opengl.EGL14.EGL_RENDERABLE_TYPE;
@@ -29,7 +28,7 @@ public class GLDrawParams {
             EGL_ALPHA_SIZE, 8,
             EGL_BIND_TO_TEXTURE_RGBA, EGL_TRUE,
             EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+            EGL_RENDERABLE_TYPE, 0x44, // EGL_OPENGL_ES2_BIT | EGL_OPENGL_ES3_BIT_KHR
             EGL_NONE
     };
     final static int[] contextAttributeList = new int[]{
