@@ -40,9 +40,8 @@ public class IsoExpoSelector {
     //
     // These are tuned starting points, not measured hardware limits - adjust to taste.
     private static final int MIN_ISO_NORMALIZED = 100; // floor we always try first (ISO-100 basis)
+    private static final double CAP_RAMP_STOPS = 4.0;  // stops of extra darkness to slide *_START -> *_END
     private static final double CLEAN_ISO_STEP_FACTOR = 2.0; // hardware analog gain stages are conventionally doublings of the base ISO
-
-    private static final double BLE_BLUR_TOLERANCE_PX = 1.5; // Max allowed motion blur in pixels
 
     private static final long PHOTO_HANDHELD_CAP_START = ExposureIndex.sec / 30; // 1/30s
     private static final long PHOTO_HANDHELD_CAP_END   = ExposureIndex.sec / 15; // 1/15s
@@ -112,34 +111,18 @@ public class IsoExpoSelector {
         // never affected. Tripod overrides mode when active since it removes the
         // handshake concern that motivates the (shorter) handheld ceilings below.
         long capStart, capEnd;
-        double rampStops = 4.0;
-        float rotationRate = 0f;
-        if (PhotonCamera.getGyro() != null) {
-            rotationRate = PhotonCamera.getGyro().getPeakRotationRate();
-        }
-
         if (useTripod) {
             capStart = TRIPOD_CAP_START;
             capEnd = TRIPOD_CAP_END;
-            rampStops = 8.0; // Very slow ramp on tripod
         } else if (PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT) {
             capStart = NIGHT_HANDHELD_CAP_START;
             capEnd = NIGHT_HANDHELD_CAP_END;
-            if (rotationRate > 0 && rotationRate < 0.04) {
-                // Steady handheld: allow up to 0.5s exposure in Night mode
-                capEnd = Math.max(capEnd, ExposureIndex.sec / 2);
-                rampStops = 6.0;
-            }
         } else if (PhotonCamera.getSettings().selectedMode == CameraMode.MOTION) {
             capStart = MOTION_HANDHELD_CAP_START;
             capEnd = MOTION_HANDHELD_CAP_END;
-            rampStops = 2.0; // Fast ramp for motion to keep shutter short
         } else {
             capStart = PHOTO_HANDHELD_CAP_START;
             capEnd = PHOTO_HANDHELD_CAP_END;
-            if (rotationRate > 0 && rotationRate < 0.05) {
-                rampStops = 5.0;
-            }
         }
 
         double dynamicFactor = getDynamicScalingFactor(captureController);
@@ -147,7 +130,7 @@ public class IsoExpoSelector {
         capEnd = (long) (capEnd * dynamicFactor);
 
         if (PhotonCamera.getSettings().selectedMode == CameraMode.PHOTO && !useTripod) {
-            // capEnd = Math.min(capEnd, ExposureIndex.sec / 15); // Removed hard limit to allow BLE to dictate
+            capEnd = Math.min(capEnd, ExposureIndex.sec / 15);
             capStart = Math.min(capStart, capEnd);
         }
         if (PhotonCamera.getSettings().selectedMode == CameraMode.MOTION && !useTripod) {
@@ -155,7 +138,7 @@ public class IsoExpoSelector {
             capStart = Math.min(capStart, capEnd);
         }
 
-        pair.applyShutterPriorityCurve(capStart, capEnd, rampStops);
+        pair.applyShutterPriorityCurve(capStart, capEnd, CAP_RAMP_STOPS);
 
         if (PhotonCamera.getSettings().saveEachBracket && step != -1) {
             int frameCount = FrameNumberSelector.frameCount;
@@ -251,18 +234,6 @@ public class IsoExpoSelector {
         return pair;
     }
 
-    private static double getFocalLengthPixels() {
-        CameraCharacteristics characteristics = CaptureController.mCameraCharacteristics;
-        if (characteristics == null) return 3000.0;
-        float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-        SizeF sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-        Rect activeArray = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-        if (focalLengths != null && focalLengths.length > 0 && sensorSize != null && activeArray != null) {
-            return focalLengths[0] * ((double) activeArray.width() / sensorSize.getWidth());
-        }
-        return 3000.0;
-    }
-
     public static double getMPY() {
         return 100.0 / getISOLOW();
     }
@@ -349,45 +320,31 @@ public class IsoExpoSelector {
             }
         }
         double effectiveFocalLength = focalLength35mm * zoom;
+        // Reciprocal rule baseline (24mm wide). Longer focal length -> smaller factor -> faster shutter.
+        double focalFactor = 24.0 / Math.max(effectiveFocalLength, 10.0);
 
         // 2. Stability Scaling (only if not on a tripod)
         double stabilityFactor = 1.0;
         if (!useTripod && PhotonCamera.getGyro() != null) {
-            float rotationRate = PhotonCamera.getGyro().getPeakRotationRate();
-            if (rotationRate > 0) {
-                // Blur-Limited Exposure (BLE) calculation
-                double fpx = getFocalLengthPixels() * zoom;
-                double bleCapSec = BLE_BLUR_TOLERANCE_PX / Math.max(fpx * rotationRate, 0.001);
-
-                // We want to scale our base 1/30s-1/15s caps.
-                // If bleCapSec is 1/15s, factor should be ~1.0 for PHOTO.
-                // Use 1/30s as a conservative baseline for the factor.
-                stabilityFactor = bleCapSec / (1.0 / 30.0);
+            int shakiness = PhotonCamera.getGyro().getFilteredShakiness();
+            if (shakiness > 0) {
+                // Steady hands (shakiness ~25) -> up to 4x factor.
+                // Shaky hands (shakiness ~400) -> down to 0.25x factor.
+                stabilityFactor = 100.0 / Math.max(shakiness, 25);
 
                 // For Motion mode, we must be conservative to avoid subject blur.
                 if (PhotonCamera.getSettings().selectedMode == CameraMode.MOTION) {
                     stabilityFactor = Math.min(stabilityFactor, 1.2);
                 }
-            } else {
-                // Fallback to heuristic if gyro is present but not returning values
-                int shakiness = PhotonCamera.getGyro().getFilteredShakiness();
-                if (shakiness > 0) {
-                    // Reciprocal rule baseline (24mm wide). Longer focal length -> smaller factor -> faster shutter.
-                    double focalFactor = 24.0 / Math.max(effectiveFocalLength, 10.0);
-                    stabilityFactor = (100.0 / Math.max(shakiness, 25)) * focalFactor;
-                }
             }
-        } else {
-            // No gyro or tripod: use basic reciprocal rule
-            stabilityFactor = 24.0 / Math.max(effectiveFocalLength, 10.0);
         }
 
-        // Clamp total scaling to [0.2x, 5.0x] range to avoid extreme/impossible shutter speeds.
-        // We increased the upper bound to 5.0x to allow longer exposures when very steady.
-        double finalFactor = Math.max(0.2, Math.min(stabilityFactor, 5.0));
+        double combined = focalFactor * stabilityFactor;
+        // Clamp total scaling to [0.2x, 2.5x] range to avoid extreme/impossible shutter speeds.
+        double finalFactor = Math.max(0.2, Math.min(combined, 2.5));
         Log.v(TAG, "Dynamic AE Factor: " + String.format(Locale.US, "%.2f", finalFactor) +
                 " (Focal=" + String.format(Locale.US, "%.2f", effectiveFocalLength) + "mm, " +
-                "RotationRate=" + (PhotonCamera.getGyro() != null ? String.format(Locale.US, "%.3f", PhotonCamera.getGyro().getPeakRotationRate()) : "N/A") + ")");
+                "Stability=" + (PhotonCamera.getGyro() != null ? PhotonCamera.getGyro().getFilteredShakiness() : "N/A") + ")");
         return finalFactor;
     }
 
@@ -542,15 +499,11 @@ public class IsoExpoSelector {
             } else {
                 long cleanIso = snapToCleanIso(isoMinToFit);
                 double shutterAtCleanIso = totalExposureEnergy / cleanIso;
-                double isoAnalogNormalized = isoanalog * (100.0 / isolow);
 
                 // If snapping up to a "clean" hardware gain stage would drop our shutter time
                 // by more than 5% below the cap, prioritize the photon collection (shutter duration)
-                // and use the exact ISO required instead -- UNLESS this is the HCG switch point,
-                // where the read noise floor drop is worth the loss in exposure time.
-                boolean isHcgJump = Math.abs(cleanIso - isoAnalogNormalized) < 1.0;
-
-                if (!isHcgJump && shutterAtCleanIso < effectiveCap * 0.95) {
+                // and use the exact ISO required instead.
+                if (shutterAtCleanIso < effectiveCap * 0.95) {
                     iso = (int) Math.ceil(isoMinToFit);
                 } else {
                     iso = (int) cleanIso;
@@ -588,14 +541,6 @@ public class IsoExpoSelector {
         private long snapToCleanIso(double isoMinToFit) {
             double isoHighNormalized = isohigh * (100.0 / isolow);
             double isoAnalogNormalized = isoanalog * (100.0 / isolow);
-
-            // DCG Awareness: If we are close to the HCG (High Conversion Gain) switch point,
-            // jump to it earlier. HCG typically has much lower read noise than LCG at the same
-            // effective gain. If we're within 0.5 stops (0.7x), the read noise win usually
-            // outweighs the small loss in photon collection from a slightly shorter shutter.
-            if (isoMinToFit > isoAnalogNormalized * 0.70 && isoMinToFit < isoAnalogNormalized) {
-                return Math.round(isoAnalogNormalized);
-            }
 
             double[] ladder = new double[16];
             int n = 0;
