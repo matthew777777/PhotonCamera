@@ -91,6 +91,9 @@ public class Gyro {
     private long timeCount = 0;
     private GyroBurst gyroBurst;
     private int filter = -1;
+    private float peakRotationRate = 0f;
+    private final float[] rotationRateHistory = new float[32];
+    private int rotationRateIdx = 0;
     public int tripodShakiness = 1000;
     private static int delayPreview = 500;
     public static int delayUs = delayPreview;
@@ -166,6 +169,17 @@ public class Gyro {
                 circleBurst.movementss[1][circleCount] = angley;
                 circleBurst.movementss[2][circleCount] = anglez;
                 circleBurst.timestampss[circleCount] = sensorEvent.timestamp;
+
+                // Update real-time rotation rate history for BLE
+                float rateMag = (float) Math.sqrt(mAngles[0]*mAngles[0] + mAngles[1]*mAngles[1] + mAngles[2]*mAngles[2]);
+                rotationRateHistory[rotationRateIdx] = rateMag;
+                rotationRateIdx = (rotationRateIdx + 1) % rotationRateHistory.length;
+                float currentPeak = 0f;
+                for (float rate : rotationRateHistory) {
+                    if (rate > currentPeak) currentPeak = rate;
+                }
+                peakRotationRate = currentPeak;
+
                 getShakiness();//For filtering
                 if(gyroburst) CompleteGyroBurst();
                 circleCount++;
@@ -366,6 +380,14 @@ public class Gyro {
     public int getFilteredShakiness() {
         return filter;
     }
+
+    /**
+     * @return Peak rotation rate in rad/s observed over the last ~100ms window.
+     */
+    public float getPeakRotationRate() {
+        return peakRotationRate;
+    }
+
     public boolean getTripod(){
         return (tripodShakiness < 25) && PhotonCamera.getSettings().selectedMode == CameraMode.NIGHT;
     }
