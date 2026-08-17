@@ -96,14 +96,11 @@ public class GLInterface {
         StringBuilder source = new StringBuilder();
         int linecnt = 0;
         boolean versioned = false;
-        boolean needs310 = false;
         for (Object line : reader.lines().toArray()) {
             linecnt++;
             String val = String.valueOf(line);
             if(val.contains("#version"))
                 versioned = true;
-            if(val.contains("local_size_x") || val.contains("atomicAdd") || val.contains("image2D") || val.contains("imageLoad") || val.contains("imageStore"))
-                needs310 = true;
             if(val.contains("#import")){
                 String imported = "";
                 if(!val.contains("//")) {
@@ -135,11 +132,7 @@ public class GLInterface {
             }
             source.append(line).append("\n");
         }
-        String versionStr = glVersion;
-        if (needs310) {
-            versionStr = "#version 310 es\n";
-        }
-        String addVersion = versionStr + "\n" + "#line 1\n";
+        String addVersion = glVersion+"\n"+"#line 1\n";
         if(versioned) addVersion = "";
         return addVersion + source;
     }
