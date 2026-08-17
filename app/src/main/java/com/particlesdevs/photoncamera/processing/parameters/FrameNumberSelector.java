@@ -2,14 +2,21 @@ package com.particlesdevs.photoncamera.processing.parameters;
 
 import com.particlesdevs.photoncamera.api.CameraMode;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
+import com.particlesdevs.photoncamera.capture.CaptureController;
 
 
 public class FrameNumberSelector {
     public static int frameCount;
     public static int throwCount;
     public static int getFrames() {
-        double lightcycle = (Math.exp(1.3595 + 1.0020 * PhotonCamera.getCaptureController().mPreviewIso/IsoExpoSelector.getISOAnalog())) / 9;
-        double target = (Math.exp(1.3595 + 1.0020 * PhotonCamera.getCaptureController().mPreviewIso/IsoExpoSelector.getISOAnalog())) / 14;
+        return getFrames(PhotonCamera.getCaptureController());
+    }
+    public static int getFrames(CaptureController captureController) {
+        if (captureController == null) {
+            return PhotonCamera.getSettings().frameCount;
+        }
+        double lightcycle = (Math.exp(1.3595 + 1.0020 * captureController.mPreviewIso/IsoExpoSelector.getISOAnalog())) / 9;
+        double target = (Math.exp(1.3595 + 1.0020 * captureController.mPreviewIso/IsoExpoSelector.getISOAnalog())) / 14;
         int frames = PhotonCamera.getSettings().frameCount;
         lightcycle *= frames;
         target *= frames;

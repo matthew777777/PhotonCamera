@@ -101,7 +101,7 @@ class CaptureProcessor @Inject constructor(
         isZslCapturing = true
         CaptureController.burst = false
 
-        val frameCount = FrameNumberSelector.getFrames()
+        val frameCount = FrameNumberSelector.getFrames(controller)
         val cameraRotation = PhotonCamera.getGravity().getCameraRotation(sensorOrientation)
         val burstShakiness = ArrayList<GyroBurst>()
         val exposures = HashMap<Long, Double>()

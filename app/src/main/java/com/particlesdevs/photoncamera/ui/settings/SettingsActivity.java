@@ -659,6 +659,12 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
                     }
                 }
             }
+
+            if ("pref_lens_discovery".equals(preference.getKey())) {
+                Intent intent = new Intent(mContext, com.particlesdevs.photoncamera.ui.camera.LensDiscoveryActivity.class);
+                startActivity(intent);
+                return true;
+            }
             
             // Return false to allow default handling (like opening other subscreens)
             return super.onPreferenceTreeClick(preference);

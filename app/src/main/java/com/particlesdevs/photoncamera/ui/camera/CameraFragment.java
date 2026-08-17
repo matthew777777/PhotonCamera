@@ -564,20 +564,27 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         this.mCameraLensDataMap = manager2.getCameraLensDataMap();
         // Re-anchor sActiveBackCamId / sActiveFrontCamId to real cameras.
         // The static defaults ("0" / "1") may not exist on every device (e.g. devices
-        // whose camera IDs start at 1). After a full process restart there is no
-        // savedInstanceState to restore them, so we must derive them from the map here.
-        if (!mCameraLensDataMap.containsKey(sActiveBackCamId)) {
+        // whose camera IDs start at 1), or they might have different facing.
+        
+        // Validate sActiveBackCamId
+        CameraLensData backLens = mCameraLensDataMap.get(sActiveBackCamId);
+        if (backLens == null || backLens.getFacing() != CameraCharacteristics.LENS_FACING_BACK) {
             for (Map.Entry<String, CameraLensData> entry : mCameraLensDataMap.entrySet()) {
                 if (entry.getValue().getFacing() == CameraCharacteristics.LENS_FACING_BACK) {
                     sActiveBackCamId = entry.getKey();
+                    Log.d(TAG, "initCameraIDLists: updated sActiveBackCamId to " + sActiveBackCamId);
                     break;
                 }
             }
         }
-        if (!mCameraLensDataMap.containsKey(sActiveFrontCamId)) {
+
+        // Validate sActiveFrontCamId
+        CameraLensData frontLens = mCameraLensDataMap.get(sActiveFrontCamId);
+        if (frontLens == null || frontLens.getFacing() != CameraCharacteristics.LENS_FACING_FRONT) {
             for (Map.Entry<String, CameraLensData> entry : mCameraLensDataMap.entrySet()) {
                 if (entry.getValue().getFacing() == CameraCharacteristics.LENS_FACING_FRONT) {
                     sActiveFrontCamId = entry.getKey();
+                    Log.d(TAG, "initCameraIDLists: updated sActiveFrontCamId to " + sActiveFrontCamId);
                     break;
                 }
             }

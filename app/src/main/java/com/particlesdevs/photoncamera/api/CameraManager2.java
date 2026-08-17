@@ -14,6 +14,7 @@ import com.particlesdevs.photoncamera.settings.SettingsManager;
 import com.particlesdevs.photoncamera.ui.camera.data.CameraLensData;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -82,10 +83,45 @@ public final class CameraManager2 {
                     }
                     findLensZoomFactor(mCameraLensDataMap);
                 }
+                
                 //Override ID detection
                 save();
             } else {
                 loadFromSave(cameraManager,ids);
+            }
+            
+            // Add user-enabled hidden lenses from discovery tool (Always run to ensure new additions show up)
+            Set<String> userIds = mSettingsManager.getStringSet(SettingsManager.SCOPE_GLOBAL, "user_camera_ids", new HashSet<>());
+            if (userIds != null && !userIds.isEmpty()) {
+                boolean added = false;
+                for (String id : userIds) {
+                    if (!mCameraLensDataMap.containsKey(id)) {
+                        try {
+                            // Try loading characteristics for the full ID first (it might be a hidden logical or addressable physical ID)
+                            CameraCharacteristics cameraCharacteristics = null;
+                            try {
+                                cameraCharacteristics = cameraManager.getCameraCharacteristics(id);
+                            } catch (Exception e) {
+                                // If full ID fails, try splitting (legacy vendor formats)
+                                String physicalID = id;
+                                if (id.contains("-")) physicalID = id.split("-")[1];
+                                if (id.contains("/")) physicalID = id.split("/")[1];
+                                cameraCharacteristics = cameraManager.getCameraCharacteristics(physicalID);
+                            }
+
+                            if (cameraCharacteristics != null) {
+                                CameraLensData cameraLensData = createNewCameraLensData(id, cameraCharacteristics);
+                                mAllCameraIDsSet.add(id);
+                                mCameraLensDataMap.put(id, cameraLensData);
+                                added = true;
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+                if (added) {
+                    findLensZoomFactor(mCameraLensDataMap);
+                    save(); // Update cache with new lenses
+                }
             }
     }
     private void initExt(CameraManager cameraManager, String[] ids) {
@@ -218,20 +254,55 @@ public final class CameraManager2 {
      *
      * @param mCameraLensData Map of all valid CameraLensData objects
      */
-    private void findLensZoomFactor(Map<String, CameraLensData> mCameraLensData) {
+    void findLensZoomFactor(Map<String, CameraLensData> mCameraLensData) {
         CameraLensData mainBack = null;
         CameraLensData mainFront = null;
+
+        // First pass: Prefer standard IDs "0" for back and "1" for front as Main cameras
+        for (CameraLensData lens : mCameraLensData.values()) {
+            String id = lens.getCameraId();
+            // Standard back camera ID is "0"
+            if ((id.equals("0") || id.equals("0-0")) && lens.getFacing() == CameraCharacteristics.LENS_FACING_BACK) {
+                mainBack = lens;
+            }
+            // Standard front camera ID is "1"
+            if ((id.equals("1") || id.equals("0-1")) && lens.getFacing() == CameraCharacteristics.LENS_FACING_FRONT) {
+                mainFront = lens;
+            }
+        }
+
+        // Second pass: Use heuristics if standard IDs weren't found or don't match facing
+        if (mainBack == null) {
+            float minDiff = Float.MAX_VALUE;
+            for (CameraLensData lens : mCameraLensData.values()) {
+                if (lens.getFacing() == CameraCharacteristics.LENS_FACING_BACK) {
+                    // Main back cameras are usually around 24-26mm equivalent
+                    float diff = Math.abs(lens.getCamera35mmFocalLength() - 26f);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        mainBack = lens;
+                    }
+                }
+            }
+        }
+        if (mainFront == null) {
+            for (CameraLensData lens : mCameraLensData.values()) {
+                if (lens.getFacing() == CameraCharacteristics.LENS_FACING_FRONT) {
+                    mainFront = lens;
+                    break;
+                }
+            }
+        }
+
+        if (mainBack != null) Log.d(TAG, "Selected mainBack: " + mainBack.getCameraId());
+        if (mainFront != null) Log.d(TAG, "Selected mainFront: " + mainFront.getCameraId());
+
+        // Third pass: Calculate zoom factors relative to chosen main cameras
         for (Map.Entry<String, CameraLensData> entry : mCameraLensData.entrySet()) {
             CameraLensData cameraLensData = entry.getValue();
-            if (cameraLensData.getFacing() == CameraCharacteristics.LENS_FACING_FRONT) {
-                if (mainFront == null) {
-                    mainFront = cameraLensData;
-                }
+            if (cameraLensData.getFacing() == CameraCharacteristics.LENS_FACING_FRONT && mainFront != null) {
                 cameraLensData.setZoomFactor(cameraLensData.getCamera35mmFocalLength() / mainFront.getCamera35mmFocalLength());
-            } else if (cameraLensData.getFacing() == CameraCharacteristics.LENS_FACING_BACK) {
-                if (mainBack == null) {
-                    mainBack = cameraLensData;
-                }
+            } else if (cameraLensData.getFacing() == CameraCharacteristics.LENS_FACING_BACK && mainBack != null) {
                 cameraLensData.setZoomFactor(cameraLensData.getCamera35mmFocalLength() / mainBack.getCamera35mmFocalLength());
             }
         }

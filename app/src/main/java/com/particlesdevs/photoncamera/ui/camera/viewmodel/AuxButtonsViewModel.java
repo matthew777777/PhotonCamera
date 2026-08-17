@@ -24,15 +24,19 @@ import android.hardware.camera2.CameraCharacteristics;
 
 import androidx.lifecycle.ViewModel;
 
+import com.particlesdevs.photoncamera.settings.SettingsManager;
 import com.particlesdevs.photoncamera.ui.camera.CameraFragment;
 import com.particlesdevs.photoncamera.ui.camera.data.CameraLensData;
+import com.particlesdevs.photoncamera.util.Log;
 import com.particlesdevs.photoncamera.ui.camera.model.AuxButtonsModel;
 import com.particlesdevs.photoncamera.ui.camera.views.AuxButtonsLayout;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.inject.Inject;
 
@@ -43,10 +47,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel;
  */
 @HiltViewModel
 public class AuxButtonsViewModel extends ViewModel {
-    private static final Comparator<CameraLensData> SORT_BY_ZOOM_FACTOR = (o1, o2) -> -Double.compare(o1.getZoomFactor(), o2.getZoomFactor());
+    private static final String TAG = "AuxButtonsViewModel";
+    private static final Comparator<CameraLensData> SORT_BY_ZOOM_FACTOR = (o1, o2) -> Double.compare(o1.getZoomFactor(), o2.getZoomFactor());
     private final AuxButtonsModel auxButtonsModel = new AuxButtonsModel();
     private boolean initialized = false;
     private boolean isEnabled = true;
+
+    @Inject SettingsManager settingsManager;
 
     @Inject
     public AuxButtonsViewModel() {
@@ -56,7 +63,14 @@ public class AuxButtonsViewModel extends ViewModel {
         if (!initialized) {
             List<CameraLensData> frontCameras = new ArrayList<>();
             List<CameraLensData> backCameras = new ArrayList<>();
+            Set<String> hiddenIds = settingsManager.getStringSet(SettingsManager.SCOPE_GLOBAL, "hidden_camera_ids", new HashSet<>());
+            
             cameraLensDataMap.forEach((id, cameraLensData) -> {
+                Log.d(TAG, "initCameraLists: id=" + id + " facing=" + cameraLensData.getFacing() + " zoom=" + cameraLensData.getZoomFactor());
+                if (hiddenIds.contains(id)) {
+                    Log.d(TAG, "Skipping hidden lens: " + id);
+                    return;
+                }
                 if (cameraLensData.getFacing() == CameraCharacteristics.LENS_FACING_BACK)
                     backCameras.add(cameraLensData);
                 else if (cameraLensData.getFacing() == CameraCharacteristics.LENS_FACING_FRONT)
@@ -64,6 +78,8 @@ public class AuxButtonsViewModel extends ViewModel {
             });
             backCameras.sort(SORT_BY_ZOOM_FACTOR);
             frontCameras.sort(SORT_BY_ZOOM_FACTOR);
+            Log.d(TAG, "Back cameras: " + backCameras);
+            Log.d(TAG, "Front cameras: " + frontCameras);
             auxButtonsModel.setBackCameras(backCameras);
             auxButtonsModel.setFrontCameras(frontCameras);
             initialized = true;

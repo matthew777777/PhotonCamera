@@ -548,18 +548,28 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         try {
             String[] cameraIds = mCameraManager2.getCameraIdList();
             for (String cameraId : cameraIds) {
-                String physicalID = cameraId;
-                if(cameraId.contains("-")){
-                    physicalID = cameraId.split("-")[1];
+                String characteristicID = cameraId;
+                if (cameraId.contains("-")) {
+                    characteristicID = cameraId.split("-")[1];
+                } else if (cameraId.contains("/")) {
+                    characteristicID = cameraId.split("/")[1];
                 }
-                mCameraCharacteristicsMap.put(physicalID, mCameraManager.getCameraCharacteristics(physicalID));
+                
+                CameraCharacteristics characteristics;
+                try {
+                    characteristics = mCameraManager.getCameraCharacteristics(cameraId);
+                    mCameraCharacteristicsMap.put(cameraId, characteristics);
+                } catch (Exception e) {
+                    // Fallback to physical ID if full ID fails
+                    characteristics = mCameraManager.getCameraCharacteristics(characteristicID);
+                    mCameraCharacteristicsMap.put(cameraId, characteristics);
+                }
             }
         } catch (CameraAccessException cameraAccessException) {
             // Should not be possible to get here but anyway
             cameraAccessException.printStackTrace();
             showToast("Failed to fetch camera characteristics: " + cameraAccessException.getLocalizedMessage());
         }
-
     }
 
     public ManualModeConsole getManualModeConsole() {
@@ -1165,18 +1175,28 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             configureTransform(width, height);
             physicalID = PhotonCamera.getSettings().mCameraID;
             logicalID = PhotonCamera.getSettings().mCameraID;
-            // Split x-y, x - logical, y - physical
+            // Split x-y or x/y, x - logical, y - physical
             if(PhotonCamera.getSettings().mCameraID.contains("-")){
                 String[] ids = PhotonCamera.getSettings().mCameraID.split("-");
                 logicalID = ids[0];
                 physicalID = ids[1];
-                //isDualSession = true;
+            } else if(PhotonCamera.getSettings().mCameraID.contains("/")){
+                String[] ids = PhotonCamera.getSettings().mCameraID.split("/");
+                logicalID = ids[0];
+                physicalID = ids[1];
             }
             lifecycleManager.openCamera(activity, logicalID, mStateCallback);
         });
     }
     public void UpdateCameraCharacteristics(String cameraId) {
-        PhotonCamera.getSpecificSensor().selectSpecifics(Integer.parseInt(cameraId));
+        try {
+            String cleanId = cameraId;
+            if (cameraId.contains("-")) cleanId = cameraId.split("-")[1];
+            if (cameraId.contains("/")) cleanId = cameraId.split("/")[1];
+            PhotonCamera.getSpecificSensor().selectSpecifics(Integer.parseInt(cleanId));
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to select specifics for ID: " + cameraId);
+        }
         CameraCharacteristics characteristics = this.mCameraCharacteristicsMap.get(cameraId);
         mCameraCharacteristics = characteristics;
         //Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
@@ -1823,7 +1843,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             mCaptureResults = new ArrayList<>();
             SaverImplementation.IMAGE_BUFFER.clear();
 
-            int frameCount = FrameNumberSelector.getFrames();
+            int frameCount = FrameNumberSelector.getFrames(this);
             //if (frameCount == 1) frameCount++;
             cameraEventsListener.onFrameCountSet(frameCount);
             Log.d(TAG, "HDRFact1:" + paramController.isManualMode() + " HDRFact2:" + PhotonCamera.getSettings().alignAlgorithm);
