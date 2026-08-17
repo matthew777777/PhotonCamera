@@ -28,7 +28,7 @@ public class GLHistogram implements AutoCloseable{
     public float[] exposure = new float[4];
     public String CustomProgram = "";
     public String CustomShader = "";
-    public float input1, input2;
+    public float input1, input2, input3;
     public GLHistogram(int size) {
         this(new GLContext(1,1),size);
     }
@@ -95,6 +95,7 @@ public class GLHistogram implements AutoCloseable{
         glProg.setVar("exposure", exposure[0] * histMpy, exposure[1] * histMpy, exposure[2] * histMpy, exposure[3] * histMpy);
         glProg.setVar("input1", input1);
         glProg.setVar("input2", input2);
+        glProg.setVar("input3", input3);
         glProg.setBufferCompute("histogramRed",buffers[0]);
         glProg.setBufferCompute("histogramGreen",buffers[1]);
         glProg.setBufferCompute("histogramBlue",buffers[2]);

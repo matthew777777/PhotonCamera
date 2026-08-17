@@ -5,6 +5,7 @@ uniform sampler2D inTexture;
 uniform vec4 exposure;
 uniform float input1;
 uniform float input2;
+uniform float input3;
 #define COL_R 1
 #define COL_G 1
 #define COL_B 1
@@ -68,20 +69,21 @@ void main() {
     if (storePos.x < imgsize.x && storePos.y < imgsize.y) {
         vec4 texColor = texture(inTexture,(vec2(storePos) + 0.5)/vec2(imgsize));
         uvec4 texColorUint = clamp(uvec4(exposure * texColor), uvec4(0), uvec4(HISTSIZE - 1));
+        uint weight = 1u;
         #if COL_CUSTOM == 1
             CUSTOM_PROGRAM;
         #endif
         #if COL_R == 1
-        atomicAdd(localRed[texColorUint.r], 1u);
+        atomicAdd(localRed[texColorUint.r], weight);
         #endif
         #if COL_G == 1
-        atomicAdd(localGreen[texColorUint.g], 1u);
+        atomicAdd(localGreen[texColorUint.g], weight);
         #endif
         #if COL_B == 1
-        atomicAdd(localBlue[texColorUint.b], 1u);
+        atomicAdd(localBlue[texColorUint.b], weight);
         #endif
         #if COL_A == 1
-        atomicAdd(localAlpha[texColorUint.a], 1u);
+        atomicAdd(localAlpha[texColorUint.a], weight);
         #endif
     }
     barrier();

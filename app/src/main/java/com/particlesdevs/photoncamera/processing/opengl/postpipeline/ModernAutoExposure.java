@@ -26,6 +26,12 @@ public class ModernAutoExposure extends Node {
     @Tunable(title = "Exposure Smoothing", category = "Modern AE", min = 0.0f, max = 0.99f, defaultValue = 0.0f)
     float exposureSmoothing = 0.0f;
 
+    @Tunable(title = "Center Weight", category = "Modern AE", min = 0.0f, max = 5.0f, defaultValue = 2.0f)
+    float centerWeight = 2.0f;
+
+    @Tunable(title = "Dynamic Range Compression", category = "Modern AE", min = 0.0f, max = 1.0f, defaultValue = 0.5f)
+    float drCompression = 0.5f;
+
     private static float lastMpy = -1.0f;
 
     @Tunable(title = "EV Min", category = "Modern AE", min = -10.0f, max = 0.0f, defaultValue = -8.0f)
@@ -57,15 +63,20 @@ public class ModernAutoExposure extends Node {
         histogram.Bc = false;
         histogram.Ac = false;
 
-        // Custom program snippet for log-luminance indexing
+        // Custom program snippet for log-luminance indexing and spatial weighting
         histogram.CustomProgram = 
             "float lum = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));" +
             "float ev = log2(lum + 1e-6);" +
             "float normEv = (ev - input1) / (input2 - input1);" +
-            "texColorUint.r = uint(clamp(normEv * 255.0, 0.0, 255.0));";
+            "texColorUint.r = uint(clamp(normEv * 255.0, 0.0, 255.0));" +
+            "vec2 normPos = (vec2(storePos) / vec2(imgsize)) * 2.0 - 1.0;" +
+            "float dist = length(normPos);" +
+            "float w = exp(-dist * dist * 2.0);" +
+            "weight = uint(1.0 + w * input3 * 10.0);";
         
         histogram.input1 = evMin;
         histogram.input2 = evMax;
+        histogram.input3 = centerWeight;
 
         int[][] result = histogram.Compute(previousNode.WorkingTexture);
         int[] hist = result[0];
@@ -75,34 +86,39 @@ public class ModernAutoExposure extends Node {
         glProg.setDefine("CUSTOM_PROGRAM", "");
 
         // 2. Compute Statistics
-        int totalPixels = 0;
-        for (int count : hist) totalPixels += count;
+        long totalWeight = 0;
+        for (int count : hist) totalWeight += count;
 
-        if (totalPixels == 0) {
+        if (totalWeight == 0) {
             Log.e(TAG, "No pixels in histogram!");
             WorkingTexture = previousNode.WorkingTexture;
             return;
         }
 
-        float medianEv = getPercentileEv(hist, totalPixels, 0.5f);
-        float highEv = getPercentileEv(hist, totalPixels, highlightPercentile / 100.0f);
-        float shadowEv = getPercentileEv(hist, totalPixels, 0.01f);
+        float medianEv = getPercentileEv(hist, totalWeight, 0.5f);
+        float highEv = getPercentileEv(hist, totalWeight, highlightPercentile / 100.0f);
+        float shadowEv = getPercentileEv(hist, totalWeight, 0.01f);
 
         // Saturated percentage (pixels at the last bin)
-        float saturatedPercent = (float) hist[hist.length - 1] / (float) totalPixels * 100.0f;
+        float saturatedPercent = (float) hist[hist.length - 1] / (float) totalWeight * 100.0f;
 
         Log.d(TAG, String.format(java.util.Locale.US,
-              "Stats - Total: %d, Median EV: %.2f, Highlight EV: %.2f, Shadow EV: %.2f, Saturated: %.2f%%",
-              totalPixels, medianEv, highEv, shadowEv, saturatedPercent));
+              "Stats - TotalWeight: %d, Median EV: %.2f, Highlight EV: %.2f, Shadow EV: %.2f, Saturated: %.2f%%",
+              totalWeight, medianEv, highEv, shadowEv, saturatedPercent));
 
         // 3. Estimate Exposure Multiplier
+        float contrast = highEv - shadowEv;
+        float drFactor = Math.max(0.0f, Math.min(1.0f, (contrast - 4.0f) / 6.0f));
+        float dynamicTarget = targetMidtone * (1.0f - drCompression * drFactor);
+        
         float medianLum = (float) Math.pow(2.0, medianEv);
-        float mpy = targetMidtone / (medianLum + 1e-6f);
+        float mpy = dynamicTarget / (medianLum + 1e-6f);
 
         // Highlight Headroom
         float highLum = (float) Math.pow(2.0, highEv);
         float headroom = highlightLimit / (highLum * mpy + 1e-6f);
-        Log.d(TAG, String.format(java.util.Locale.US, "Highlight Headroom: %.2f stops", Math.log(headroom)/Math.log(2.0)));
+        Log.d(TAG, String.format(java.util.Locale.US, "DR Factor: %.2f, Dynamic Target: %.4f, Highlight Headroom: %.2f stops", 
+              drFactor, dynamicTarget, Math.log(headroom)/Math.log(2.0)));
 
         // Highlight Protection
         if (highLum * mpy > highlightLimit) {
@@ -133,9 +149,9 @@ public class ModernAutoExposure extends Node {
         glProg.closed = true;
     }
 
-    private float getPercentileEv(int[] hist, int totalPixels, float percentile) {
-        int threshold = (int) (totalPixels * percentile);
-        int count = 0;
+    private float getPercentileEv(int[] hist, long totalPixels, float percentile) {
+        long threshold = (long) (totalPixels * percentile);
+        long count = 0;
         for (int i = 0; i < hist.length; i++) {
             count += hist[i];
             if (count >= threshold) {
