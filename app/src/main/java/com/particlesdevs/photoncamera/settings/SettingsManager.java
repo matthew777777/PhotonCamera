@@ -126,6 +126,13 @@ public class SettingsManager {
         return value ? "1" : "0";
     }
 
+    public Set<String> getStringSet(String scope, String key, Set<String> def) {
+        return getPreferencesFromScope(scope).getStringSet(key, def);
+    }
+    public void set(String scope, String key, Set<String> value) {
+        getPreferencesFromScope(scope).edit().putStringSet(key, value).apply();
+    }
+
     /**
      * Get the SettingsManager's default preferences.  This is useful
      * to third party modules as they are defining their upgrade paths,

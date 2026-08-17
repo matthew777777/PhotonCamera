@@ -301,20 +301,20 @@ public class HdrxProcessor extends ProcessorBase {
         catch (Exception e){
             Log.d(TAG,"Error in processingEventsListener.onProcessingFinished:"+Log.getStackTraceString(e));
         }
-        imageFile = Paths.get(imageFile.toAbsolutePath() + ".jpg");
+        // Use a local path variable to avoid re-assigning the member field
+                Path finalJpgPath = Paths.get(imageFile.toAbsolutePath() + ".jpg");
         //Saves the final bitmap
-        boolean imageSaved = ImageSaver.Util.saveBitmapAsJPG(imageFile, img,
+        boolean imageSaved = ImageSaver.Util.saveBitmapAsJPG(finalJpgPath, img,
                 ImageSaver.JPG_QUALITY, exifData);
 
         try {
-            processingEventsListener.notifyImageSavedStatus(imageSaved, imageFile);
+            processingEventsListener.notifyImageSavedStatus(imageSaved, finalJpgPath);
         }
         catch (Exception e){
             Log.d(TAG,"Error in processingEventsListener.notifyImageSavedStatus:"+Log.getStackTraceString(e));
         }
 
         pipeline.close();
-
 
         Allocator.getMemoryCount();
         callback.onFinished();

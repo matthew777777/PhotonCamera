@@ -157,6 +157,10 @@
         <activity
             android:name="com.particlesdevs.photoncamera.ui.camera.CameraActivity"
             android:configChanges="orientation|keyboardHidden|screenSize" />
+        <activity
+            android:name="com.particlesdevs.photoncamera.ui.camera.LensDiscoveryActivity"
+            android:theme="@style/Theme.Photon.SettingsActivity"
+            android:label="@string/lens_discovery_title" />
         <!-- <activity android:name="com.particlesdevs.photoncamera.gallery.ui.GalleryActivity" /> -->
 
         <provider

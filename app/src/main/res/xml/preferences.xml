@@ -454,6 +454,13 @@
             android:title="@string/pref_category_device_key_title">
         <Preference
                 android:layout="@layout/preference_with_margin"
+                android:key="pref_lens_discovery"
+                android:title="@string/lens_discovery"
+                android:summary="@string/lens_discovery_summary"
+                android:icon="@drawable/ic_multi_lens"
+                android:persistent="false" />
+        <Preference
+                android:layout="@layout/preference_with_margin"
                 android:key="@string/pref_fetch_configurations_key"
                 android:title="@string/fetch_configurations"
                 android:summary="@string/fetch_configurations_summary"

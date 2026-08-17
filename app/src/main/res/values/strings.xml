@@ -118,6 +118,15 @@
     <string name="sensor_configurations">Sensor Configurations</string>
     <string name="sensor_configurations_summary">Per-sensor tuning parameters (physical camera id)</string>
     <string name="pref_category_device_key_title">Device</string>
+    <string name="lens_discovery" translatable="false">Lens Discovery</string>
+    <string name="lens_discovery_summary" translatable="false">Search for hidden physical and logical lens IDs</string>
+    <string name="lens_discovery_title" translatable="false">Lens Discovery Tool</string>
+    <string name="lens_discovery_scanning" translatable="false">Scanning for lenses…</string>
+    <string name="lens_discovery_found_count" translatable="false">Found %1$d lenses</string>
+    <string name="lens_discovery_add_to_switcher" translatable="false">Enable</string>
+    <string name="lens_discovery_added" translatable="false">Lens %1$s enabled. Restart app to see changes.</string>
+    <string name="lens_discovery_already_added" translatable="false">Lens %1$s is already enabled.</string>
+    <string name="user_camera_ids" translatable="false">user_camera_ids</string>
     <string name="this_device">Your Device - %1$s</string>
     <string name="sync_on">Sync. On</string>
     <string name="sync_off">Sync. Off</string>
