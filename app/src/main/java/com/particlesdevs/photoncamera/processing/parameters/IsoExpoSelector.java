@@ -142,7 +142,7 @@ public class IsoExpoSelector {
             }
         }
 
-        double dynamicFactor = getDynamicScalingFactor();
+        double dynamicFactor = getDynamicScalingFactor(captureController);
         capStart = (long) (capStart * dynamicFactor);
         capEnd = (long) (capEnd * dynamicFactor);
 
@@ -318,7 +318,7 @@ public class IsoExpoSelector {
         }
     }
 
-    private static double getDynamicScalingFactor() {
+    private static double getDynamicScalingFactor(CaptureController captureController) {
         // 1. Focal Length Scaling
         double focalLength35mm = 24.0;
         CameraCharacteristics characteristics = CaptureController.mCameraCharacteristics;
@@ -333,16 +333,18 @@ public class IsoExpoSelector {
 
         // Digital zoom factor
         float zoom = 1.0f;
-        CaptureResult result = PhotonCamera.getCaptureController().getMPreviewCaptureResult();
-        if (result != null) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                Float zoomRatio = result.get(CaptureResult.CONTROL_ZOOM_RATIO);
-                if (zoomRatio != null) zoom = zoomRatio;
-            } else {
-                Rect crop = result.get(CaptureResult.SCALER_CROP_REGION);
-                Rect activeArray = characteristics != null ? characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) : null;
-                if (crop != null && activeArray != null && crop.width() > 0) {
-                    zoom = (float) activeArray.width() / crop.width();
+        if (captureController != null) {
+            CaptureResult result = captureController.getMPreviewCaptureResult();
+            if (result != null) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    Float zoomRatio = result.get(CaptureResult.CONTROL_ZOOM_RATIO);
+                    if (zoomRatio != null) zoom = zoomRatio;
+                } else {
+                    Rect crop = result.get(CaptureResult.SCALER_CROP_REGION);
+                    Rect activeArray = characteristics != null ? characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) : null;
+                    if (crop != null && activeArray != null && crop.width() > 0) {
+                        zoom = (float) activeArray.width() / crop.width();
+                    }
                 }
             }
         }
