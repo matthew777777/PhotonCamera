@@ -337,8 +337,18 @@ public class SensorConfigPreferenceGenerator {
     }
 
     private static void addPreference(Context context, PreferenceCategory category, String sensorId, TunableFieldInfo info) {
+        // Skip OIS configuration for sensors that do not physically support hardware OIS
+        if ("oisMode".equalsIgnoreCase(info.fieldName) && !isOisSupported(context, sensorId)) {
+            return;
+        }
+
         SensorConfig annotation = info.annotation;
         String prefKey = "pref_sensorconfig_" + sensorId + "_" + info.fieldName.toLowerCase();
+
+        if (annotation.entries().length > 0 && annotation.entryValues().length > 0) {
+            addListPreference(context, category, prefKey, info);
+            return;
+        }
 
         if (annotation.step() == 0f) {
             addFreeTextPreference(context, category, prefKey, info);
@@ -420,6 +430,59 @@ public class SensorConfigPreferenceGenerator {
         });
 
         category.addPreference(editText);
+    }
+
+    /**
+     * Creates a ListPreference (dropdown/dialog list) when the annotation provides entries and entryValues.
+     */
+    private static void addListPreference(Context context, PreferenceCategory category, String prefKey, TunableFieldInfo info) {
+        SensorConfig annotation = info.annotation;
+        ListPreference listPref = new ListPreference(context);
+        listPref.setKey(prefKey);
+        listPref.setTitle(annotation.title());
+        listPref.setDialogTitle(annotation.title());
+
+        listPref.setEntries(annotation.entries());
+        listPref.setEntryValues(annotation.entryValues());
+
+        // Resolve default value from annotation defaultValue
+        String defaultValue = annotation.entryValues()[0];
+        if (annotation.defaultValue() != -999999f) {
+            float def = annotation.defaultValue();
+            for (String val : annotation.entryValues()) {
+                try {
+                    if (Float.parseFloat(val) == def) {
+                        defaultValue = val;
+                        break;
+                    }
+                } catch (NumberFormatException ignored) {
+                    if (val.equals(String.valueOf(def))) {
+                        defaultValue = val;
+                        break;
+                    }
+                }
+            }
+        }
+        listPref.setDefaultValue(defaultValue);
+        listPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+
+        category.addPreference(listPref);
+    }
+
+    /**
+     * Checks if the physical camera sensor supports hardware Optical Image Stabilization (OIS).
+     */
+    private static boolean isOisSupported(Context context, String sensorId) {
+        try {
+            android.hardware.camera2.CameraManager manager = (android.hardware.camera2.CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+            if (manager != null) {
+                android.hardware.camera2.CameraCharacteristics chars = manager.getCameraCharacteristics(sensorId);
+                int[] modes = chars.get(android.hardware.camera2.CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
+                return modes != null && modes.length > 1;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     private static String formatDefault(float defaultValue, Class<?> fieldType) {

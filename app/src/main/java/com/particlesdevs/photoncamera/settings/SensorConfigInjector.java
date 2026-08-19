@@ -57,15 +57,16 @@ public class SensorConfigInjector {
                 float step = annotation.step();
                 boolean isStoredAsFloat = (step != Math.floor(step));
                 boolean isFreeText = (step == 0f);
-                String freeText = isFreeText
+                boolean isList = (annotation.entries().length > 0 && annotation.entryValues().length > 0);
+                String stringValue = (isFreeText || isList)
                         ? SettingsManagerExtensions.getString(settingsManager, SCOPE_GLOBAL, prefKey, null)
                         : null;
 
                 Class<?> fieldType = field.getType();
                 if (fieldType == float.class || fieldType == Float.class) {
                     float value;
-                    if (isFreeText) {
-                        value = (freeText == null || freeText.trim().isEmpty()) ? annotationDefault : Float.parseFloat(freeText);
+                    if (isFreeText || isList) {
+                        value = (stringValue == null || stringValue.trim().isEmpty()) ? annotationDefault : Float.parseFloat(stringValue);
                     } else if (isStoredAsFloat) {
                         value = SettingsManagerExtensions.getFloat(settingsManager, SCOPE_GLOBAL, prefKey, annotationDefault);
                     } else {
@@ -75,8 +76,8 @@ public class SensorConfigInjector {
                     Log.d(TAG, "Injected " + sensorKey + " = " + value);
                 } else if (fieldType == int.class || fieldType == Integer.class) {
                     int value;
-                    if (isFreeText) {
-                        value = (freeText == null || freeText.trim().isEmpty()) ? (int) annotationDefault : Integer.parseInt(freeText);
+                    if (isFreeText || isList) {
+                        value = (stringValue == null || stringValue.trim().isEmpty()) ? (int) annotationDefault : Integer.parseInt(stringValue);
                     } else {
                         value = SettingsManagerExtensions.getInteger(settingsManager, SCOPE_GLOBAL, prefKey, (int) annotationDefault);
                     }
@@ -84,8 +85,8 @@ public class SensorConfigInjector {
                     Log.d(TAG, "Injected " + sensorKey + " = " + value);
                 } else if (fieldType == double.class || fieldType == Double.class) {
                     double value;
-                    if (isFreeText) {
-                        value = (freeText == null || freeText.trim().isEmpty()) ? annotationDefault : Double.parseDouble(freeText);
+                    if (isFreeText || isList) {
+                        value = (stringValue == null || stringValue.trim().isEmpty()) ? annotationDefault : Double.parseDouble(stringValue);
                     } else if (isStoredAsFloat) {
                         value = (double) SettingsManagerExtensions.getFloat(settingsManager, SCOPE_GLOBAL, prefKey, annotationDefault);
                     } else {
@@ -96,18 +97,18 @@ public class SensorConfigInjector {
                 } else if (fieldType == boolean.class || fieldType == Boolean.class) {
                     boolean defVal = (annotationDefault != 0.0f);
                     boolean value;
-                    if (isFreeText) {
-                        value = freeText == null || freeText.trim().isEmpty()
+                    if (isFreeText || isList) {
+                        value = stringValue == null || stringValue.trim().isEmpty()
                                 ? defVal
-                                : (Boolean.parseBoolean(freeText) || freeText.equals("1"));
+                                : (Boolean.parseBoolean(stringValue) || stringValue.equals("1"));
                     } else {
                         value = SettingsManagerExtensions.getBoolean(settingsManager, SCOPE_GLOBAL, prefKey, defVal);
                     }
                     field.setBoolean(target, value);
                     Log.d(TAG, "Injected " + sensorKey + " = " + value);
-                } else if (fieldType == String.class && isFreeText) {
-                    String value = (freeText == null || freeText.trim().isEmpty())
-                            ? String.valueOf((int) annotationDefault) : freeText;
+                } else if (fieldType == String.class && (isFreeText || isList)) {
+                    String value = (stringValue == null || stringValue.trim().isEmpty())
+                            ? String.valueOf((int) annotationDefault) : stringValue;
                     field.set(target, value);
                     Log.d(TAG, "Injected " + sensorKey + " = " + value);
                 } else {

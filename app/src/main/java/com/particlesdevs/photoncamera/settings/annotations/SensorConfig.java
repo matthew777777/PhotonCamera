@@ -56,11 +56,22 @@ public @interface SensorConfig {
      */
     float defaultValue() default -999999f;
 
-    /**
+/**
      * Step size for seekbar (for numeric types)
      * If step has decimals (e.g. 0.01), it's treated as float
      * If step is whole number (e.g. 1.0), it's treated as integer
      * If step is 0, the setting is edited as a plain text input without a slider
      */
     float step() default 1.0f;
+
+    /**
+     * Optional human-readable labels for ListPreference dialog options.
+     * If both entries and entryValues are provided, a ListPreference is generated.
+     */
+    String[] entries() default {};
+
+    /**
+     * Values corresponding to entries for ListPreference.
+     */
+    String[] entryValues() default {};
 }

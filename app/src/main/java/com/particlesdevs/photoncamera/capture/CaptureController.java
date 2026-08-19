@@ -224,6 +224,34 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             defaultValue = 0, min = 0, max = 65535, step = 0,
             description = "Camera capture session type (0 = regular)")
     public int sessionType = 0;
+
+    @SensorConfig(
+            title = "OIS Mode",
+            description = "Controls optical stabilization. Auto mode disables OIS on a tripod and in Unlimited to prevent drift",
+            entries = {"On", "Auto", "Off"},
+            entryValues = {"0", "1", "2"},
+            defaultValue = 0
+    )
+    public int oisMode = 0;
+
+    @SensorConfig(
+            title = "Exposure Balance",
+            description = "Shift balance between shutter speed and ISO. Photo and Night modes only",
+            entries = {"0.25x", "0.35x", "0.50x", "0.71x", "1.00x", "1.41x", "2.00x", "2.83x", "4.00x"},
+            entryValues = {"0.25", "0.35", "0.50", "0.71", "1.00", "1.41", "2.00", "2.83", "4.00"},
+            defaultValue = 1.0f
+    )
+    public float exposureBalanceMultiplier = 1.0f;
+
+    @SensorConfig(
+            title = "Exposure Balance ISO Limit",
+            description = "Limit the maximum sensitivity allowed when shifting exposure balance",
+            entries = {"400", "800", "1600", "3200", "6400", "12800", "Max Analog ISO", "Sensor Max ISO"},
+            entryValues = {"400", "800", "1600", "3200", "6400", "12800", "-2", "-1"},
+            defaultValue = -2
+    )
+    public int exposureBalanceIsoLimit = -2;
+
     private static int mTargetFormat = RAW_FORMAT;
     private ManualModeConsole manualModeConsole;
     private final ParamController paramController;
@@ -1557,6 +1585,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                 Log.d(TAG, "Failed to set LENS_SHADING_MAP_MODE_ON for ZSL mode:" + Log.getStackTraceString(e));
                             }
                         //}
+                        
+                        // Apply dynamic OIS for preview stream
+                        applyOisMode(mPreviewRequestBuilder, false);
+
                         // Finally, we start displaying the camera preview.
                         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
                                 getSelectedFpsRange());
@@ -2025,6 +2057,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (null == mCameraDevice) {
                 return;
             }
+            SensorConfigInjector.applyToSensor(physicalID, this);
             if (isZslMode()) {
                 triggerZslCapture();
                 return;
@@ -2060,12 +2093,13 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (mFlashed) captureBuilder.set(FLASH_MODE, FLASH_MODE_TORCH);
             Log.d(TAG, "Focus:" + focus);
             captureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL);
+           
             int[] stabilizationModes = mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
             if (stabilizationModes != null && stabilizationModes.length > 1) {
                 Log.d(TAG, "LENS_OPTICAL_STABILIZATION_MODE");
-//                captureBuilder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);//Fix ois bugs for preview and burst
-                captureBuilder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON);//Fix ois bugs for preview and burst
+                applyOisMode(captureBuilder, true);//Fix ois bugs for preview and burst
             }
+
             for (int i = 0; i < 3; i++) {
                 Log.d(TAG, "Temperature:" + mPreviewTemp[i]);
             }
@@ -2663,6 +2697,42 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                     (long) rhs.getWidth() * rhs.getHeight());
         }
 
+    }
+
+    /**
+     * Dynamically applies Optical Image Stabilization (OIS) configuration to a CaptureRequest.
+     * Respects user preference (Default/Smart/Off) and physical hardware limitations.
+     *
+     * @param builder        the builder for which to configure OIS
+     * @param isStillCapture true if configuring a still capture request, false for preview stream
+     */
+    private void applyOisMode(CaptureRequest.Builder builder, boolean isStillCapture) {
+        int[] stabilizationModes = mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
+        if (stabilizationModes != null && stabilizationModes.length > 1) {
+            int oisMode = this.oisMode;
+            if (oisMode == 2) {
+                // Always Off
+                builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
+            } else if (oisMode == 1) {
+                // Smart Auto
+                boolean isTripod = PhotonCamera.getGyro() != null && PhotonCamera.getGyro().getTripod();
+                CameraMode mode = PhotonCamera.getSettings().selectedMode;
+                boolean isContinuousCapture = (mode == CameraMode.UNLIMITED);
+
+                if (isTripod || isContinuousCapture) {
+                    builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
+                } else {
+                    builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON);
+                }
+            } else {
+                // Default: Maintain 100% identical behavior with the original code.
+                // For still captures, we explicitly force OIS ON.
+                // For preview/video streams, we do NOT set the OIS key, letting the HAL default handle it.
+                if (isStillCapture) {
+                    builder.set(CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE, CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON);
+                }
+            }
+        }
     }
 
     public static class CameraProperties {
