@@ -113,7 +113,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 sampleTex = new GLTexture(sampleSize, sampleSize, new GLFormat(GLFormat.DataType.SIMPLE_8, 4));
                 sampleFbo = new int[1];
                 GLES30.glGenFramebuffers(1, sampleFbo, 0);
-                glHistogram = new GLHistogram(new GLProg(), sampleSize);
+                glHistogram = new GLHistogram(new GLProg(), 256);
             }
 
             // Save current GL state
@@ -174,6 +174,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int vTexCoord;
     private int enablePeak;
     private int mirror;
+    private int resolution;
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {

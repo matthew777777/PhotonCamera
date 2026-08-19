@@ -24,6 +24,7 @@ import android.hardware.camera2.CameraCharacteristics;
 
 import androidx.lifecycle.ViewModel;
 
+import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.settings.SettingsManager;
 import com.particlesdevs.photoncamera.ui.camera.CameraFragment;
 import com.particlesdevs.photoncamera.ui.camera.data.CameraLensData;
@@ -48,10 +49,10 @@ public class AuxButtonsViewModel extends ViewModel {
     private boolean initialized = false;
     private boolean isEnabled = true;
 
-    @Inject SettingsManager settingsManager;
+    private final SettingsManager settingsManager;
 
-    @Inject
     public AuxButtonsViewModel() {
+        settingsManager = PhotonCamera.getSettingsManagerStatic();
     }
 
     public void initCameraLists(Map<String, CameraLensData> cameraLensDataMap) {

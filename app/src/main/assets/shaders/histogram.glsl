@@ -16,25 +16,29 @@ uniform float input2;
 #define HISTSTEPS uint(HISTSIZE/64)
 
 #if COL_R == 1
-layout(std430, binding = 1) buffer histogramRed {
+layout(std430, binding = 1) buffer histogramRed
+{
     uint reds[];
 };
 shared uint localRed[HISTSIZE];
 #endif
 #if COL_G == 1
-layout(std430, binding = 2) buffer histogramGreen {
+layout(std430, binding = 2) buffer histogramGreen
+{
     uint greens[];
 };
 shared uint localGreen[HISTSIZE];
 #endif
 #if COL_B == 1
-layout(std430, binding = 3) buffer histogramBlue {
+layout(std430, binding = 3) buffer histogramBlue
+{
     uint blues[];
 };
 shared uint localBlue[HISTSIZE];
 #endif
 #if COL_A == 1
-layout(std430, binding = 4) buffer histogramAlpha {
+layout(std430, binding = 4) buffer histogramAlpha
+{
     uint alphas[];
 };
 shared uint localAlpha[HISTSIZE];

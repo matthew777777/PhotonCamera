@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.particlesdevs.photoncamera.R;
+import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.settings.SettingsManager;
 import com.particlesdevs.photoncamera.util.Log;
@@ -30,13 +31,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import javax.inject.Inject;
-
-import dagger.hilt.android.AndroidEntryPoint;
-
-@AndroidEntryPoint
 public class LensDiscoveryActivity extends AppCompatActivity {
-    @Inject SettingsManager settingsManager;
+    private SettingsManager settingsManager;
     private static final String TAG = "LensDiscovery";
     private ProgressBar progressBar;
     private TextView foundCountText;
@@ -47,6 +43,13 @@ public class LensDiscoveryActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_lens_discovery);
+        
+        settingsManager = PhotonCamera.getSettingsManagerStatic();
+        if (settingsManager == null) {
+            Toast.makeText(this, "Camera initialization failed", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);

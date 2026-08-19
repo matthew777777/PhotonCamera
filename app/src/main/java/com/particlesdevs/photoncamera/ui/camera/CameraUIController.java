@@ -267,9 +267,9 @@ final class CameraUIController implements CameraUIEventsListener,
                         PreferenceKeys.setShowHistogram(value.equals(1));
                         cameraFragment.invalidateSurfaceView();
                         break;
-                    case AE_METERING:
-                        PreferenceKeys.setAeMetering((Integer) value);
-                        cameraFragment.captureController.applyAeMetering();
+                    case AE_METERING_STD:
+                        PreferenceKeys.setAeMeteringStd((Integer) value);
+                        cameraFragment.captureController.applyAeMeteringStd();
                         break;
                     case SAVE_EACH_BRACKET:
                         PreferenceKeys.setSaveEachBracket(value.equals(1));
@@ -277,10 +277,6 @@ final class CameraUIController implements CameraUIEventsListener,
                         if (value.equals(1) && PreferenceKeys.isSaveRaw() != 2) {
                             PhotonCamera.showToast(R.string.use_with_raw_only_warning);
                         }
-                        break;
-                    case HISTOGRAM:
-                        PreferenceKeys.setShowHistogram(value.equals(1));
-                        cameraFragment.invalidateSurfaceView();
                         break;
 
                 }

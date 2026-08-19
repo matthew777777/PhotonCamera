@@ -47,7 +47,6 @@ public class SettingsBarEntryProvider extends ViewModel {
     private final SettingsBarEntryModel bracketingEntry = SettingsBarEntryModel.newEntry(R.id.bracketing_entry_layout, R.string.exposure_bracketing, SettingType.BRACKETING);
     private final SettingsBarEntryModel saveEachBracketEntry = SettingsBarEntryModel.newEntry(R.id.save_each_bracket_entry_layout, R.string.save_each_bracket, SettingType.SAVE_EACH_BRACKET);
     private final SettingsBarEntryModel histogramEntry = SettingsBarEntryModel.newEntry(R.id.histogram_entry_layout, R.string.histogram, SettingType.HISTOGRAM);
-    private final SettingsBarEntryModel aeMeteringEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_entry_layout, R.string.ae_metering, SettingType.AE_METERING);
     private final SettingsBarEntryModel aeMeteringStdEntry = SettingsBarEntryModel.newEntry(R.id.ae_metering_std_entry_layout, R.string.ae_metering_std, SettingType.AE_METERING_STD);
     private final List<SettingsBarEntryModel> allEntries = new ArrayList<>(8);
 
@@ -64,7 +63,6 @@ public class SettingsBarEntryProvider extends ViewModel {
         allEntries.add(bracketingEntry);
         allEntries.add(saveEachBracketEntry);
         allEntries.add(histogramEntry);
-        allEntries.add(aeMeteringEntry);
         allEntries.add(aeMeteringStdEntry);
     }
 
@@ -81,7 +79,6 @@ public class SettingsBarEntryProvider extends ViewModel {
         createBracketingEntry();
         createSaveEachBracketEntry();
         createHistogramEntry();
-        createAeMeteringEntry();
         createAeMeteringStdEntry();
         updateAllEntries();
     }
@@ -99,7 +96,6 @@ public class SettingsBarEntryProvider extends ViewModel {
         updateEntry(bracketingEntry, PreferenceKeys.getBracketingMode());
         updateEntry(saveEachBracketEntry, PreferenceKeys.isSaveEachBracketOn());
         updateEntry(histogramEntry, PreferenceKeys.isShowHistogramOn());
-        updateEntry(aeMeteringEntry, PreferenceKeys.getAeMetering());
         updateEntry(aeMeteringStdEntry, PreferenceKeys.getAeMeteringStd());
     }
 
@@ -208,21 +204,12 @@ public class SettingsBarEntryProvider extends ViewModel {
         );
     }
 
-    private void createAeMeteringEntry() {
-        aeMeteringEntry.addSettingsBarButtonModels(
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_off_button, R.drawable.ic_exposure, R.string.ae_metering_off, -1, aeMeteringEntry),
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_center_button, R.drawable.ic_exposure, R.string.ae_metering_center, 0, aeMeteringEntry),
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_average_button, R.drawable.ic_exposure, R.string.ae_metering_average, 1, aeMeteringEntry),
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_spot_button, R.drawable.ic_exposure, R.string.ae_metering_spot, 2, aeMeteringEntry)
-        );
-    }
-
     private void createAeMeteringStdEntry() {
         aeMeteringStdEntry.addSettingsBarButtonModels(
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_off_button, R.drawable.ic_exposure, R.string.ae_metering_off, -1, aeMeteringStdEntry),
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_center_button, R.drawable.ic_exposure, R.string.ae_metering_center, 0, aeMeteringStdEntry),
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_average_button, R.drawable.ic_exposure, R.string.ae_metering_average, 1, aeMeteringStdEntry),
-                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_spot_button, R.drawable.ic_exposure, R.string.ae_metering_spot, 2, aeMeteringStdEntry)
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_off_button, R.drawable.ic_exposure, R.string.ae_metering_std_off, -1, aeMeteringStdEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_center_button, R.drawable.ic_exposure, R.string.ae_metering_std_center, 0, aeMeteringStdEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_average_button, R.drawable.ic_exposure, R.string.ae_metering_std_average, 1, aeMeteringStdEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.ae_metering_std_spot_button, R.drawable.ic_exposure, R.string.ae_metering_std_spot, 2, aeMeteringStdEntry)
         );
     }
 

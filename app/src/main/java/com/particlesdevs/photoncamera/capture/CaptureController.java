@@ -1547,7 +1547,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                         //mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
                         // Flash is automatically enabled when necessary.
                         resetPreviewAEMode();
-                        applyAeMeteringRegions(mPreviewRequestBuilder);
+                        applyAeMeteringStdRegions(mPreviewRequestBuilder);
                         Camera2ApiAutoFix.applyPrev(mPreviewRequestBuilder);
                         VendorTagUtils.builderSessionApply(mPreviewRequestBuilder, false, useMaximumResolutionKey, physicalID);
                         //if(isZslMode()){
@@ -1790,7 +1790,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
             cameraEventsListener.onCaptureStillPictureStarted("CaptureStarted!");
             mMeasuredFrameCnt = 0;
-            applyAeMeteringRegions(builder);
+            applyAeMeteringStdRegions(builder);
             mImageSaver.implementation = new DebugSender(cameraEventsListener);
 
             cameraEventsListener.onBurstPrepared(null);
@@ -2077,7 +2077,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 captureBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AE_REGIONS));
                 captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AF_REGIONS));
             } else {
-                applyAeMeteringRegions(captureBuilder);
+                applyAeMeteringStdRegions(captureBuilder);
             }
             VendorTagUtils.builderSessionApply(captureBuilder, true, useMaximumResolutionKey, physicalID);
             try {
@@ -2371,17 +2371,17 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         rebuildPreviewBuilder();
     }
 
-    public void applyAeMetering() {
+    public void applyAeMeteringStd() {
         if (mPreviewRequestBuilder == null) return;
-        applyAeMeteringRegions(mPreviewRequestBuilder);
+        applyAeMeteringStdRegions(mPreviewRequestBuilder);
         VendorTagUtils.builderSessionApply(mPreviewRequestBuilder, false, useMaximumResolutionKey, physicalID);
         rebuildPreviewBuilder();
     }
 
-    private void applyAeMeteringRegions(CaptureRequest.Builder builder) {
+    private void applyAeMeteringStdRegions(CaptureRequest.Builder builder) {
         int mode = PreferenceKeys.getAeMeteringStd();
-        Log.d(TAG, "applyAeMeteringRegions mode:" + mode);
-        MeteringRectangle[] rectangles = getAEMeteringRectangles(mode);
+        Log.d(TAG, "applyAeMeteringStdRegions mode:" + mode);
+        MeteringRectangle[] rectangles = getAEMeteringStdRectangles(mode);
         if (mode == -1) {
             rectangles = mInitialMeteringAE;
         }
@@ -2394,7 +2394,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         }
     }
 
-    private MeteringRectangle[] getAEMeteringRectangles(int mode) {
+    private MeteringRectangle[] getAEMeteringStdRectangles(int mode) {
         Rect activeArray = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
         if (activeArray == null) return null;
 

@@ -17,6 +17,7 @@ import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 import com.particlesdevs.photoncamera.processing.parameters.ResolutionSolution;
 import com.particlesdevs.photoncamera.processing.render.NoiseModeler;
 import com.particlesdevs.photoncamera.processing.render.Parameters;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.Allocator;
 

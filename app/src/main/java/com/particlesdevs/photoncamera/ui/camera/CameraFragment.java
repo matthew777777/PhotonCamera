@@ -98,6 +98,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Future;
 
 public class CameraFragment extends Fragment implements BaseActivity.BackPressedListener {
@@ -150,6 +151,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     private ManualModeConsole manualModeConsole;
     public float displayAspectRatio;
     private HorizonIndicatorView mHorizonIndicatorView;
+    private final AtomicBoolean histogramProcessing = new AtomicBoolean(false);
 
     public CameraFragment() {
         Log.v(TAG, "fragment created");
