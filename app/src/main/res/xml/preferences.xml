@@ -90,7 +90,7 @@
                 android:key="@string/pref_peak_method_key"
                 app:useSimpleSummaryProvider="true"
                 android:title="@string/focus_peaking"
-                android:icon="@drawable/ic_saturation"
+                android:icon="@drawable/ic_focus"
                 android:entries="@array/focuspeakset_entries"
                 android:entryValues="@array/focuspeakset_entryValues"
                 android:defaultValue="2"
