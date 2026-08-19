@@ -294,7 +294,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
                 surfaceView.post(() -> {
                     surfaceView.setHistogramData(histData);
                     surfaceView.setRotation(cameraFragmentViewModel.getCameraFragmentModel().getOrientation());
-                    surfaceView.refresh();
+                    surfaceView.refresh(true); // Low frequency update
                     histogramProcessing.set(false);
                 });
             }
@@ -486,8 +486,13 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
                 surfaceView.setDebugText(Logger.createTextFrom(stringMap));
                 surfaceView.refresh();
             } else {
-                if (surfaceView.isCanvasDrawn) {
-                    surfaceView.clear();
+                if (surfaceView.hasDebugInfo()) {
+                    surfaceView.setAFRect(null);
+                    surfaceView.setAERect(null);
+                    surfaceView.setDebugText(null);
+                    surfaceView.refresh(true); // Sync both buffers once to clear
+                } else if (result.getFrameNumber() % 60 == 0) {
+                    surfaceView.refresh(true); // Keep grid/histogram stable
                 }
             }
         });

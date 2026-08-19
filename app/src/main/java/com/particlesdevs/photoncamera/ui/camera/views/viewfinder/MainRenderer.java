@@ -146,6 +146,14 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             glHistogram.Ac = false; // We don't need alpha histogram
             int[][] data = glHistogram.Compute(sampleTex);
 
+            // Create a deep copy to prevent race conditions with UI thread
+            int[][] deepCopy = new int[data.length][];
+            for (int i = 0; i < data.length; i++) {
+                if (data[i] != null) {
+                    deepCopy[i] = data[i].clone();
+                }
+            }
+
             // Restore GL state
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, oldFbo[0]);
             GLES20.glViewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
@@ -162,7 +170,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
             GLES20.glActiveTexture(oldActiveTex[0]);
 
-            histogramCallback.onHistogramUpdate(data);
+            histogramCallback.onHistogramUpdate(deepCopy);
         } catch (Exception e) {
             Log.e("MainRenderer", "Histogram update failed: " + e.getMessage());
             e.printStackTrace();
@@ -178,6 +186,14 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        sampleTex = null;
+        if (sampleFbo != null) {
+            GLES30.glDeleteFramebuffers(1, sampleFbo, 0);
+            sampleFbo = null;
+        }
+        glHistogram = null;
+        frameCount = 0;
+
         initTex();
         mSTexture = new SurfaceTexture(hTex[0]);
         mSTexture.setOnFrameAvailableListener(this);

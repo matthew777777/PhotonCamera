@@ -16,7 +16,7 @@ public class GLHistogram implements AutoCloseable{
     GLProg glProg;
     GLBuffer[] buffers = new GLBuffer[4];
     int histSize;
-    public int[][] outputArr = new int[4][histSize];
+    public int[][] outputArr;
     GLFormat histFormat = new GLFormat(GLFormat.DataType.UNSIGNED_32);
     private boolean externalContext = false;
     public boolean Rc = true;
@@ -46,6 +46,7 @@ public class GLHistogram implements AutoCloseable{
         for (int i = 0; i < 4; i++) {
             exposure[i] = 1.0f;
         }
+        outputArr = new int[4][histSize];
 
         buffers[0] = new GLBuffer(histSize,histFormat);
         buffers[1] = new GLBuffer(histSize,histFormat);
@@ -59,6 +60,7 @@ public class GLHistogram implements AutoCloseable{
         for (int i = 0; i < 4; i++) {
             exposure[i] = 1.0f;
         }
+        outputArr = new int[4][histSize];
         buffers[0] = new GLBuffer(histSize,histFormat);
         buffers[1] = new GLBuffer(histSize,histFormat);
         buffers[2] = new GLBuffer(histSize,histFormat);
@@ -100,14 +102,26 @@ public class GLHistogram implements AutoCloseable{
         glProg.setBufferCompute("histogramBlue",buffers[2]);
         glProg.setBufferCompute("histogramAlpha",buffers[3]);
         glProg.computeAuto(new Point(input.mSize.x/resize, input.mSize.y/resize), 1);
-        if (Rc)
-            outputArr[0] = buffers[0].readBufferIntegers(true);
-        if (Gc)
-            outputArr[1] = buffers[1].readBufferIntegers(true);
-        if (Bc)
-            outputArr[2] = buffers[2].readBufferIntegers(true);
-        if (Ac)
-            outputArr[3] = buffers[3].readBufferIntegers(true);
+        if (Rc) {
+            int[] res = buffers[0].readBufferIntegers(true);
+            if (res != null) outputArr[0] = res;
+            else outputArr[0] = new int[histSize];
+        }
+        if (Gc) {
+            int[] res = buffers[1].readBufferIntegers(true);
+            if (res != null) outputArr[1] = res;
+            else outputArr[1] = new int[histSize];
+        }
+        if (Bc) {
+            int[] res = buffers[2].readBufferIntegers(true);
+            if (res != null) outputArr[2] = res;
+            else outputArr[2] = new int[histSize];
+        }
+        if (Ac) {
+            int[] res = buffers[3].readBufferIntegers(true);
+            if (res != null) outputArr[3] = res;
+            else outputArr[3] = new int[histSize];
+        }
         Log.d("GLHistogram"," elapsed:"+(System.currentTimeMillis()-time)+" ms");
         return outputArr;
     }

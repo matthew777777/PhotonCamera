@@ -84,6 +84,7 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
         float maxVal = 0;
         // Ignore the very first and last bins as they often have spikes (pure black/white)
         for (int i = 0; i < 3; i++) {
+            if (histogramData[i] == null) continue;
             for (int j = 1; j < histogramData[i].length - 1; j++) {
                 if (histogramData[i][j] > maxVal) maxVal = histogramData[i][j];
             }
@@ -92,6 +93,7 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
         if (maxVal > 0) {
             histogramPaint.setXfermode(porterDuffXfermode);
             for (int i = 0; i < 3; i++) {
+                if (histogramData[i] == null) continue;
                 if (i == 0) {
                     histogramPaint.setARGB(0xFF, 0xFF, 0x07, 0x00);
                 } else if (i == 1) {
@@ -214,13 +216,41 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
         this.rotationDegrees = degrees;
     }
 
+    public boolean hasDebugInfo() {
+        return (afRectToDraw != null && !afRectToDraw.isEmpty()) ||
+                (aeRectToDraw != null && !aeRectToDraw.isEmpty()) ||
+                debugText != null;
+    }
+
     public void refresh() {
+        refresh(false);
+    }
+
+    public void refresh(boolean lowFrequency) {
+        if (!shouldDraw()) {
+            if (isCanvasDrawn) clear();
+            return;
+        }
         drawOnCanvas(mHolder);
+        if (lowFrequency) {
+            drawOnCanvas(mHolder); // Draw second time to sync double buffer for low-rate updates
+        }
+    }
+
+    private boolean shouldDraw() {
+        return PreferenceKeys.isShowHistogramOn() ||
+                PreferenceKeys.getGridValue() != 0 ||
+                PreferenceKeys.isAfDataOn() ||
+                PreferenceKeys.isRoundEdgeOn() ||
+                (afRectToDraw != null && !afRectToDraw.isEmpty()) ||
+                (aeRectToDraw != null && !aeRectToDraw.isEmpty()) ||
+                debugText != null;
     }
 
     private void drawOnCanvas(SurfaceHolder surfaceHolder) {
+        Canvas canvas = null;
         try {
-            Canvas canvas = surfaceHolder.lockHardwareCanvas();
+            canvas = surfaceHolder.lockHardwareCanvas();
             if (canvas == null) {
                 Log.e(TAG, "Canvas is null");
             } else {
@@ -231,11 +261,18 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
                 drawAFRect(canvas);
                 drawAERect(canvas);
                 drawAFDebugText(canvas);
-                surfaceHolder.unlockCanvasAndPost(canvas);
                 isCanvasDrawn = true;
             }
         } catch (Exception e) {
             e.printStackTrace();
+        } finally {
+            if (canvas != null) {
+                try {
+                    surfaceHolder.unlockCanvasAndPost(canvas);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
@@ -243,15 +280,9 @@ public class SurfaceViewOverViewfinder extends SurfaceView {
         afRectToDraw = null;
         aeRectToDraw = null;
         debugText = null;
-        // Don't nullify histogramData here to prevent flickering
+        // Don't nullify histogramData here to allow it to fade out or be replaced
         try {
             Canvas canvas = mHolder.lockHardwareCanvas();
-            if (canvas != null) {
-                canvas.drawColor(0, PorterDuff.Mode.CLEAR);
-                mHolder.unlockCanvasAndPost(canvas);
-            }
-            // Clear twice to handle double buffering
-            canvas = mHolder.lockHardwareCanvas();
             if (canvas != null) {
                 canvas.drawColor(0, PorterDuff.Mode.CLEAR);
                 mHolder.unlockCanvasAndPost(canvas);
