@@ -278,6 +278,10 @@ final class CameraUIController implements CameraUIEventsListener,
                             PhotonCamera.showToast(R.string.use_with_raw_only_warning);
                         }
                         break;
+                    case HISTOGRAM:
+                        PreferenceKeys.setShowHistogram(value.equals(1));
+                        cameraFragment.invalidateSurfaceView();
+                        break;
 
                 }
                 cameraFragment.cameraFragmentBinding.layoutTopbar.invalidateAll();

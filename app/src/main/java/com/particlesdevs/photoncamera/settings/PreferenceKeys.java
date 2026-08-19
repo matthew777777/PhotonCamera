@@ -38,6 +38,7 @@ public class PreferenceKeys {
         COMMON_KEYS.add(Key.KEY_SHOW_GRID.mValue);
         COMMON_KEYS.add(Key.KEY_SHOW_WATERMARK.mValue);
         COMMON_KEYS.add(Key.KEY_SHOW_ROUND_EDGE.mValue);
+        COMMON_KEYS.add(Key.KEY_SHOW_HISTOGRAM.mValue);
         COMMON_KEYS.add(Key.KEY_CAMERA_SOUNDS.mValue);
         COMMON_KEYS.add(Key.KEY_SHOW_GRADIENT.mValue);
         COMMON_KEYS.add(Key.KEY_AF_MODE.mValue);
@@ -250,6 +251,14 @@ public class PreferenceKeys {
 
     public static boolean isRoundEdgeOn() {
         return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_SHOW_ROUND_EDGE);
+    }
+
+    public static boolean isShowHistogramOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_SHOW_HISTOGRAM);
+    }
+
+    public static void setShowHistogram(boolean value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_SHOW_HISTOGRAM, value);
     }
 
     public static int getGridValue() {
@@ -472,6 +481,7 @@ public class PreferenceKeys {
         KEY_ENHANCED_PROCESSING(R.string.pref_enhanced_processing_key),
         KEY_HDRX_NR(R.string.pref_hdrx_nr_key),
         KEY_SHOW_ROUND_EDGE(R.string.pref_show_roundedge_key),
+        KEY_SHOW_HISTOGRAM(R.string.pref_show_histogram_key),
         KEY_SHOW_GRID(R.string.pref_show_grid_key),
         KEY_CAMERA_SOUNDS(R.string.pref_camera_sounds_key),
         KEY_CHROMA_NR_SEEKBAR(R.string.pref_chroma_nr_seekbar_key),
