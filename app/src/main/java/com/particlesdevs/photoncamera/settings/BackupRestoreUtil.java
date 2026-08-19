@@ -304,7 +304,7 @@ public class BackupRestoreUtil {
     }
     
     /**
-     * Helper method to put JSON values into SharedPreferences Editor
+     * Helper method to put JSON values into SharedPreferences Editor with type safety
      */
     private static void putJsonValueToEditor(SharedPreferences.Editor editor, String key, com.google.gson.JsonElement value) {
         if (value.isJsonPrimitive()) {
@@ -324,7 +324,22 @@ public class BackupRestoreUtil {
                     }
                 }
             } else {
-                editor.putString(key, primitive.getAsString());
+                String strValue = primitive.getAsString();
+                // Sanitize legacy/corrupted string numbers for tunable and sensor seekbars
+                if (key.startsWith("pref_tunable_") || key.startsWith("pref_sensorconfig_")) {
+                    try {
+                        if (strValue.contains(".")) {
+                            editor.putFloat(key, Float.parseFloat(strValue));
+                            return;
+                        } else {
+                            editor.putInt(key, Integer.parseInt(strValue));
+                            return;
+                        }
+                    } catch (NumberFormatException ignored) {
+                        // Fallback to string if it is a non-numeric string or free text
+                    }
+                }
+                editor.putString(key, strValue);
             }
         } else if (value.isJsonArray()) {
             // Handle string sets

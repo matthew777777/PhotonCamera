@@ -82,13 +82,8 @@ public class TunableSeekBarPreference extends Preference implements SeekBar.OnSe
             seekBar.setMax((int) ((mMax - mMin) * mStepPerUnit));
             seekBar.setOnSeekBarChangeListener(this);
             
-            // Get persisted value as appropriate type
-            float currentValue;
-            if (isFloat) {
-                currentValue = getPersistedFloat(mDefaultValue);
-            } else {
-                currentValue = (float) getPersistedInt((int) mDefaultValue);
-            }
+            // Get persisted value as appropriate type with auto-healing
+            float currentValue = getSafePersistedValue();
             
             // Update UI only - don't persist again!
             seekBarProgress = valueToProgress(currentValue);
@@ -248,12 +243,8 @@ public class TunableSeekBarPreference extends Preference implements SeekBar.OnSe
             currentValue = mDefaultValue;
             Log.d(TAG, "First init - using default (NOT persisting yet): " + mDefaultValue);
         } else {
-            // Load existing persisted value
-            if (isFloat) {
-                currentValue = getPersistedFloat(mDefaultValue);
-            } else {
-                currentValue = (float) getPersistedInt((int) mDefaultValue);
-            }
+            // Load existing persisted value with auto-healing
+            currentValue = getSafePersistedValue();
             Log.d(TAG, "Loading persisted: " + currentValue);
         }
         
@@ -384,7 +375,39 @@ public class TunableSeekBarPreference extends Preference implements SeekBar.OnSe
     }
 
     public float getFloatValue() {
-        return isFloat ? getPersistedFloat(mDefaultValue) : (float) getPersistedInt((int) mDefaultValue);
+        return getSafePersistedValue();
+    }
+
+    /**
+     * Safely reads the persisted value with auto-healing capability.
+     * Catches ClassCastException when corrupted/legacy string values exist in SharedPreferences,
+     * converts them to the correct numeric type, repairs storage, and prevents crashes.
+     */
+    private float getSafePersistedValue() {
+        SharedPreferences prefs = getPreferenceManager() != null ? getPreferenceManager().getSharedPreferences() : null;
+        if (prefs == null || !prefs.contains(getKey())) {
+            return mDefaultValue;
+        }
+        try {
+            return isFloat ? getPersistedFloat(mDefaultValue) : (float) getPersistedInt((int) mDefaultValue);
+        } catch (ClassCastException e) {
+            Log.w(TAG, "Type mismatch for " + getKey() + ", healing corrupted preference: " + e.getMessage());
+            try {
+                String strVal = prefs.getString(getKey(), String.valueOf(mDefaultValue));
+                float parsed = Float.parseFloat(strVal);
+                // Heal: remove string, persist proper primitive type
+                prefs.edit().remove(getKey()).apply();
+                if (isFloat) {
+                    persistFloat(parsed);
+                } else {
+                    persistInt((int) parsed);
+                }
+                return parsed;
+            } catch (Exception parseException) {
+                Log.e(TAG, "Failed to parse corrupted value for " + getKey() + ", resetting to default", parseException);
+                prefs.edit().remove(getKey()).apply();
+                return mDefaultValue;
+            }
+        }
     }
 }
-
