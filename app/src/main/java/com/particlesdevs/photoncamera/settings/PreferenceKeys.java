@@ -42,6 +42,7 @@ public class PreferenceKeys {
         COMMON_KEYS.add(Key.KEY_CAMERA_SOUNDS.mValue);
         COMMON_KEYS.add(Key.KEY_SHOW_GRADIENT.mValue);
         COMMON_KEYS.add(Key.KEY_AF_MODE.mValue);
+        COMMON_KEYS.add(Key.KEY_FOCUS_PEAK.mValue);
         COMMON_KEYS.add(Key.KEY_AE_MODE.mValue);
         COMMON_KEYS.add(Key.CAMERA_MODE.mValue);
         COMMON_KEYS.add(Key.KEY_SAVE_RAW.mValue);

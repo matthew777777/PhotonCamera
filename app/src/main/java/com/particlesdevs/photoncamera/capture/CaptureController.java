@@ -241,7 +241,17 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     @SensorConfig(
             title = "Exposure Balance",
             description = "Shift balance between shutter speed and ISO. Photo and Night modes only",
-            entries = {"0.25x", "0.35x", "0.50x", "0.71x", "1.00x", "1.41x", "2.00x", "2.83x", "4.00x"},
+            entries = {
+                    "0.25x (Max SNR Bias)",
+                    "0.35x (High SNR Bias)",
+                    "0.50x (Medium SNR Bias)",
+                    "0.71x (Slight SNR Bias)",
+                    "1.00x (Balanced / Default)",
+                    "1.41x (Slight Speed Bias)",
+                    "2.00x (Medium Speed Bias)",
+                    "2.83x (High Speed Bias)",
+                    "4.00x (Max Speed Bias)"
+            },
             entryValues = {"0.25", "0.35", "0.50", "0.71", "1.00", "1.41", "2.00", "2.83", "4.00"},
             defaultValue = 1.0f
     )

@@ -85,6 +85,16 @@
                 android:entries="@array/af_mode_entries"
                 android:entryValues="@array/af_mode_entryvalues"
                 android:defaultValue="@string/pref_af_mode_default_value"/>
+        <ListPreference
+                android:layout="@layout/preference_with_margin"
+                android:key="@string/pref_peak_method_key"
+                app:useSimpleSummaryProvider="true"
+                android:title="@string/focus_peaking"
+                android:icon="@drawable/ic_saturation"
+                android:entries="@array/focuspeakset_entries"
+                android:entryValues="@array/focuspeakset_entryValues"
+                android:defaultValue="2"
+                />
 
         <com.particlesdevs.photoncamera.ui.settings.custompreferences.ManagedSwitchPreference
                 android:key="@string/pref_show_afdata_key"
@@ -455,16 +465,6 @@
                 android:entryValues="@array/colorset_entryValues"
                 android:defaultValue="@string/pref_align_method_default"
 
-                />
-        <ListPreference
-                android:layout="@layout/preference_with_margin"
-                android:key="@string/pref_peak_method_key"
-                app:useSimpleSummaryProvider="true"
-                android:title="@string/focus_peaking"
-                android:icon="@drawable/ic_saturation"
-                android:entries="@array/focuspeakset_entries"
-                android:entryValues="@array/focuspeakset_entryValues"
-                android:defaultValue="@string/pref_focus_peak_default"
                 />
         <com.particlesdevs.photoncamera.ui.settings.custompreferences.ManagedSwitchPreference
                 android:layout="@layout/preference_with_margin"

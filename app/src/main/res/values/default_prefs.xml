@@ -69,7 +69,7 @@
     <string name="pref_noise_merge_seekbar_default" translatable="false">0.0</string>
     <string name="pref_compressor_seekbar_default" translatable="false">0.0</string>
     <string name="pref_align_method_default" translatable="false">1</string>
-    <string name="pref_focus_peak_default" translatable="false">0</string>
+    <string name="pref_focus_peak_default" translatable="false">2</string>
     <string name="pref_color_method_default" translatable="false">0</string>
     <string name="pref_preview_format_default" translatable="false">0</string>
     <string name="pref_cfa_default_value" translatable="false">-1</string>
