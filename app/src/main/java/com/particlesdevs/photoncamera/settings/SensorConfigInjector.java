@@ -1,100 +1,120 @@
 package com.particlesdevs.photoncamera.settings;
 
 import com.particlesdevs.photoncamera.app.PhotonCamera;
+import com.particlesdevs.photoncamera.processing.render.SpecificSettingSensor;
 import com.particlesdevs.photoncamera.settings.annotations.SensorConfig;
 import com.particlesdevs.photoncamera.util.Log;
 
 import java.lang.reflect.Field;
 
+import static com.particlesdevs.photoncamera.settings.SettingsManager.SCOPE_GLOBAL;
+
 /**
- * Runtime injector for @SensorConfig annotated fields.
- * Scoped by sensor ID.
+ * Runtime injector for {@code @SensorConfig} annotated fields.
+ * Reads per-sensor values from SharedPreferences and applies them to a
+ * {@link SpecificSettingSensor} instance, so tuning works per physical camera id.
  */
 public class SensorConfigInjector {
     private static final String TAG = "SensorConfigInjector";
 
+    private SensorConfigInjector() {}
+
+    /**
+     * Apply sensor config overrides for a given physical sensor id to the target object.
+     *
+     * @param sensorId physical camera id (e.g. "0", "1", "2")
+     * @param target   the object whose {@code @SensorConfig} fields will be updated
+     */
     public static void applyToSensor(String sensorId, Object target) {
-        if (target == null) {
-            Log.w(TAG, "Target is null, cannot inject");
+        if (target == null || sensorId == null || sensorId.isEmpty()) {
+            Log.w(TAG, "Target or sensorId is null, cannot inject");
             return;
         }
 
-        Class<?> clazz = target.getClass();
         SettingsManager settingsManager = PhotonCamera.getSettingsManagerStatic();
         if (settingsManager == null) {
             Log.w(TAG, "SettingsManager is null, cannot inject");
             return;
         }
 
+        Class<?> clazz = target.getClass();
+        String className = clazz.getSimpleName();
+
         for (Field field : clazz.getDeclaredFields()) {
-            if (field.isAnnotationPresent(SensorConfig.class)) {
-                SensorConfig annotation = field.getAnnotation(SensorConfig.class);
-                if (annotation == null) continue;
+            if (!field.isAnnotationPresent(SensorConfig.class)) continue;
+            SensorConfig annotation = field.getAnnotation(SensorConfig.class);
+            if (annotation == null) continue;
 
-                field.setAccessible(true);
-                // Key format: pref_sensorconfig_<sensorId>_<fieldName>
-                String prefKey = "pref_sensorconfig_" + sensorId + "_" + field.getName().toLowerCase();
+            field.setAccessible(true);
+            String prefKey = "pref_sensorconfig_" + sensorId + "_" + field.getName().toLowerCase();
+            String sensorKey = className + "." + field.getName() + " [" + sensorId + "]";
 
-                try {
-                    Class<?> fieldType = field.getType();
-                    float annotationDefault = annotation.defaultValue();
-                    float step = annotation.step();
-                    boolean isStoredAsFloat = (step != Math.floor(step));
-                    boolean isFreeText = (step == 0f);
-
-                    String freeText = isFreeText
-                            ? SettingsManagerExtensions.getString(settingsManager, PreferenceKeys.SCOPE_GLOBAL, prefKey, null)
-                            : null;
-
-                    if (fieldType == float.class || fieldType == Float.class) {
-                        float def = (annotationDefault == -999999f) ? field.getFloat(target) : annotationDefault;
-                        float value;
-                        if (isFreeText) {
-                            value = (freeText == null || freeText.trim().isEmpty()) ? def : Float.parseFloat(freeText);
-                        } else if (isStoredAsFloat) {
-                            value = SettingsManagerExtensions.getFloat(settingsManager,
-                                    PreferenceKeys.SCOPE_GLOBAL, prefKey, def);
-                        } else {
-                            value = (float) SettingsManagerExtensions.getInteger(settingsManager,
-                                    PreferenceKeys.SCOPE_GLOBAL, prefKey, (int) def);
-                        }
-                        field.setFloat(target, value);
-                        //Log.d(TAG, "Injected " + prefKey + " = " + value);
-
-                    } else if (fieldType == int.class || fieldType == Integer.class) {
-                        int def = (annotationDefault == -999999f) ? field.getInt(target) : (int) annotationDefault;
-                        int value;
-                        if (isFreeText) {
-                            value = (freeText == null || freeText.trim().isEmpty()) ? def : Integer.parseInt(freeText);
-                        } else {
-                            value = SettingsManagerExtensions.getInteger(settingsManager,
-                                    PreferenceKeys.SCOPE_GLOBAL, prefKey, def);
-                        }
-                        field.setInt(target, value);
-                        //Log.d(TAG, "Injected " + prefKey + " = " + value);
-
-                    } else if (fieldType == double.class || fieldType == Double.class) {
-                        double def = (annotationDefault == -999999f) ? field.getDouble(target) : (double) annotationDefault;
-                        double value;
-                        if (isFreeText) {
-                            value = (freeText == null || freeText.trim().isEmpty()) ? def : Double.parseDouble(freeText);
-                        } else if (isStoredAsFloat) {
-                            value = (double) SettingsManagerExtensions.getFloat(settingsManager,
-                                    PreferenceKeys.SCOPE_GLOBAL, prefKey, (float) def);
-                        } else {
-                            value = (double) SettingsManagerExtensions.getInteger(settingsManager,
-                                    PreferenceKeys.SCOPE_GLOBAL, prefKey, (int) def);
-                        }
-                        field.setDouble(target, value);
-                    } else {
-                        Log.w(TAG, "Unsupported type for field: " + field.getName() + " (" + fieldType + ")");
-                    }
-
-                } catch (IllegalAccessException e) {
-                    Log.e(TAG, "Failed to inject field: " + field.getName(), e);
-                } catch (Exception e) {
-                    Log.e(TAG, "Error injecting field: " + field.getName(), e);
+            try {
+                float annotationDefault = annotation.defaultValue();
+                if (annotationDefault == -999999f) {
+                    annotationDefault = annotation.min();
                 }
+                float step = annotation.step();
+                boolean isStoredAsFloat = (step != Math.floor(step));
+                boolean isFreeText = (step == 0f);
+                String freeText = isFreeText
+                        ? SettingsManagerExtensions.getString(settingsManager, SCOPE_GLOBAL, prefKey, null)
+                        : null;
+
+                Class<?> fieldType = field.getType();
+                if (fieldType == float.class || fieldType == Float.class) {
+                    float value;
+                    if (isFreeText) {
+                        value = (freeText == null || freeText.trim().isEmpty()) ? annotationDefault : Float.parseFloat(freeText);
+                    } else if (isStoredAsFloat) {
+                        value = SettingsManagerExtensions.getFloat(settingsManager, SCOPE_GLOBAL, prefKey, annotationDefault);
+                    } else {
+                        value = (float) SettingsManagerExtensions.getInteger(settingsManager, SCOPE_GLOBAL, prefKey, (int) annotationDefault);
+                    }
+                    field.setFloat(target, value);
+                    Log.d(TAG, "Injected " + sensorKey + " = " + value);
+                } else if (fieldType == int.class || fieldType == Integer.class) {
+                    int value;
+                    if (isFreeText) {
+                        value = (freeText == null || freeText.trim().isEmpty()) ? (int) annotationDefault : Integer.parseInt(freeText);
+                    } else {
+                        value = SettingsManagerExtensions.getInteger(settingsManager, SCOPE_GLOBAL, prefKey, (int) annotationDefault);
+                    }
+                    field.setInt(target, value);
+                    Log.d(TAG, "Injected " + sensorKey + " = " + value);
+                } else if (fieldType == double.class || fieldType == Double.class) {
+                    double value;
+                    if (isFreeText) {
+                        value = (freeText == null || freeText.trim().isEmpty()) ? annotationDefault : Double.parseDouble(freeText);
+                    } else if (isStoredAsFloat) {
+                        value = (double) SettingsManagerExtensions.getFloat(settingsManager, SCOPE_GLOBAL, prefKey, annotationDefault);
+                    } else {
+                        value = (double) SettingsManagerExtensions.getInteger(settingsManager, SCOPE_GLOBAL, prefKey, (int) annotationDefault);
+                    }
+                    field.setDouble(target, value);
+                    Log.d(TAG, "Injected " + sensorKey + " = " + value);
+                } else if (fieldType == boolean.class || fieldType == Boolean.class) {
+                    boolean defVal = (annotationDefault != 0.0f);
+                    boolean value;
+                    if (isFreeText) {
+                        value = freeText == null || freeText.trim().isEmpty()
+                                ? defVal
+                                : (Boolean.parseBoolean(freeText) || freeText.equals("1"));
+                    } else {
+                        value = SettingsManagerExtensions.getBoolean(settingsManager, SCOPE_GLOBAL, prefKey, defVal);
+                    }
+                    field.setBoolean(target, value);
+                    Log.d(TAG, "Injected " + sensorKey + " = " + value);
+                } else if (fieldType == String.class && isFreeText) {
+                    String value = (freeText == null || freeText.trim().isEmpty())
+                            ? String.valueOf((int) annotationDefault) : freeText;
+                    field.set(target, value);
+                    Log.d(TAG, "Injected " + sensorKey + " = " + value);
+                } else {
+                    Log.w(TAG, "Unsupported type for field: " + field.getName() + " (" + fieldType + ")");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to inject field: " + field.getName(), e);
             }
         }
     }
