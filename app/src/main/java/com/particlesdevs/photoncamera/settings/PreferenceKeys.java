@@ -75,6 +75,11 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD, -1); // Default to Off
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SAVE_EACH_BRACKET, false);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, resources.getString(R.string.pref_video_resolution_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_ENCODER, 2); // H.264 (MediaRecorder.VideoEncoder.H264)
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_BIT_DEPTH, 8);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_BITRATE_MODE, 0); // Auto
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_NR_MODE, 0); // Off
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_EDGE_MODE, 0); // Off
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_DOWNSCALE_4X, false);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_WRITE_ZIP, true);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_CROP_169, true);
@@ -461,6 +466,26 @@ public class PreferenceKeys {
         return preferenceKeys.settingsManager.getString(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, "1920x1080");
     }
 
+    public static int getVideoEncoder() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_VIDEO_ENCODER, 2);
+    }
+
+    public static int getVideoBitDepth() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_VIDEO_BIT_DEPTH, 8);
+    }
+
+    public static int getVideoBitrateMode() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_VIDEO_BITRATE_MODE, 0);
+    }
+
+    public static int getVideoNRMode() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_VIDEO_NR_MODE, 0);
+    }
+
+    public static int getVideoEdgeMode() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_VIDEO_EDGE_MODE, 0);
+    }
+
     public static void setVideoResolution(String value) {
         preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, value);
     }
@@ -526,6 +551,11 @@ public class PreferenceKeys {
          */
         KEY_PREVIEW_RESOLUTION(R.string.pref_preview_resolution_key),////TODO add preview resolution selector
         KEY_VIDEO_RESOLUTION(R.string.pref_video_resolution_key),
+        KEY_VIDEO_ENCODER(R.string.pref_video_encoder_key),
+        KEY_VIDEO_BIT_DEPTH(R.string.pref_video_bit_depth_key),
+        KEY_VIDEO_BITRATE_MODE(R.string.pref_video_bitrate_mode_key),
+        KEY_VIDEO_NR_MODE(R.string.pref_video_nr_mode_key),
+        KEY_VIDEO_EDGE_MODE(R.string.pref_video_edge_mode_key),
         KEY_RAWVIDEO_DOWNSCALE_4X(R.string.pref_rawvideo_downscale_4x_key),
         KEY_RAWVIDEO_WRITE_ZIP(R.string.pref_rawvideo_write_zip_key),
         KEY_RAWVIDEO_CROP_169(R.string.pref_rawvideo_crop_169_key),
