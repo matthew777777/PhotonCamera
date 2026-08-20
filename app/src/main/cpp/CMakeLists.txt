@@ -7,6 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# Force 16 KB page alignment for Android 15+ compatibility
+add_link_options("-Wl,-z,max-page-size=16384")
+
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../../../version.properties ver)
 string(REGEX MATCH "VERSION_BUILD=([0-9]*)" _ ${ver})
 set(VERSION_BUILD ${CMAKE_MATCH_1})

@@ -3,6 +3,7 @@ apply plugin: 'kotlin-android'
 //apply plugin: "io.github.wurensen.android-aspectjx"
 Properties versionProps = new Properties()
 android {
+    ndkVersion "28.2.13676358"
     signingConfigs {
         debug {
             storeFile file('../key/PcamLeak.jks')
@@ -47,6 +48,11 @@ android {
         ndk {
             //noinspection ChromeOsAbiSupport
             abiFilters "arm64-v8a", "armeabi-v7a"
+        }
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
         }
         versionName '0.97'
         versionProps['VERSION_NAME'] = versionName
