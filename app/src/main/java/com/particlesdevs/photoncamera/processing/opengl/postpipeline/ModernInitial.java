@@ -1,8 +1,5 @@
 package com.particlesdevs.photoncamera.processing.opengl.postpipeline;
 
-import android.graphics.Point;
-import com.particlesdevs.photoncamera.processing.opengl.GLFormat;
-import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
 import com.particlesdevs.photoncamera.processing.render.ColorCorrectionTransform;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
@@ -43,13 +40,6 @@ public class ModernInitial extends Node {
     }
 
     @Override
-    public void AfterRun() {
-        if (GainMapTex != null) GainMapTex.close();
-    }
-
-    private GLTexture GainMapTex;
-
-    @Override
     public void Run() {
         // Use modern exposure compensation from settings if not overridden by tunable
         float compensation = PreferenceKeys.getModernExposureCompensation();
@@ -67,26 +57,34 @@ public class ModernInitial extends Node {
             intermediateToSRGB = basePipeline.mParameters.CCT.matrix;
         }
 
-        // Safety check: Ensure matrices are not all zeros
-        if (sensorToIntermediate == null || sensorToIntermediate[0] == 0 && sensorToIntermediate[4] == 0) {
+        // Safety check: fall back to identity if matrices are missing/malformed.
+        if (sensorToIntermediate == null || sensorToIntermediate.length < 9
+                || (sensorToIntermediate[0] == 0 && sensorToIntermediate[4] == 0)) {
             Log.w(TAG, "sensorToIntermediate is uninitialized, using identity");
-            sensorToIntermediate = new float[]{1,0,0, 0,1,0, 0,0,1};
+            sensorToIntermediate = new float[]{1, 0, 0, 0, 1, 0, 0, 0, 1};
         }
-        if (intermediateToSRGB == null || intermediateToSRGB[0] == 0 && intermediateToSRGB[4] == 0) {
+        if (intermediateToSRGB == null || intermediateToSRGB.length < 9
+                || (intermediateToSRGB[0] == 0 && intermediateToSRGB[4] == 0)) {
             Log.w(TAG, "intermediateToSRGB is uninitialized, using identity");
-            intermediateToSRGB = new float[]{1,0,0, 0,1,0, 0,0,1};
+            intermediateToSRGB = new float[]{1, 0, 0, 0, 1, 0, 0, 0, 1};
         }
 
         Log.d(TAG, "Run() - totalExposureScale: " + totalExposureScale);
         Log.d(TAG, "Run() - sensorToIntermediate: " + Arrays.toString(sensorToIntermediate));
         Log.d(TAG, "Run() - intermediateToSRGB: " + Arrays.toString(intermediateToSRGB));
 
+        // The pipeline already builds and owns one shared GainMap texture
+        // (see PostPipeline.GainMap / Bayer2Float) - reuse it by reference
+        // instead of re-uploading the raw gain data from scratch every frame.
+        PostPipeline pipeline = (PostPipeline) basePipeline;
+        boolean useGainMap = pipeline.GainMap != null;
+
         // 1. Set Defines and Program FIRST
-        if (basePipeline.mParameters.gainMap != null) {
-            glProg.setDefine("USE_GAINMAP", 1);
-        } else {
-            glProg.setDefine("USE_GAINMAP", 0);
-        }
+        glProg.setDefine("USE_GAINMAP", useGainMap);
+        // Noise model (slope/offset) - used to fade the shading correction out
+        // in noisy/dark regions, same role NOISES/NOISEO play in initial.glsl.
+        glProg.setDefine("NOISES", basePipeline.noiseS);
+        glProg.setDefine("NOISEO", basePipeline.noiseO);
         glProg.useAssetProgram("modern_initial");
 
         // 2. Set Uniforms AFTER program is active
@@ -95,19 +93,14 @@ public class ModernInitial extends Node {
         glProg.setVar("intermediateToSRGB", intermediateToSRGB);
 
         float[] WP = basePipeline.mParameters.whitePoint;
-        if (WP == null || WP[0] == 0) WP = new float[]{1.0f, 1.0f, 1.0f};
+        if (WP == null || WP.length < 3 || WP[0] == 0) WP = new float[]{1.0f, 1.0f, 1.0f};
         glProg.setVar("whitePoint", WP);
-        glProg.setVar("noiseS", basePipeline.noiseS);
-        glProg.setVar("noiseO", basePipeline.noiseO);
 
         glProg.setTexture("InputBuffer", previousNode.WorkingTexture);
 
-        // Lens shading correction (GainMap)
-        if (basePipeline.mParameters.gainMap != null) {
-            GainMapTex = new GLTexture(basePipeline.mParameters.mapSize, new GLFormat(GLFormat.DataType.FLOAT_16, 4),
-                    com.particlesdevs.photoncamera.util.BufferUtils.getFrom(basePipeline.mParameters.gainMap),
-                    android.opengl.GLES20.GL_LINEAR, android.opengl.GLES20.GL_CLAMP_TO_EDGE);
-            glProg.setTexture("GainMap", GainMapTex);
+        // Lens shading correction (GainMap) - bind the pipeline's shared texture.
+        if (useGainMap) {
+            glProg.setTexture("GainMap", pipeline.GainMap);
         }
 
         WorkingTexture = basePipeline.getMain();

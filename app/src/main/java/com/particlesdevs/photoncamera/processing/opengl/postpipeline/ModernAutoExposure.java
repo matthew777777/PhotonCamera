@@ -26,7 +26,16 @@ public class ModernAutoExposure extends Node {
     @Tunable(title = "Exposure Smoothing", category = "Modern AE", min = 0.0f, max = 0.99f, defaultValue = 0.0f)
     float exposureSmoothing = 0.0f;
 
-    private static float lastMpy = -1.0f;
+    // Deliberately static: PostPipeline.BuildDefaultPipeline() constructs a brand
+    // new ModernAutoExposure node for every capture, so an instance field could
+    // never carry a value from one frame to the next - static is the only way
+    // this smoothing feature can work at all. `volatile` gives basic cross-thread
+    // visibility. The timestamp guard resets smoothing whenever there's been a
+    // real gap (lens switch, new session, backgrounded app) so a stale value
+    // from an unrelated previous session can't bleed into a new one.
+    private static volatile float lastMpy = -1.0f;
+    private static volatile long lastMpyTimeMs = 0L;
+    private static final long SMOOTHING_STALE_MS = 2000L;
 
     @Tunable(title = "EV Min", category = "Modern AE", min = -10.0f, max = 0.0f, defaultValue = -8.0f)
     float evMin = -8.0f;
@@ -49,6 +58,13 @@ public class ModernAutoExposure extends Node {
             return;
         }
 
+        // GLProg already clears its Defines list right after every
+        // useProgram()/useAssetProgram() call (see GLProg.useShader()), so
+        // GLHistogram.Compute() below never actually leaves anything behind on
+        // its own. This is a cheap, name-agnostic safety net for whatever ran
+        // before this node - not a fix for a live leak.
+        glProg.clearDefines();
+
         // 1. Compute Log-Luminance Histogram
         GLHistogram histogram = new GLHistogram(glProg, 256);
         histogram.Custom = true;
@@ -57,22 +73,20 @@ public class ModernAutoExposure extends Node {
         histogram.Bc = false;
         histogram.Ac = false;
 
-        // Custom program snippet for log-luminance indexing
-        histogram.CustomProgram = 
+        // Custom program snippet for log-luminance indexing.
+        // Rec.601 weights to match the luminocity() convention already used
+        // throughout initial.glsl, rather than adding a second luma formula.
+        histogram.CustomProgram =
             "float lum = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));" +
             "float ev = log2(lum + 1e-6);" +
             "float normEv = (ev - input1) / (input2 - input1);" +
             "texColorUint.r = uint(clamp(normEv * 255.0, 0.0, 255.0));";
-        
+
         histogram.input1 = evMin;
         histogram.input2 = evMax;
 
         int[][] result = histogram.Compute(previousNode.WorkingTexture);
         int[] hist = result[0];
-        
-        // Explicitly clear histogram defines to avoid affecting subsequent fragment shaders
-        glProg.setDefine("COL_CUSTOM", false);
-        glProg.setDefine("CUSTOM_PROGRAM", "");
 
         // 2. Compute Statistics
         int totalPixels = 0;
@@ -102,7 +116,7 @@ public class ModernAutoExposure extends Node {
         // Highlight Headroom
         float highLum = (float) Math.pow(2.0, highEv);
         float headroom = highlightLimit / (highLum * mpy + 1e-6f);
-        Log.d(TAG, String.format(java.util.Locale.US, "Highlight Headroom: %.2f stops", Math.log(headroom)/Math.log(2.0)));
+        Log.d(TAG, String.format(java.util.Locale.US, "Highlight Headroom: %.2f stops", Math.log(headroom) / Math.log(2.0)));
 
         // Highlight Protection
         if (highLum * mpy > highlightLimit) {
@@ -113,21 +127,31 @@ public class ModernAutoExposure extends Node {
             mpy = finalMpy;
         }
 
-        // 3.1 Exposure Smoothing
-        if (exposureSmoothing > 0.0f && lastMpy > 1e-4f) {
+        // 3.1 Bound the multiplier to the already-configured EV range so a
+        // near-black or occluded frame can't drive it to an unbounded value
+        // that blows out the instant real signal reappears.
+        float minMpy = (float) Math.pow(2.0, evMin);
+        float maxMpy = (float) Math.pow(2.0, evMax);
+        mpy = Math.max(minMpy, Math.min(maxMpy, mpy));
+
+        // 3.2 Exposure Smoothing - only blend against a recent, same-session value.
+        long now = System.currentTimeMillis();
+        boolean haveRecentMpy = lastMpy > 1e-4f && (now - lastMpyTimeMs) < SMOOTHING_STALE_MS;
+        if (exposureSmoothing > 0.0f && haveRecentMpy) {
             mpy = lastMpy * exposureSmoothing + mpy * (1.0f - exposureSmoothing);
         }
         lastMpy = mpy;
+        lastMpyTimeMs = now;
         if (lastMpy < 1e-4f) lastMpy = -1.0f; // Reset if it collapses
 
         Log.d(TAG, String.format(java.util.Locale.US, "Final Exposure Multiplier: %.6f (EV Offset: %.2f)",
-              mpy, Math.log(mpy)/Math.log(2.0)));
+              mpy, Math.log(mpy) / Math.log(2.0)));
 
         // 4. Apply Exposure Scaling
         glProg.useAssetProgram("modern_autoexposure");
         glProg.setTexture("InputBuffer", previousNode.WorkingTexture);
         glProg.setVar("exposureScale", Math.max(mpy, 1e-6f));
-        
+
         WorkingTexture = basePipeline.getMain();
         glProg.drawBlocks(WorkingTexture);
         glProg.closed = true;

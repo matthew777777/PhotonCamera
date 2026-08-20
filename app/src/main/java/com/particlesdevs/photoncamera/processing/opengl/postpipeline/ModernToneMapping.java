@@ -2,8 +2,11 @@ package com.particlesdevs.photoncamera.processing.opengl.postpipeline;
 
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
+import com.particlesdevs.photoncamera.util.Log;
 
 public class ModernToneMapping extends Node {
+    private static final String TAG = "ModernToneMapping";
+
     @Tunable(title = "Enable Tone Mapping", category = "Modern Tone", defaultValue = 1, min = 0, max = 1, step = 1)
     boolean enable = true;
 
@@ -28,11 +31,13 @@ public class ModernToneMapping extends Node {
             return;
         }
 
+        Log.d(TAG, "Run() - strength: " + strength + ", gamma: " + gamma);
+
         glProg.useAssetProgram("modern_tonemapping");
         glProg.setTexture("InputBuffer", previousNode.WorkingTexture);
         glProg.setVar("strength", strength);
         glProg.setVar("gamma", gamma);
-        
+
         WorkingTexture = basePipeline.getMain();
         glProg.drawBlocks(WorkingTexture);
         glProg.closed = true;

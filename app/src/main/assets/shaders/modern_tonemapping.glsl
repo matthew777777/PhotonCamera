@@ -7,9 +7,8 @@ uniform float gamma;
 
 out vec4 Output;
 
-#import coords
-
-// Standard ACES Filmic Tone Mapping approximation
+// Narkowicz ACES filmic tone mapping approximation - same fit already used by
+// the (currently uncalled) aces() helper in initial.glsl.
 vec3 ACESFilm(vec3 x) {
     float a = 2.51;
     float b = 0.03;
@@ -23,14 +22,15 @@ void main() {
     ivec2 xy = ivec2(gl_FragCoord.xy);
     vec3 linearRGB = texelFetch(InputBuffer, xy, 0).rgb;
 
-    // 1. Apply Tone Mapping
-    // ACES expects linear input, usually scaled so that 1.0 is white.
-    // strength allows fine-tuning the look.
-    vec3 mapped = ACESFilm(linearRGB * strength);
+    // 1. Apply Tone Mapping.
+    // `strength` pre-scales the input going into the filmic curve (effectively
+    // an extra trim on top of ModernAutoExposure's metering) rather than
+    // blending the output, which is why its useful range extends past 1.0.
+    vec3 mapped = ACESFilm(max(linearRGB, 0.0) * strength);
 
-    // 2. Apply Gamma Correction (Linear to Display sRGB)
-    // pow(x, 1/2.2) is a standard approximation for sRGB gamma.
-    vec3 displayRGB = pow(max(mapped, 0.0), vec3(1.0 / gamma));
+    // 2. Apply Gamma Correction (Linear to Display).
+    // mapped is already clamped to [0,1] by ACESFilm, so this stays in range.
+    vec3 displayRGB = pow(mapped, vec3(1.0 / max(gamma, 1e-4)));
 
     Output = vec4(displayRGB, 1.0);
 }
