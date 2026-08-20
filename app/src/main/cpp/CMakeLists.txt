@@ -28,7 +28,7 @@ endif()
 
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/deps/technicallyflac.h)
     file(DOWNLOAD
-            https://raw.githubusercontent.com/jprjr/technicallyflac/main/technicallyflac.h
+            https://raw.githubusercontent.com/ParticlesDevs/technicallyflac/main/technicallyflac.h
             ${CMAKE_CURRENT_SOURCE_DIR}/deps/technicallyflac.h)
 endif()
 
