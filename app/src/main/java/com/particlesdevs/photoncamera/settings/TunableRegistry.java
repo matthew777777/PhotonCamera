@@ -24,6 +24,12 @@ public final class TunableRegistry {
         com.particlesdevs.photoncamera.processing.opengl.scripts.ESD4D.class,
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.ExposureFusionBayer2.class,
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.ABLC.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.ModernInitial.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.ModernAutoExposure.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.ModernToneMapping.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.Bilateral.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.BilateralSeparable.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.ExposureFusionBayer3.class,
         com.particlesdevs.photoncamera.processing.render.Parameters.class,
         com.particlesdevs.photoncamera.processing.ImageSaverSettings.class,
     };

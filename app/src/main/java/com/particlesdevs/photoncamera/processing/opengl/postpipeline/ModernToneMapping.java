@@ -16,6 +16,21 @@ public class ModernToneMapping extends Node {
     @Tunable(title = "Gamma", category = "Modern Tone", min = 1.0f, max = 3.0f, defaultValue = 2.2f)
     float gamma = 2.2f;
 
+    @Tunable(title = "ACES A", category = "Modern Tone", min = 0.0f, max = 5.0f, defaultValue = 2.51f)
+    float acesA = 2.51f;
+
+    @Tunable(title = "ACES B", category = "Modern Tone", min = 0.0f, max = 1.0f, defaultValue = 0.03f)
+    float acesB = 0.03f;
+
+    @Tunable(title = "ACES C", category = "Modern Tone", min = 0.0f, max = 5.0f, defaultValue = 2.43f)
+    float acesC = 2.43f;
+
+    @Tunable(title = "ACES D", category = "Modern Tone", min = 0.0f, max = 2.0f, defaultValue = 0.59f)
+    float acesD = 0.59f;
+
+    @Tunable(title = "ACES E", category = "Modern Tone", min = 0.0f, max = 1.0f, defaultValue = 0.14f)
+    float acesE = 0.14f;
+
     public ModernToneMapping() {
         super("", "ModernToneMapping");
     }
@@ -37,6 +52,11 @@ public class ModernToneMapping extends Node {
         glProg.setTexture("InputBuffer", previousNode.WorkingTexture);
         glProg.setVar("strength", strength);
         glProg.setVar("gamma", gamma);
+        glProg.setVar("acesA", acesA);
+        glProg.setVar("acesB", acesB);
+        glProg.setVar("acesC", acesC);
+        glProg.setVar("acesD", acesD);
+        glProg.setVar("acesE", acesE);
 
         WorkingTexture = basePipeline.getMain();
         glProg.drawBlocks(WorkingTexture);

@@ -61,7 +61,8 @@ void main() {
     #if USEGAIN == 1
     vec4 gains = texture(GainMap, vec2(xy)*vec2(RawInvSize));
     gains.rgb = vec3(gains.r,(gains.g+gains.b)/2.0,gains.a);
-    gains.rgb /= dot(gains.rgb,vec3(1.0/3.0));
+    // Removed re-normalization to dot(gains.rgb, 1/3) to ensure full
+    // lens shading correction is applied, as requested to avoid vignetting.
     #else
     vec3 gains = vec3(1.0);
     #endif

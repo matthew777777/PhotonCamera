@@ -31,6 +31,36 @@ public class ModernInitial extends Node {
     )
     float manualExposureScale = 1.0f;
 
+    @Tunable(
+        title = "Contrast",
+        category = "Modern Core",
+        min = 0.5f,
+        max = 2.0f,
+        defaultValue = 1.0f,
+        description = "Contrast adjustment (pivot at 0.18 linear midtone)"
+    )
+    float contrast = 1.0f;
+
+    @Tunable(
+        title = "Saturation",
+        category = "Modern Core",
+        min = 0.0f,
+        max = 2.0f,
+        defaultValue = 1.0f,
+        description = "Color saturation in linear space"
+    )
+    float saturation = 1.0f;
+
+    @Tunable(
+        title = "Vignette Correction",
+        category = "Modern Core",
+        min = 0.0f,
+        max = 2.0f,
+        defaultValue = 1.0f,
+        description = "Multiplier for lens shading correction"
+    )
+    float vignetteCorrection = 1.0f;
+
     public ModernInitial() {
         super("", "ModernInitial");
     }
@@ -89,6 +119,9 @@ public class ModernInitial extends Node {
 
         // 2. Set Uniforms AFTER program is active
         glProg.setVar("exposureScale", totalExposureScale);
+        glProg.setVar("contrast", contrast);
+        glProg.setVar("saturation", saturation);
+        glProg.setVar("vignette", vignetteCorrection);
         glProg.setVar("sensorToIntermediate", sensorToIntermediate);
         glProg.setVar("intermediateToSRGB", intermediateToSRGB);
 

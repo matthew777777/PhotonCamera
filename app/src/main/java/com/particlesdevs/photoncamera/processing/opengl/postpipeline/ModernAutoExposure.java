@@ -2,6 +2,7 @@ package com.particlesdevs.photoncamera.processing.opengl.postpipeline;
 
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
 import com.particlesdevs.photoncamera.processing.opengl.scripts.GLHistogram;
+import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.Log;
 
@@ -110,8 +111,11 @@ public class ModernAutoExposure extends Node {
               totalPixels, medianEv, highEv, shadowEv, saturatedPercent));
 
         // 3. Estimate Exposure Multiplier
+        float compensation = PreferenceKeys.getModernExposureCompensation();
+        float targetMidtoneCompensated = targetMidtone * (float) Math.pow(2.0, compensation);
+
         float medianLum = (float) Math.pow(2.0, medianEv);
-        float mpy = targetMidtone / (medianLum + 1e-6f);
+        float mpy = targetMidtoneCompensated / (medianLum + 1e-6f);
 
         // Highlight Headroom
         float highLum = (float) Math.pow(2.0, highEv);

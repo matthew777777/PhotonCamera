@@ -72,6 +72,10 @@ public class Bayer2Float extends Node {
         glProg.setDefine("TP", testPatternIndex);
         if (PreferenceKeys.isModernCoreBalancingOn()) {
             glProg.setDefine("NO_CLAMP", true);
+            // Disable GainMap in tofloat for Modern pipeline; we handle it
+            // in ModernInitial in linear space with better noise gating
+            // (or lack thereof, if requested).
+            glProg.setDefine("USEGAIN", 0);
         }
         glProg.useAssetProgram("tofloat");
         glProg.setTexture("InputBuffer", in);

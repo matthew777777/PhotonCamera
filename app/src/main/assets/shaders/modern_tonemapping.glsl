@@ -5,17 +5,18 @@ uniform sampler2D InputBuffer;
 uniform float strength;
 uniform float gamma;
 
+uniform float acesA;
+uniform float acesB;
+uniform float acesC;
+uniform float acesD;
+uniform float acesE;
+
 out vec4 Output;
 
 // Narkowicz ACES filmic tone mapping approximation - same fit already used by
 // the (currently uncalled) aces() helper in initial.glsl.
 vec3 ACESFilm(vec3 x) {
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+    return clamp((x * (acesA * x + acesB)) / (x * (acesC * x + acesD) + acesE), 0.0, 1.0);
 }
 
 void main() {
