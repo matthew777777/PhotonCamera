@@ -31,13 +31,13 @@ public class DemosaicRCD extends Node {
     @Tunable(
         title = "Artifact Correction",
         category = "DemosaicRCD",
-        defaultValue = 0,
+        defaultValue = 1,
         min = 0,
         max = 1,
         step = 1,
         description = "Enable advanced RCD artifact correction logic"
     )
-    boolean rcdArtifactCorrection = false;
+    boolean rcdArtifactCorrection = true;
 
     @Tunable(
         title = "Green Equilibration",
