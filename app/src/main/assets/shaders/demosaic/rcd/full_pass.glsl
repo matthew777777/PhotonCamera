@@ -18,6 +18,10 @@ layout(rgba16f, binding = 2) uniform highp writeonly image2D outTexture;
 #define ARTIFACT_CORRECTION 0
 #endif
 
+#ifndef RATIO_SMOOTHING
+#define RATIO_SMOOTHING 0
+#endif
+
 layout(std430, binding = 4) buffer relJumpStats {
     uint bins[8]; // 0:<0.05, 1:0.05-0.1, 2:0.1-0.2, 3:0.2-0.5, 4:>0.5, 5:>0.2, 6:>0.5, 7:total
 };
@@ -72,7 +76,7 @@ void main() {
         float chromaCorr = 0.0;
         float maxRelJump = 0.0;
 
-        // Base results for delta visualization (Preserve known-good Stage 6 baseline)
+        // Base results for delta visualization
         float r_base = 0.0;
         float b_base = 0.0;
         if (pattern == 0) {
@@ -116,7 +120,6 @@ void main() {
         }
 
 #if ARTIFACT_CORRECTION == 1
-        // Step 1 - Reverting to previous known-good correction version
         if (pattern == 0) { // Red pixel
             r = bayer(pos);
             float bSum = 0.0, gSum = 0.0, bMin = 1e6, bMax = -1e6;
@@ -125,15 +128,21 @@ void main() {
                 ivec2 p = pos + neighbors[i];
                 float gn = green(p), val = bayer(p), rat = val / max(gn, EPS);
                 bMin = min(bMin, rat); bMax = max(bMax, rat);
-
-                // Experiment C: Isolated relJump Detector
                 float relJump = abs(gn - g) / (max(g, gn) + EPS);
                 maxRelJump = max(maxRelJump, relJump);
-
                 float w = 1.0 / (1.0 + pow(abs(gn - g) * 10.0 * ratioEdgeProtection, 2.0));
                 bSum += val * w; gSum += gn * w; edgeRej += (1.0 - w) * 0.25;
             }
             float rawRatio = bSum / max(gSum, EPS);
+            #if RATIO_SMOOTHING == 1
+                // 3x3 simple ratio smoothing for binned artifacts
+                float smRatio = 0.0;
+                for(int j=-1; j<=1; j++) for(int i=-1; i<=1; i++) {
+                    ivec2 p = pos + ivec2(i*2, j*2); // Jump to next color block
+                    smRatio += bayer(p+ivec2(1,1)) / max(green(p+ivec2(1,1)), EPS);
+                }
+                rawRatio = mix(rawRatio, smRatio / 9.0, 0.5);
+            #endif
             float limitedRatio = clamp(rawRatio, (bMin+bMax)*0.5 - (bMax-bMin)*0.5*ratioRobustness, (bMin+bMax)*0.5 + (bMax-bMin)*0.5*ratioRobustness);
             ratioOutlier = abs(rawRatio - limitedRatio);
             b = g * limitedRatio;
@@ -145,14 +154,20 @@ void main() {
                 ivec2 p = pos + neighbors[i];
                 float gn = green(p), val = bayer(p), rat = val / max(gn, EPS);
                 rMin = min(rMin, rat); rMax = max(rMax, rat);
-
                 float relJump = abs(gn - g) / (max(g, gn) + EPS);
                 maxRelJump = max(maxRelJump, relJump);
-
                 float w = 1.0 / (1.0 + pow(abs(gn - g) * 10.0 * ratioEdgeProtection, 2.0));
                 rSum += val * w; gSum += gn * w; edgeRej += (1.0 - w) * 0.25;
             }
             float rawRatio = rSum / max(gSum, EPS);
+            #if RATIO_SMOOTHING == 1
+                float smRatio = 0.0;
+                for(int j=-1; j<=1; j++) for(int i=-1; i<=1; i++) {
+                    ivec2 p = pos + ivec2(i*2, j*2);
+                    smRatio += bayer(p+ivec2(-1,-1)) / max(green(p+ivec2(-1,-1)), EPS);
+                }
+                rawRatio = mix(rawRatio, smRatio / 9.0, 0.5);
+            #endif
             float limitedRatio = clamp(rawRatio, (rMin+rMax)*0.5 - (rMax-rMin)*0.5*ratioRobustness, (rMin+rMax)*0.5 + (rMax-rMin)*0.5*ratioRobustness);
             ratioOutlier = abs(rawRatio - limitedRatio);
             r = g * limitedRatio;
@@ -204,24 +219,23 @@ void main() {
             b = g * (bS / max(bgS, EPS));
         }
 
+        // Final directional clamping to suppress binned zippering
+        r = clamp(r, min(r_base, g), max(r_base, g));
+        b = clamp(b, min(b_base, g), max(b_base, g));
+
         if (ratioOutlier > 0.05) {
             float avgCh = (r + b) * 0.5;
             r = mix(r, avgCh, ratioOutlier * chromaCorrStr);
             b = mix(b, avgCh, ratioOutlier * chromaCorrStr);
             chromaCorr = ratioOutlier * chromaCorrStr;
-            if (debugMode == 16) { r = mix(r, avgCh, 0.9); b = mix(b, avgCh, 0.9); }
         }
 
-        // Collect Statistics (Experiment C)
-        atomicAdd(bins[7], 1u); // Total
+        atomicAdd(bins[7], 1u);
         if (maxRelJump < 0.05) atomicAdd(bins[0], 1u);
         else if (maxRelJump < 0.10) atomicAdd(bins[1], 1u);
         else if (maxRelJump < 0.20) atomicAdd(bins[2], 1u);
         else if (maxRelJump < 0.50) atomicAdd(bins[3], 1u);
         else atomicAdd(bins[4], 1u);
-
-        if (maxRelJump > 0.20) atomicAdd(bins[5], 1u);
-        if (maxRelJump > 0.50) atomicAdd(bins[6], 1u);
 #else
         r = r_base;
         b = b_base;
@@ -232,24 +246,11 @@ void main() {
         else if (debugMode == 2) finalColor = vec3(conf);
         else if (debugMode == 3) finalColor = vec3(r, 0.0, 0.0);
         else if (debugMode == 4) finalColor = vec3(0.0, 0.0, b);
-        else if (debugMode == 5) finalColor = vec3(r / max(g, EPS), 0.0, 0.0);
-        else if (debugMode == 6) finalColor = vec3(0.0, 0.0, b / max(g, EPS));
-        else if (debugMode == 9) finalColor = vec3(conf);
-        else if (debugMode == 10) finalColor = vec3(r / max(g, EPS), 0.0, 0.0);
-        else if (debugMode == 11) finalColor = vec3(0.0, 0.0, b / max(g, EPS));
-        else if (debugMode == 12) finalColor = vec3(edgeRej);
-        else if (debugMode == 13) finalColor = vec3(ratioOutlier * 10.0);
-        else if (debugMode == 14) finalColor = vec3(chromaCorr * 10.0);
         else if (debugMode == 15) {
             float delta = abs(r - r_base) + abs(b - b_base);
-            finalColor = vec4(delta * 100.0, 0.0, 0.0, 1.0).rgb;
-        }
-        else if (debugMode == 17) finalColor = vec3(1.0 - edgeRej);
-        else if (debugMode == 18) { // Experiment C: relJump Detector
-            finalColor = vec3(maxRelJump); // Bright edges where jump is large
+            finalColor = vec3(delta * 100.0, 0.0, 0.0);
         }
 
-        // NUMERICAL SAFETY INSTRUMENTATION
         if (any(isnan(finalColor)) || any(isinf(finalColor))) {
             finalColor = vec3(1.0, 0.0, 1.0);
         }

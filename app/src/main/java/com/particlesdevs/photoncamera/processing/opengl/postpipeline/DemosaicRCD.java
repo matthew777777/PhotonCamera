@@ -39,6 +39,27 @@ public class DemosaicRCD extends Node {
     )
     boolean rcdArtifactCorrection = false;
 
+    @Tunable(
+        title = "Green Equilibration",
+        category = "DemosaicRCD",
+        min = 0.0f,
+        max = 1.0f,
+        defaultValue = 0.0f,
+        description = "Balance G1 and G2 channels to fix grid/maze artifacts"
+    )
+    float rcdGreenEquilibration = 0.0f;
+
+    @Tunable(
+        title = "Ratio Smoothing",
+        category = "DemosaicRCD",
+        min = 0,
+        max = 1,
+        defaultValue = 0,
+        step = 1,
+        description = "Apply median filter to color ratios to suppress chromatic noise"
+    )
+    boolean rcdRatioSmoothing = false;
+
     @Tunable(title = "Edge Sensitivity", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
     float rcdEdgeSensitivity = 1.0f;
 
@@ -194,6 +215,7 @@ public class DemosaicRCD extends Node {
                     glProg.setVar("CfaPattern", basePipeline.mParameters.cfaPattern);
                     glProg.setVar("edgeSensitivity", rcdEdgeSensitivity);
                     glProg.setVar("dirConfidence", rcdDirectionConfidence);
+                    glProg.setVar("greenEquil", rcdGreenEquilibration);
                     glProg.computeManual((width + tile - 1) / tile, (height + tile - 1) / tile, 1);
                     GLCoreBlockProcessing.checkEglError(Name + " Pass 1");
                 }
@@ -204,6 +226,7 @@ public class DemosaicRCD extends Node {
                 glProg.setDefine("DEBUGSTAGE", debugStage);
                 glProg.setDefine("EPS", epsilon);
                 glProg.setDefine("ARTIFACT_CORRECTION", rcdArtifactCorrection ? 1 : 0);
+                glProg.setDefine("RATIO_SMOOTHING", rcdRatioSmoothing ? 1 : 0);
                 glProg.useAssetProgram("demosaic/rcd/full_pass", true);
                 if (rcdArtifactCorrection) {
                     glProg.setBufferCompute("relJumpStats", statsBuffer);

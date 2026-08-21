@@ -417,8 +417,9 @@ vec3 applyColorSpace(vec3 pRGB,float tonemapGain, float gainsVal){
     //float vignetteFactor = mix(0.0,VIGNETTE,clamp(br*100.0 - 0.01,0.0,1.0));
     float noise = sqrt(NOISES + NOISEO + 1e-8);
     //float vignetteFactor = smoothstep(0.0,min(noise, 0.1),br)*VIGNETTE;
+    // Apply VIGNETTE tunable and protect noise floor in dark areas.
     float vignetteFactor = (br*br/(br*br+noise*noise))*VIGNETTE;
-    gainsVal = mix(float(1.0), gainsVal, 1.0);
+    gainsVal = mix(float(1.0), gainsVal, vignetteFactor);
     //br = clamp(reinhard_extended(br*gainsVal,max(1.0,gainsVal)),0.0,1.0);
     //br = clamp(reinhard_extended(br*tonemapGain,max(1.0,tonemapGain)),0.0,1.0);
     pRGB = clamp(pRGB*mix(tonemapGain,1.0,LTMMIX), 0.0,1.0);

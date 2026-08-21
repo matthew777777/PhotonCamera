@@ -12,14 +12,14 @@ public class ModernAutoExposure extends Node {
     @Tunable(title = "Enable Modern AE", category = "Modern AE", defaultValue = 1, min = 0, max = 1, step = 1)
     boolean enable = true;
 
-    @Tunable(title = "Target Midtone", category = "Modern AE", min = 0.0f, max = 1.0f, defaultValue = 0.18f)
-    float targetMidtone = 0.18f;
+    @Tunable(title = "Target Midtone", category = "Modern AE", min = 0.0f, max = 1.0f, defaultValue = 0.10f)
+    float targetMidtone = 0.10f;
 
-    @Tunable(title = "Highlight Percentile", category = "Modern AE", min = 90.0f, max = 100.0f, defaultValue = 98.0f)
-    float highlightPercentile = 98.0f;
+    @Tunable(title = "Highlight Percentile", category = "Modern AE", min = 90.0f, max = 100.0f, defaultValue = 99.0f)
+    float highlightPercentile = 99.0f;
 
-    @Tunable(title = "Highlight Protection", category = "Modern AE", min = 0.0f, max = 1.0f, defaultValue = 0.5f)
-    float highlightProtection = 0.5f;
+    @Tunable(title = "Highlight Protection", category = "Modern AE", min = 0.0f, max = 1.0f, defaultValue = 0.70f)
+    float highlightProtection = 0.70f;
 
     @Tunable(title = "Highlight Limit", category = "Modern AE", min = 0.5f, max = 5.0f, defaultValue = 1.5f)
     float highlightLimit = 1.5f;

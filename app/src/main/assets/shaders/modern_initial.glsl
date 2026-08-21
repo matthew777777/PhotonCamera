@@ -42,12 +42,18 @@ void main() {
     // used by tofloat.glsl and legacy initial.glsl.
     vec3 gain3 = vec3(gains.r, (gains.g + gains.b) * 0.5, gains.a);
 
-    // Apply Gain Map correction fully to ensure no vignetting remains.
-    // Re-normalization and noise-gating were removed to satisfy the
-    // requirement of "never have vignetting", matching the behavior
-    // expected by the user after rebase.
-    // Added 'vignette' multiplier for tunable control.
-    wbLinear *= mix(vec3(1.0), gain3, vignette);
+    // Re-normalize so the map only reshapes relative shading across the frame,
+    // instead of also nudging overall exposure (tofloat.glsl does the same).
+    gain3 /= max(dot(gain3, vec3(1.0 / 3.0)), 1e-6);
+
+    // Fade the correction out as signal approaches the sensor noise floor, so
+    // it doesn't amplify noise in dark corners - mirrors the noise-gated
+    // VIGNETTE term in legacy initial.glsl.
+    // 'vignette' tunable scales the overall strength of the correction.
+    float noiseFloor = sqrt(max(NOISES + NOISEO, 0.0) + 1e-8);
+    float lum = dot(wbLinear, vec3(0.299, 0.587, 0.114));
+    float gainConfidence = (lum * lum) / (lum * lum + noiseFloor * noiseFloor);
+    wbLinear *= mix(vec3(1.0), gain3, gainConfidence * vignette);
     #endif
 
     // 4. Scene-referred Color Transformation.
