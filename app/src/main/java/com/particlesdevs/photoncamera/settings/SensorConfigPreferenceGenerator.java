@@ -345,6 +345,9 @@ public class SensorConfigPreferenceGenerator {
         SensorConfig annotation = info.annotation;
         String prefKey = "pref_sensorconfig_" + sensorId + "_" + info.fieldName.toLowerCase();
 
+        // Heal preference type in background if corrupted by config import
+        ensureStringPreference(context, prefKey);
+
         if (annotation.entries().length > 0 && annotation.entryValues().length > 0) {
             addListPreference(context, category, prefKey, info);
             return;
@@ -498,5 +501,42 @@ public class SensorConfigPreferenceGenerator {
         String fieldName;
         Class<?> fieldType;
         SensorConfig annotation;
+    }
+    /**
+     * Inspects the SharedPreferences entry for the given key and ensures it is stored 
+     * as a String. If it contains a mismatched type (like Integer due to config import), 
+     * it automatically heals it on the fly to prevent ClassCastException in ListPreference/EditTextPreference.
+     */
+    private static void ensureStringPreference(Context context, String key) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        if (prefs.contains(key)) {
+            try {
+                // Try reading as a String to verify correct type
+                prefs.getString(key, null);
+            } catch (ClassCastException e) {
+                Log.w(TAG, "Mismatched type detected for key: " + key + ". Healing to String.");
+                try {
+                    // Attempt to heal if stored as Integer
+                    int intVal = prefs.getInt(key, -999999);
+                    if (intVal != -999999) {
+                        prefs.edit().putString(key, String.valueOf(intVal)).apply();
+                        return;
+                    }
+                } catch (Exception ignored) {}
+                try {
+                    // Attempt to heal if stored as Float
+                    float floatVal = prefs.getFloat(key, -999999f);
+                    if (floatVal != -999999f) {
+                        prefs.edit().putString(key, String.valueOf(floatVal)).apply();
+                        return;
+                    }
+                } catch (Exception ignored) {}
+                try {
+                    // Attempt to heal if stored as Boolean
+                    boolean boolVal = prefs.getBoolean(key, false);
+                    prefs.edit().putString(key, boolVal ? "1" : "0").apply();
+                } catch (Exception ignored) {}
+            }
+        }
     }
 }
