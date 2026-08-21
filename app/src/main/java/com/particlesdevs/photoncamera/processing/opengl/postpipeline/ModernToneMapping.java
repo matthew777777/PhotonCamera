@@ -10,7 +10,10 @@ public class ModernToneMapping extends Node {
     @Tunable(title = "Enable Tone Mapping", category = "Modern Tone", defaultValue = 1, min = 0, max = 1, step = 1)
     boolean enable = true;
 
-    @Tunable(title = "Tone Mapping Strength", category = "Modern Tone", min = 0.1f, max = 2.0f, defaultValue = 1.0f)
+    @Tunable(title = "Tonemapping Method", category = "Modern Tone", defaultValue = 0, min = 0, max = 1, step = 1, description = "0: ACES, 1: OpenDRT")
+    int tonemapMethod = 0;
+
+    @Tunable(title = "Tone Mapping Strength", category = "Modern Tone", min = 0.1f, max = 5.0f, defaultValue = 1.0f)
     float strength = 1.0f;
 
     @Tunable(title = "Gamma", category = "Modern Tone", min = 1.0f, max = 3.0f, defaultValue = 2.2f)
@@ -31,6 +34,15 @@ public class ModernToneMapping extends Node {
     @Tunable(title = "ACES E", category = "Modern Tone", min = 0.0f, max = 1.0f, defaultValue = 0.14f)
     float acesE = 0.14f;
 
+    @Tunable(title = "OpenDRT Contrast", category = "Modern Tone", min = 0.5f, max = 2.0f, defaultValue = 1.15f)
+    float odtContrast = 1.15f;
+
+    @Tunable(title = "OpenDRT Shoulder", category = "Modern Tone", min = 0.1f, max = 5.0f, defaultValue = 2.0f)
+    float odtShoulder = 2.0f;
+
+    @Tunable(title = "OpenDRT Purity", category = "Modern Tone", min = 0.0f, max = 1.0f, defaultValue = 0.5f)
+    float odtPurity = 0.5f;
+
     public ModernToneMapping() {
         super("", "ModernToneMapping");
     }
@@ -46,10 +58,11 @@ public class ModernToneMapping extends Node {
             return;
         }
 
-        Log.d(TAG, "Run() - strength: " + strength + ", gamma: " + gamma);
+        Log.d(TAG, "Run() - method: " + tonemapMethod + ", strength: " + strength + ", gamma: " + gamma);
 
         glProg.useAssetProgram("modern_tonemapping");
         glProg.setTexture("InputBuffer", previousNode.WorkingTexture);
+        glProg.setVar("tonemapMethod", tonemapMethod);
         glProg.setVar("strength", strength);
         glProg.setVar("gamma", gamma);
         glProg.setVar("acesA", acesA);
@@ -57,6 +70,9 @@ public class ModernToneMapping extends Node {
         glProg.setVar("acesC", acesC);
         glProg.setVar("acesD", acesD);
         glProg.setVar("acesE", acesE);
+        glProg.setVar("odtContrast", odtContrast);
+        glProg.setVar("odtShoulder", odtShoulder);
+        glProg.setVar("odtPurity", odtPurity);
 
         WorkingTexture = basePipeline.getMain();
         glProg.drawBlocks(WorkingTexture);
