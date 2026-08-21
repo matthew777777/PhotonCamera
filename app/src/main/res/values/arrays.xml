@@ -74,7 +74,6 @@
     </string-array>
     <string-array name="theme_accent_entries">
         <item>@string/Default</item>
-        <item>@string/theme_accent_nikonyellow</item>
         <item>Eszdman</item>
         <item>@string/theme_accent_blue</item>
         <item>@string/theme_accent_red</item>
@@ -87,7 +86,6 @@
     </string-array>
     <string-array name="theme_accent_entryValues">
         <item>default</item>
-        <item>nikonyellow</item>
         <item>eszdman</item>
         <item>blue</item>
         <item>red</item>
