@@ -61,9 +61,10 @@ void main() {
     #if USEGAIN == 1
     vec4 gains = texture(GainMap, vec2(xy)*vec2(RawInvSize));
     gains.rgb = vec3(gains.r,(gains.g+gains.b)/2.0,gains.a);
-    // Re-normalize so the map only reshapes relative shading across the frame,
-    // instead of also nudging overall exposure. This prevents "overshooting"
-    // and brighter-than-intended corners.
+    // Re-normalize pixel-by-pixel so this stage only corrects color shading (tint)
+    // and does not nudge overall exposure. This prevents "overshooting" and
+    // keeps the center brightness stable. Vignetting (luma) correction is
+    // handled in the Initial / ModernInitial stages.
     gains.rgb /= max(dot(gains.rgb, vec3(1.0 / 3.0)), 1e-6);
     #else
     vec3 gains = vec3(1.0);

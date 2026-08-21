@@ -42,17 +42,18 @@ void main() {
     // used by tofloat.glsl and legacy initial.glsl.
     vec3 gain3 = vec3(gains.r, (gains.g + gains.b) * 0.5, gains.a);
 
-    // Re-normalize so the map only reshapes relative shading across the frame,
-    // instead of also nudging overall exposure (tofloat.glsl does the same).
-    gain3 /= max(dot(gain3, vec3(1.0 / 3.0)), 1e-6);
+    // Removed per-pixel re-normalization! Dividing by the local average gain
+    // was effectively stripping the brightness correction (vignetting) from
+    // the map and only keeping the color shading. By removing this, we
+    // restore full vignetting correction.
 
     // Fade the correction out as signal approaches the sensor noise floor, so
-    // it doesn't amplify noise in dark corners - mirrors the noise-gated
-    // VIGNETTE term in legacy initial.glsl.
-    // 'vignette' tunable scales the overall strength of the correction.
+    // it doesn't amplify noise in dark corners. We use a more relaxed
+    // confidence curve to ensure corners are brightened even in deeper shadows.
     float noiseFloor = sqrt(max(NOISES + NOISEO, 0.0) + 1e-8);
     float lum = dot(wbLinear, vec3(0.299, 0.587, 0.114));
-    float gainConfidence = (lum * lum) / (lum * lum + noiseFloor * noiseFloor);
+    // Squaring the denominator less aggressively to keep correction active.
+    float gainConfidence = (lum * lum) / (lum * lum + noiseFloor * noiseFloor * 0.25);
     wbLinear *= mix(vec3(1.0), gain3, gainConfidence * vignette);
     #endif
 
