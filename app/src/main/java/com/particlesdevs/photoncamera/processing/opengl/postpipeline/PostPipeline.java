@@ -266,6 +266,11 @@ public class PostPipeline extends GLBasePipeline {
             add(dem);
         }
 
+        // Stage 3: Experimental Capture Sharpening (RT port)
+        // Must run on linear data immediately after demosaicing.
+        Log.d("PostPipeline", "Adding ExperimentalCaptureSharpening");
+        add(new ExperimentalCaptureSharpening());
+
         // Black Level Correction (dynamic) - Moved after Demosaic to match RGB expectation
         Log.d("PostPipeline", "Adding ABLC");
         add(new ABLC());
