@@ -33,10 +33,15 @@ int bayerChannel(ivec2 xy, int pattern) {
 }
 
 float localG(ivec2 xy) {
-    float g = texelFetch(InputBuffer, xy + ivec2(1, 0), 0).r;
-    g += texelFetch(InputBuffer, xy + ivec2(-1, 0), 0).r;
-    g += texelFetch(InputBuffer, xy + ivec2(0, 1), 0).r;
-    g += texelFetch(InputBuffer, xy + ivec2(0, -1), 0).r;
+    ivec2 size = textureSize(InputBuffer, 0);
+    ivec2 right = clamp(xy + ivec2(1, 0), ivec2(0), size - ivec2(1));
+    ivec2 left = clamp(xy - ivec2(1, 0), ivec2(0), size - ivec2(1));
+    ivec2 down = clamp(xy + ivec2(0, 1), ivec2(0), size - ivec2(1));
+    ivec2 up = clamp(xy - ivec2(0, 1), ivec2(0), size - ivec2(1));
+    float g = texelFetch(InputBuffer, right, 0).r;
+    g += texelFetch(InputBuffer, left, 0).r;
+    g += texelFetch(InputBuffer, down, 0).r;
+    g += texelFetch(InputBuffer, up, 0).r;
     return g * 0.25;
 }
 

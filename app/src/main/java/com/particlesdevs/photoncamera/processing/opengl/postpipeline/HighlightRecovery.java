@@ -103,16 +103,8 @@ public class HighlightRecovery extends Node {
 
         int pattern = cfaPatternOverride;
         if (pattern == -1) {
-            // Map Android CFA pattern to our shader's expected indices
-            // Android: 0=RGGB, 1=GRBG, 2=GBRG, 3=BGGR
-            // Shader expects: 0=RGGB, 1=BGGR, 2=GRBG, 3=GBRG
-            int androidPattern = basePipeline.mParameters.cfaPattern;
-            switch (androidPattern) {
-                case 1: pattern = 2; break; // GRBG
-                case 2: pattern = 3; break; // GBRG
-                case 3: pattern = 1; break; // BGGR
-                default: pattern = 0; break; // RGGB
-            }
+            // tofloat shifts every sensor CFA into RGGB coordinates.
+            pattern = 0;
         }
 
         scratchTextures.clear();
@@ -169,7 +161,7 @@ public class HighlightRecovery extends Node {
     }
 
     private GLTexture getReduceScratch(int width, int height) {
-        GLTexture tex = new GLTexture(width, height, new GLFormat(GLFormat.DataType.FLOAT_16, 4));
+        GLTexture tex = new GLTexture(width, height, new GLFormat(GLFormat.DataType.FLOAT_32, 4));
         scratchTextures.add(tex);
         return tex;
     }
