@@ -147,7 +147,14 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
 
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-            setPreferencesFromResource(R.xml.preferences, rootKey);
+            try {
+                setPreferencesFromResource(R.xml.preferences, rootKey);
+            } catch (IllegalArgumentException e) {
+                // The rootKey was not found in the XML (likely a dynamic sub-tab)
+                // Load the root screen instead, and we will switch to the dynamic one in onCreate
+                Log.w("SettingsFragment", "rootKey " + rootKey + " not found in XML, falling back to root");
+                setPreferencesFromResource(R.xml.preferences, null);
+            }
         }
 
         @Override
@@ -182,14 +189,21 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
             String rootKey = getArguments() != null ? getArguments().getString(PreferenceFragmentCompat.ARG_PREFERENCE_ROOT) : null;
             Log.d("SettingsFragment", "onCreate with rootKey: " + rootKey);
             
-            if ("pref_tunable_submenu".equals(rootKey)) {
-                Log.d("SettingsFragment", "This is the tunable submenu fragment, generating preferences now");
-                generateTunablePreferences();
-            }
-
-            if ("pref_sensor_config_submenu".equals(rootKey)) {
-                Log.d("SettingsFragment", "This is the sensor config submenu fragment, generating preferences now");
-                generateSensorConfigPreferences();
+            if (rootKey != null) {
+                if (rootKey.startsWith("pref_subtab_tunable_") || rootKey.equals("pref_tunable_submenu")) {
+                    Log.d("SettingsFragment", "Generating tunable preferences for rootKey: " + rootKey);
+                    generateTunablePreferences();
+                } else if (rootKey.startsWith("pref_category_sensor_") || rootKey.equals("pref_sensor_config_submenu")) {
+                    Log.d("SettingsFragment", "Generating sensor config preferences for rootKey: " + rootKey);
+                    generateSensorConfigPreferences();
+                }
+                
+                // If it was a dynamic rootKey that wasn't in the XML, set the preference screen manually now that it's generated
+                Preference screen = findPreference(rootKey);
+                if (screen instanceof PreferenceScreen && screen != getPreferenceScreen()) {
+                    Log.d("SettingsFragment", "Switching to dynamic preference screen: " + rootKey);
+                    setPreferenceScreen((PreferenceScreen) screen);
+                }
             }
             
             filterPreferencesByMode();

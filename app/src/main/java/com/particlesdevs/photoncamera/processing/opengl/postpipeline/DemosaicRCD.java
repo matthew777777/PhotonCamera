@@ -63,27 +63,6 @@ public class DemosaicRCD extends Node {
     )
     boolean rcdRatioSmoothing = false;
 
-    @Tunable(
-        title = "Green Equilibration",
-        category = "DemosaicRCD",
-        min = 0.0f,
-        max = 1.0f,
-        defaultValue = 0.0f,
-        description = "Balance G1 and G2 channels to fix grid/maze artifacts"
-    )
-    float rcdGreenEquilibration = 0.0f;
-
-    @Tunable(
-        title = "Ratio Smoothing",
-        category = "DemosaicRCD",
-        min = 0,
-        max = 1,
-        defaultValue = 0,
-        step = 1,
-        description = "Apply median filter to color ratios to suppress chromatic noise"
-    )
-    boolean rcdRatioSmoothing = false;
-
     @Tunable(title = "Edge Sensitivity", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 1.0f)
     float rcdEdgeSensitivity = 1.0f;
 
