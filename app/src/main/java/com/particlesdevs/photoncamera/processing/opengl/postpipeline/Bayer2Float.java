@@ -125,6 +125,7 @@ public class Bayer2Float extends Node {
         glProg.drawBlocks(WorkingTexture);
         basePipeline.main1 = new GLTexture(wsize, new GLFormat(GLFormat.DataType.FLOAT_16, GLDrawParams.WorkDim), null, GL_LINEAR, GL_CLAMP_TO_EDGE);
         basePipeline.main3 = new GLTexture(wsize, new GLFormat(GLFormat.DataType.FLOAT_16, GLDrawParams.WorkDim), null, GL_LINEAR, GL_CLAMP_TO_EDGE);
+        basePipeline.main4 = new GLTexture(wsize, new GLFormat(GLFormat.DataType.FLOAT_16, GLDrawParams.WorkDim), null, GL_LINEAR, GL_CLAMP_TO_EDGE);
         ((PostPipeline) basePipeline).GainMap = GainMapTex;
         glProg.closed = true;
         in.close();

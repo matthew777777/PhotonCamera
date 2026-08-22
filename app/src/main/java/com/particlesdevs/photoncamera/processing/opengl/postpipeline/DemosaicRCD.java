@@ -31,6 +31,7 @@ public class DemosaicRCD extends Node {
     @Tunable(
         title = "Artifact Correction",
         category = "DemosaicRCD",
+        subTab = "Experimental Pipeline",
         defaultValue = 1,
         min = 0,
         max = 1,
@@ -42,6 +43,7 @@ public class DemosaicRCD extends Node {
     @Tunable(
         title = "Green Equilibration",
         category = "DemosaicRCD",
+        subTab = "Experimental Pipeline",
         min = 0.0f,
         max = 1.0f,
         defaultValue = 0.0f,
@@ -52,6 +54,7 @@ public class DemosaicRCD extends Node {
     @Tunable(
         title = "Ratio Smoothing",
         category = "DemosaicRCD",
+        subTab = "Experimental Pipeline",
         min = 0,
         max = 1,
         defaultValue = 0,
@@ -75,9 +78,13 @@ public class DemosaicRCD extends Node {
     @Tunable(title = "Chroma Correction Strength", category = "DemosaicRCD", min = 0.0f, max = 2.0f, defaultValue = 0.5f)
     float rcdChromaCorrectionStrength = 0.5f;
 
+    @Tunable(title = "Green Refine Strength", category = "DemosaicRCD", min = 0.0f, max = 1.0f, defaultValue = 0.5f)
+    float greenRefineStrength = 0.5f;
+
     @Tunable(
         title = "Epsilon",
         category = "DemosaicRCD",
+        subTab = "Experimental Pipeline",
         min = 0.0001f,
         max = 0.01f,
         defaultValue = 0.001f,
@@ -89,6 +96,7 @@ public class DemosaicRCD extends Node {
     @Tunable(
         title = "Pass Through",
         category = "DemosaicRCD",
+        subTab = "Experimental Pipeline",
         min = 0,
         max = 1,
         defaultValue = 0,
@@ -100,6 +108,7 @@ public class DemosaicRCD extends Node {
     @Tunable(
         title = "Debug Stage",
         category = "DemosaicRCD",
+        subTab = "Experimental Pipeline",
         min = 1,
         max = 10,
         defaultValue = 6,
@@ -220,6 +229,29 @@ public class DemosaicRCD extends Node {
                     GLCoreBlockProcessing.checkEglError(Name + " Pass 1");
                 }
 
+                // Pass 1.5: RB Reconstruction (intermediate)
+                GLTexture colorData = basePipeline.main4;
+                if (colorData == null) {
+                    Log.e(Name, "Intermediate texture (basePipeline.main4) is NULL!");
+                    return;
+                }
+                if (debugStage >= 6) {
+                    Log.d(Name, "Pass 1.5: RB Reconstruction dispatching " + width + "x" + height);
+                    glProg.setLayout(tile, tile, 1);
+                    glProg.setDefine("EPS", epsilon);
+                    glProg.setDefine("ARTIFACT_CORRECTION", rcdArtifactCorrection ? 1 : 0);
+                    glProg.setDefine("RATIO_SMOOTHING", rcdRatioSmoothing ? 1 : 0);
+                    glProg.useAssetProgram("demosaic/rcd/rb_pass", true);
+                    glProg.setTextureCompute("inTexture", inTex, false);
+                    glProg.setTextureCompute("greenTexture", greenData, false);
+                    glProg.setTextureCompute("outTexture", colorData, true);
+                    glProg.setVar("imgSize", width, height);
+                    glProg.setVar("ratioRobustness", rcdRatioRobustness);
+                    glProg.setVar("ratioEdgeProtection", rcdRatioEdgeProtection);
+                    glProg.computeManual((width + tile - 1) / tile, (height + tile - 1) / tile, 1);
+                    GLCoreBlockProcessing.checkEglError(Name + " Pass 1.5");
+                }
+
                 // Pass 2: Final Reconstruction
                 Log.d(Name, "Pass 2: Final Reconstruction dispatching " + width + "x" + height);
                 glProg.setLayout(tile, tile, 1);
@@ -233,6 +265,9 @@ public class DemosaicRCD extends Node {
                 }
                 glProg.setTextureCompute("inTexture", inTex, false);
                 glProg.setTextureCompute("greenTexture", greenData, false);
+                if (debugStage >= 6) {
+                    glProg.setTextureCompute("colorTexture", colorData, false);
+                }
                 glProg.setTextureCompute("outTexture", WorkingTexture, true);
                 glProg.setVar("debugMode", debugMode);
                 glProg.setVar("imgSize", width, height);
@@ -240,6 +275,7 @@ public class DemosaicRCD extends Node {
                 glProg.setVar("ratioRobustness", rcdRatioRobustness);
                 glProg.setVar("ratioEdgeProtection", rcdRatioEdgeProtection);
                 glProg.setVar("chromaCorrStr", rcdChromaCorrectionStrength);
+                glProg.setVar("greenRefineStrength", greenRefineStrength);
                 glProg.computeManual((width + tile - 1) / tile, (height + tile - 1) / tile, 1);
                 GLCoreBlockProcessing.checkEglError(Name + " Pass 2");
                 

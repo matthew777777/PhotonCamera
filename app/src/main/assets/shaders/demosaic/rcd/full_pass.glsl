@@ -5,6 +5,7 @@ precision highp float;
 layout(rgba16f, binding = 0) uniform highp readonly image2D inTexture;
 layout(rgba16f, binding = 1) uniform highp readonly image2D greenTexture;
 layout(rgba16f, binding = 2) uniform highp writeonly image2D outTexture;
+layout(rgba16f, binding = 3) uniform highp readonly image2D colorTexture;
 
 #ifndef DEBUGSTAGE
 #define DEBUGSTAGE 1
@@ -30,10 +31,10 @@ uniform int debugMode;
 uniform ivec2 imgSize;
 uniform int CfaPattern;
 
-// New tunables for Step 3+
 uniform float ratioRobustness;
 uniform float ratioEdgeProtection;
 uniform float chromaCorrStr;
+uniform float greenRefineStrength;
 
 float bayer(ivec2 pos) {
     ivec2 size = imageSize(inTexture);
@@ -45,13 +46,21 @@ float green(ivec2 pos) {
     return imageLoad(greenTexture, clamp(pos, ivec2(0), size - 1)).r;
 }
 
+// .x = R reconstructed by rb_pass.glsl, .y = B reconstructed by rb_pass.glsl.
+// Only meaningful at green-native (pattern 1/2) positions - see the long
+// comment in rb_pass.glsl for why pattern 0/3 texels here are scratch.
+vec2 colorRB(ivec2 pos) {
+    ivec2 size = imageSize(colorTexture);
+    vec4 c = imageLoad(colorTexture, clamp(pos, ivec2(0), size - 1));
+    return c.rg;
+}
+
 // ---------------------------------------------------------------------------
 // Diagonal ("\" = P axis, "/" = Q axis) detail-energy probe. Used only to
-// decide which diagonal to trust when reconstructing R@B / B@R, exactly the
-// same role dirStats()/dirDisc() play for green: cheap, single-tap, evaluated
-// at the pixel itself and (with ARTIFACT_CORRECTION on) at its 4 cardinal
-// neighbours, so an isolated noisy pixel can't out-vote a confident
-// neighbourhood consensus.
+// decide which diagonal to trust when reconstructing R@B / B@R. Cheap,
+// single-tap, evaluated at the pixel itself and (with ARTIFACT_CORRECTION on)
+// at its 4 cardinal neighbours, so an isolated noisy pixel can't out-vote a
+// confident neighbourhood consensus. Identical copy lives in rb_pass.glsl.
 // ---------------------------------------------------------------------------
 float pqRatio(ivec2 p) {
     float c = bayer(p);
@@ -96,10 +105,7 @@ void main() {
         // Naive bilinear / ratio ladder - kept ONLY so debugStage 3/4/5 still
         // show a meaningful comparison baseline, and so the debugMode==15
         // "how much did correction change things" heatmap still has
-        // something to diff against. This is no longer used to clamp the
-        // real output (see the note below) - clamping a stable
-        // difference-based estimate against a ratio-based bound was fighting
-        // the fix.
+        // something to diff against. Not used to clamp the real output.
         float r_base = 0.0;
         float b_base = 0.0;
         if (pattern == 0) {
@@ -143,19 +149,40 @@ void main() {
         }
 
         #if DEBUGSTAGE >= 6
-        // -----------------------------------------------------------------
-        // Real reconstruction, colour DIFFERENCES not ratios.
-        //
-        // The old path did `b = g * (sumB / sumG)`. A ratio blows up
-        // whenever the local green sum is small or slightly misestimated
-        // (shadows, sensor noise, or simply the pixel next to a green
-        // direction error) - that is exactly what produces isolated
-        // single-pixel colour spikes. R,G,B live on the same additive
-        // scale, so `b = g + (val - green)_interpolated` stays bounded:
-        // worst case it inherits the local contrast, it can't explode.
-        // -----------------------------------------------------------------
         if (pattern == 0) { // Red-native pixel: keep raw R, reconstruct B diagonally
             r = bayer(pos);
+
+            // --- Green refinement -------------------------------------------------
+            // rb_pass.glsl already reconstructed R and B at every green-native
+            // (pattern 1/2) pixel using the INITIAL green estimate. (R-G) should
+            // vary smoothly, so the R values at this pixel's 4 cardinal
+            // (green-native) neighbours are a second, independent opinion on what
+            // green should be here - if they disagree with green_pass's estimate,
+            // that's a signal the original direction choice was slightly off.
+            // (Note: reference RCD itself stops after computing green once; this
+            // extra step is closer to how DCB-style demosaicing refines green.)
+            {
+                float gW = green(pos + ivec2(-1, 0));
+                float gE = green(pos + ivec2( 1, 0));
+                float gN = green(pos + ivec2(0, -1));
+                float gS = green(pos + ivec2(0,  1));
+                float diffW = colorRB(pos + ivec2(-1, 0)).x - gW; // R@W - G@W
+                float diffE = colorRB(pos + ivec2( 1, 0)).x - gE;
+                float diffN = colorRB(pos + ivec2(0, -1)).x - gN;
+                float diffS = colorRB(pos + ivec2(0,  1)).x - gS;
+
+                float hDiff = 0.5 * (diffE + diffW);
+                float vDiff = 0.5 * (diffN + diffS);
+                float blendedDiff = mix(vDiff, hDiff, dir); // reuse green_pass's own H/V call
+                float gRefined = r - blendedDiff;
+
+                float gMin = min(min(gN, gS), min(gE, gW));
+                float gMax = max(max(gN, gS), max(gE, gW));
+                float gSpread = max(gMax - gMin, EPS);
+                float delta = clamp(gRefined - g, -gSpread * 2.0, gSpread * 2.0);
+
+                g = max(mix(g, g + delta, greenRefineStrength), 0.0);
+            }
 
             float gNW = green(pos + ivec2(-1, -1));
             float gNE = green(pos + ivec2( 1, -1));
@@ -171,9 +198,8 @@ void main() {
             float gradSW = EPS + abs(gSW - g) * ratioEdgeProtection;
             float gradSE = EPS + abs(gSE - g) * ratioEdgeProtection;
 
-            // P ("\", NW-SE) and Q ("/", NE-SW) estimates: cross-weighted so
-            // the corner on the FLATTER side (smaller local gradient) is
-            // trusted more - same principle as reference RCD's V/H_Est.
+            // P ("\", NW-SE) and Q ("/", NE-SW) estimates: cross-weighted so the
+            // corner on the FLATTER side (smaller local gradient) is trusted more.
             float pEst = (gradSE * bNW + gradNW * bSE) / (gradNW + gradSE);
             float qEst = (gradSW * bNE + gradNE * bSW) / (gradNE + gradSW);
 
@@ -219,6 +245,30 @@ void main() {
             #endif
         } else if (pattern == 3) { // Blue-native pixel: keep raw B, reconstruct R diagonally
             b = bayer(pos);
+
+            // --- Green refinement (mirror of pattern==0 above, B in place of R) ---
+            {
+                float gW = green(pos + ivec2(-1, 0));
+                float gE = green(pos + ivec2( 1, 0));
+                float gN = green(pos + ivec2(0, -1));
+                float gS = green(pos + ivec2(0,  1));
+                float diffW = colorRB(pos + ivec2(-1, 0)).y - gW; // B@W - G@W
+                float diffE = colorRB(pos + ivec2( 1, 0)).y - gE;
+                float diffN = colorRB(pos + ivec2(0, -1)).y - gN;
+                float diffS = colorRB(pos + ivec2(0,  1)).y - gS;
+
+                float hDiff = 0.5 * (diffE + diffW);
+                float vDiff = 0.5 * (diffN + diffS);
+                float blendedDiff = mix(vDiff, hDiff, dir);
+                float gRefined = b - blendedDiff;
+
+                float gMin = min(min(gN, gS), min(gE, gW));
+                float gMax = max(max(gN, gS), max(gE, gW));
+                float gSpread = max(gMax - gMin, EPS);
+                float delta = clamp(gRefined - g, -gSpread * 2.0, gSpread * 2.0);
+
+                g = max(mix(g, g + delta, greenRefineStrength), 0.0);
+            }
 
             float gNW = green(pos + ivec2(-1, -1));
             float gNE = green(pos + ivec2( 1, -1));
@@ -277,38 +327,10 @@ void main() {
             #else
                 r = g + blended;
             #endif
-        } else if (pattern == 1) { // Green-native (R-row): R horizontal, B vertical
-            float gW = green(pos + ivec2(-1, 0));
-            float gE = green(pos + ivec2( 1, 0));
-            float rW = bayer(pos + ivec2(-1, 0)) - gW;
-            float rE = bayer(pos + ivec2( 1, 0)) - gE;
-            float gradW = EPS + abs(gW - g) * ratioEdgeProtection;
-            float gradE = EPS + abs(gE - g) * ratioEdgeProtection;
-            r = g + (gradE * rW + gradW * rE) / (gradW + gradE);
-
-            float gN = green(pos + ivec2(0, -1));
-            float gS = green(pos + ivec2(0,  1));
-            float bN = bayer(pos + ivec2(0, -1)) - gN;
-            float bS = bayer(pos + ivec2(0,  1)) - gS;
-            float gradN = EPS + abs(gN - g) * ratioEdgeProtection;
-            float gradS = EPS + abs(gS - g) * ratioEdgeProtection;
-            b = g + (gradS * bN + gradN * bS) / (gradN + gradS);
-        } else { // pattern == 2, Green-native (B-row): R vertical, B horizontal
-            float gN = green(pos + ivec2(0, -1));
-            float gS = green(pos + ivec2(0,  1));
-            float rN = bayer(pos + ivec2(0, -1)) - gN;
-            float rS = bayer(pos + ivec2(0,  1)) - gS;
-            float gradN = EPS + abs(gN - g) * ratioEdgeProtection;
-            float gradS = EPS + abs(gS - g) * ratioEdgeProtection;
-            r = g + (gradS * rN + gradN * rS) / (gradN + gradS);
-
-            float gW = green(pos + ivec2(-1, 0));
-            float gE = green(pos + ivec2( 1, 0));
-            float bW = bayer(pos + ivec2(-1, 0)) - gW;
-            float bE = bayer(pos + ivec2( 1, 0)) - gE;
-            float gradW = EPS + abs(gW - g) * ratioEdgeProtection;
-            float gradE = EPS + abs(gE - g) * ratioEdgeProtection;
-            b = g + (gradE * bW + gradW * bE) / (gradW + gradE);
+        } else { // pattern == 1 or 2, green-native: rb_pass already has the answer
+            vec2 rb = colorRB(pos);
+            r = rb.x;
+            b = rb.y;
         }
 
         if (ratioOutlier > 0.05) {
@@ -326,8 +348,6 @@ void main() {
         vec3 finalColor = vec3(r, g, b);
         if (debugMode == 1) {
             // dir in [0,1]: 0=vertical, 0.5=ambiguous/blended, 1=horizontal.
-            // Continuous now (green_pass no longer hard-switches), so this is
-            // a gradient instead of 3 flat colours.
             finalColor = (dir < 0.5)
                 ? mix(vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0), (0.5 - dir) * 2.0)
                 : mix(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), (dir - 0.5) * 2.0);
