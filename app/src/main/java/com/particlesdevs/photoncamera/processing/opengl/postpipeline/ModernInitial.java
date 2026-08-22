@@ -14,6 +14,7 @@ public class ModernInitial extends Node {
     @Tunable(
         title = "Modern Exposure Compensation",
         category = "Modern Core",
+        subTab = "Experimental Pipeline",
         min = -5.0f,
         max = 5.0f,
         defaultValue = 0.0f,
@@ -24,6 +25,7 @@ public class ModernInitial extends Node {
     @Tunable(
         title = "Manual Exposure Scale",
         category = "Modern Core",
+        subTab = "Experimental Pipeline",
         min = 0.01f,
         max = 100.0f,
         defaultValue = 1.0f,
@@ -34,6 +36,7 @@ public class ModernInitial extends Node {
     @Tunable(
         title = "Contrast",
         category = "Modern Core",
+        subTab = "Experimental Pipeline",
         min = 0.5f,
         max = 2.0f,
         defaultValue = 1.0f,
@@ -44,6 +47,7 @@ public class ModernInitial extends Node {
     @Tunable(
         title = "Saturation",
         category = "Modern Core",
+        subTab = "Experimental Pipeline",
         min = 0.0f,
         max = 2.0f,
         defaultValue = 1.0f,
@@ -54,6 +58,7 @@ public class ModernInitial extends Node {
     @Tunable(
         title = "Vignette Correction",
         category = "Modern Core",
+        subTab = "Experimental Pipeline",
         min = 0.0f,
         max = 2.0f,
         defaultValue = 1.0f,

@@ -65,35 +65,43 @@ public class TunablePreferenceGenerator {
                 return;
             }
             
-            // Group preferences by category
-            Map<String, List<TunableFieldInfo>> categorizedFields = new HashMap<>();
+            // Group preferences by subTab and category: subTab -> (category -> List<fields>)
+            Map<String, Map<String, List<TunableFieldInfo>>> groupedFields = new HashMap<>();
             
             // Scan all registered classes
             for (Class<?> clazz : TUNABLE_CLASSES) {
                 Log.d(TAG, "About to scan class: " + clazz.getName());
-                scanClass(clazz, categorizedFields);
+                scanClass(clazz, groupedFields);
             }
             
-            Log.d(TAG, "Found " + categorizedFields.size() + " categories");
+            Log.d(TAG, "Found " + groupedFields.size() + " sub-tabs");
             
-            // Create preference categories and add preferences
-            for (Map.Entry<String, List<TunableFieldInfo>> entry : categorizedFields.entrySet()) {
-                String categoryName = entry.getKey();
-                List<TunableFieldInfo> fields = entry.getValue();
+            // Create sub-tabs and their categories
+            for (Map.Entry<String, Map<String, List<TunableFieldInfo>>> subTabEntry : groupedFields.entrySet()) {
+                String subTabName = subTabEntry.getKey();
+                Map<String, List<TunableFieldInfo>> categorizedFields = subTabEntry.getValue();
                 
-                Log.d(TAG, "Processing category: " + categoryName + " with " + fields.size() + " fields");
-                
-                // Sort by order
-                fields.sort((a, b) -> Integer.compare(a.order, b.order));
-                
-                // Find or create category in the tunable submenu
-                PreferenceCategory category = findOrCreateCategory(context, tunableSubmenu, categoryName);
-                Log.d(TAG, "Category created/found: " + categoryName);
-                
-                // Add preferences for each field
-                for (TunableFieldInfo fieldInfo : fields) {
-                    //Log.d(TAG, "Adding preference for: " + fieldInfo.fieldName);
-                    addPreference(context, category, fieldInfo);
+                // Determine target screen (either root or a nested PreferenceScreen)
+                PreferenceScreen targetScreen = subTabName.isEmpty() 
+                    ? tunableSubmenu 
+                    : findOrCreateSubTab(context, tunableSubmenu, subTabName);
+
+                for (Map.Entry<String, List<TunableFieldInfo>> entry : categorizedFields.entrySet()) {
+                    String categoryName = entry.getKey();
+                    List<TunableFieldInfo> fields = entry.getValue();
+                    
+                    Log.d(TAG, "Processing category: " + categoryName + " in sub-tab: " + (subTabName.isEmpty() ? "ROOT" : subTabName));
+                    
+                    // Sort by order
+                    fields.sort((a, b) -> Integer.compare(a.order, b.order));
+                    
+                    // Find or create category in the target screen
+                    PreferenceCategory category = findOrCreateCategory(context, targetScreen, categoryName);
+                    
+                    // Add preferences for each field
+                    for (TunableFieldInfo fieldInfo : fields) {
+                        addPreference(context, category, fieldInfo);
+                    }
                 }
             }
             
@@ -104,7 +112,7 @@ public class TunablePreferenceGenerator {
         }
     }
     
-    private static void scanClass(Class<?> clazz, Map<String, List<TunableFieldInfo>> categorizedFields) {
+    private static void scanClass(Class<?> clazz, Map<String, Map<String, List<TunableFieldInfo>>> groupedFields) {
         String className = clazz.getSimpleName();
         Log.d(TAG, "Scanning class: " + className);
         
@@ -114,13 +122,9 @@ public class TunablePreferenceGenerator {
         int fieldOrder = 0; // Track field declaration order
         
         for (Field field : fields) {
-            //Log.d(TAG, "Checking field: " + field.getName() + ", has annotation: " + field.isAnnotationPresent(Tunable.class));
             if (field.isAnnotationPresent(Tunable.class)) {
                 Tunable annotation = field.getAnnotation(Tunable.class);
-                if (annotation == null) {
-                    Log.w(TAG, "Field " + field.getName() + " has @Tunable but annotation is null!");
-                    continue;
-                }
+                if (annotation == null) continue;
                 
                 TunableFieldInfo info = new TunableFieldInfo();
                 info.className = className;
@@ -128,17 +132,45 @@ public class TunablePreferenceGenerator {
                 info.fieldName = field.getName();
                 info.fieldType = field.getType();
                 info.annotation = annotation;
-                info.order = fieldOrder++; // Use declaration order
+                info.order = fieldOrder++; 
                 
+                String subTab = annotation.subTab();
                 String category = annotation.category();
-                if (!categorizedFields.containsKey(category)) {
-                    categorizedFields.put(category, new ArrayList<>());
+
+                if (!groupedFields.containsKey(subTab)) {
+                    groupedFields.put(subTab, new HashMap<>());
                 }
-                categorizedFields.get(category).add(info);
+                Map<String, List<TunableFieldInfo>> categories = groupedFields.get(subTab);
                 
-                //Log.d(TAG, "Found tunable field: " + className + "." + field.getName() + " (order: " + info.order + ")");
+                if (!categories.containsKey(category)) {
+                    categories.put(category, new ArrayList<>());
+                }
+                categories.get(category).add(info);
             }
         }
+    }
+
+    private static PreferenceScreen findOrCreateSubTab(Context context, PreferenceScreen root, String subTabName) {
+        String subTabKey = "pref_subtab_tunable_" + subTabName.toLowerCase().replace(" ", "_");
+
+        for (int i = 0; i < root.getPreferenceCount(); i++) {
+            if (root.getPreference(i) instanceof PreferenceScreen) {
+                PreferenceScreen screen = (PreferenceScreen) root.getPreference(i);
+                if (subTabKey.equals(screen.getKey())) {
+                    return screen;
+                }
+            }
+        }
+
+        // Create new nested PreferenceScreen
+        PreferenceScreen subTab = root.getPreferenceManager().createPreferenceScreen(context);
+        subTab.setKey(subTabKey);
+        subTab.setTitle(subTabName);
+        subTab.setSummary("Nested settings for " + subTabName);
+        subTab.setIconSpaceReserved(false);
+        root.addPreference(subTab);
+
+        return subTab;
     }
     
     private static PreferenceCategory findOrCreateCategory(Context context, PreferenceScreen screen, String categoryName) {

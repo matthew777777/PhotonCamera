@@ -69,25 +69,16 @@ public class PostPipeline extends GLBasePipeline {
     
     @Tunable(
         title = "Demosaicing Method",
-        description = "0 = Demosaic (compatibility mode), 1 = Demosaic3 (better quality)",
+        description = "0 = Demosaic (compatibility mode), 1 = Demosaic3 (better quality), 2 = RCD (advanced)",
         category = "Demosaic",
+        subTab = "Experimental Pipeline",
         min = 0.0f,
-        max = 1.0f,
+        max = 2.0f,
         defaultValue = 1.0f,
         step = 1.0f
     )
     int demosaicingMethod = 1;
 
-    @Tunable(
-        title = "Experimental Demosaic",
-        description = "Choose demosaic backend for the Experimental Pipeline. 0 = Legacy Demosaic3, 1 = RCD + Adaptive Selection",
-        category = "Demosaic",
-        min = 0.0f,
-        max = 1.0f,
-        defaultValue = 0.0f,
-        step = 1.0f
-    )
-    int experimentalDemosaic = 0;
 
     public Bitmap Run(ByteBuffer inBuffer, Parameters parameters) {
         mParameters = parameters;
@@ -186,10 +177,12 @@ public class PostPipeline extends GLBasePipeline {
                 if(mSettings.alignAlgorithm != 2) {
                     //add(new HotPixelFilter());
                     // demosaicingMethod is automatically injected from settings
-                    //noinspection SwitchStatementWithTooFewBranches
                     switch (demosaicingMethod){
                         case 0:
                             add(new Demosaic());
+                            break;
+                        case 2:
+                            add(new DemosaicRCD());
                             break;
                         default:
                             add(new Demosaic3());
@@ -256,14 +249,21 @@ public class PostPipeline extends GLBasePipeline {
         add(hr);
 
         // Stage 2: Demosaic Selection
-        if (experimentalDemosaic == 0) {
-            Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = LEGACY_Demosaic3");
-            add(new Demosaic3());
-        } else {
-            Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = RCD_ADAPTIVE");
-            DemosaicRCD dem = new DemosaicRCD();
-            dem.passThrough = 0; // DEBUG: ENABLE RCD
-            add(dem);
+        switch (demosaicingMethod) {
+            case 0:
+                Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = Demosaic (Compatibility)");
+                add(new Demosaic());
+                break;
+            case 2:
+                Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = RCD_ADAPTIVE");
+                DemosaicRCD dem = new DemosaicRCD();
+                dem.passThrough = 0; // DEBUG: ENABLE RCD
+                add(dem);
+                break;
+            default:
+                Log.d("PostPipeline", "ExperimentalJPEG: DemosaicBackend = Demosaic3");
+                add(new Demosaic3());
+                break;
         }
 
         // Stage 3: Experimental Capture Sharpening (RT port)

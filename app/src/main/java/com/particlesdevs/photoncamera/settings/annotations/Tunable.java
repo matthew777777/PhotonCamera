@@ -41,6 +41,11 @@ public @interface Tunable {
      * Options: "Sharpening", "Demosaic", "Denoise", "Color", "Tone", "General"
      */
     String category() default "General";
+
+    /**
+     * Sub-tab (nested screen) for the setting
+     */
+    String subTab() default "";
     
     /**
      * Minimum value (for numeric types)
