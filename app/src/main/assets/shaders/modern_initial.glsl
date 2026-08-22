@@ -66,11 +66,15 @@ void main() {
 
     // 6. Contrast adjustment (pivot at 0.18 midtone).
     // Avoid negative values and division by zero.
-    vec3 contrastRGB = pow(max(exposedRGB, 1e-6) / 0.18, vec3(contrast)) * 0.18;
+    float exposedLuma = dot(exposedRGB, vec3(0.2126, 0.7152, 0.0722));
+    float contrastLuma = 0.18 * pow(max(exposedLuma, 1e-6) / 0.18, contrast);
+    vec3 contrastRGB = exposedLuma > 1e-6
+        ? exposedRGB * (contrastLuma / exposedLuma)
+        : vec3(0.0);
 
     // 7. Saturation adjustment.
-    float luma = dot(contrastRGB, vec3(0.299, 0.587, 0.114));
-    vec3 finalRGB = mix(vec3(luma), contrastRGB, saturation);
+    float luma = dot(contrastRGB, vec3(0.2126, 0.7152, 0.0722));
+    vec3 finalRGB = mix(vec3(luma), contrastRGB, max(saturation, 0.0));
 
     // Output scene-referred HDR RGB. No upper clamp - highlights above 1.0
     // are legitimate HDR data for the tone mapper further down the chain.

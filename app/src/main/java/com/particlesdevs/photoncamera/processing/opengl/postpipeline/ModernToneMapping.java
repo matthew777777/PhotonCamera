@@ -37,8 +37,11 @@ public class ModernToneMapping extends Node {
     @Tunable(title = "OpenDRT Contrast", category = "Modern Tone", subTab = "Experimental Pipeline", min = 0.5f, max = 2.0f, defaultValue = 1.15f)
     float odtContrast = 1.15f;
 
-    @Tunable(title = "OpenDRT Shoulder", category = "Modern Tone", subTab = "Experimental Pipeline", min = 0.1f, max = 5.0f, defaultValue = 2.0f)
-    float odtShoulder = 2.0f;
+    @Tunable(title = "OpenDRT Display Grey", category = "Modern Tone", subTab = "Experimental Pipeline", min = 0.01f, max = 0.50f, defaultValue = 0.18f)
+    float odtLg = 0.18f;
+
+    @Tunable(title = "OpenDRT Toe", category = "Modern Tone", subTab = "Experimental Pipeline", min = 0.0f, max = 0.1f, defaultValue = 0.02f)
+    float odtToe = 0.02f;
 
     @Tunable(title = "OpenDRT Purity", category = "Modern Tone", subTab = "Experimental Pipeline", min = 0.0f, max = 1.0f, defaultValue = 0.5f)
     float odtPurity = 0.5f;
@@ -58,7 +61,15 @@ public class ModernToneMapping extends Node {
             return;
         }
 
-        Log.d(TAG, "Run() - method: " + tonemapMethod + ", strength: " + strength + ", gamma: " + gamma);
+        // Calculate sx (shoulder scale) to satisfy the middle grey intersection constraint.
+        // f(x) = (x / (x + sx))^p
+        // The toe changes the input before the sigmoid, so solve against the
+        // toe-transformed middle grey rather than the raw 0.18 value.
+        float grey = 0.18f;
+        float toeGrey = grey * grey / (grey + odtToe + 1e-6f);
+        float sx = toeGrey * ((float) Math.pow(odtLg, -1.0f / odtContrast) - 1.0f);
+
+        Log.d(TAG, "Run() - method: " + tonemapMethod + ", strength: " + strength + ", sx: " + sx);
 
         glProg.useAssetProgram("modern_tonemapping");
         glProg.setTexture("InputBuffer", previousNode.WorkingTexture);
@@ -71,7 +82,8 @@ public class ModernToneMapping extends Node {
         glProg.setVar("acesD", acesD);
         glProg.setVar("acesE", acesE);
         glProg.setVar("odtContrast", odtContrast);
-        glProg.setVar("odtShoulder", odtShoulder);
+        glProg.setVar("odtSx", sx);
+        glProg.setVar("odtToe", odtToe);
         glProg.setVar("odtPurity", odtPurity);
 
         WorkingTexture = basePipeline.getMain();

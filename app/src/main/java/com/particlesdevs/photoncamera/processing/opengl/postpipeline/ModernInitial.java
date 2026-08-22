@@ -2,7 +2,6 @@ package com.particlesdevs.photoncamera.processing.opengl.postpipeline;
 
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
 import com.particlesdevs.photoncamera.processing.render.ColorCorrectionTransform;
-import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.Log;
 
@@ -76,9 +75,7 @@ public class ModernInitial extends Node {
 
     @Override
     public void Run() {
-        // Use modern exposure compensation from settings if not overridden by tunable
-        float compensation = PreferenceKeys.getModernExposureCompensation();
-        float evScale = (float) Math.pow(2.0, compensation + exposureCompensation);
+        float evScale = (float) Math.pow(2.0, exposureCompensation);
         float totalExposureScale = evScale * manualExposureScale;
 
         // Get color matrices from parameters

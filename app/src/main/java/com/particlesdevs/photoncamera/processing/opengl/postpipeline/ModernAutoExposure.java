@@ -59,6 +59,30 @@ public class ModernAutoExposure extends Node {
             return;
         }
 
+        // Detect selected tonemapping method to anchor exposure correctly.
+        // 0: ACES, 1: OpenDRT.
+        int tonemapMethod = 0;
+        try {
+            tonemapMethod = androidx.preference.PreferenceManager.getDefaultSharedPreferences(com.particlesdevs.photoncamera.app.PhotonCamera.getSettingsManagerStatic().getContext())
+                    .getInt("pref_tunable_moderntonemapping_tonemapmethod", 0);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to read tonemapMethod preference, defaulting to ACES");
+        }
+
+        float activeTargetMidtone;
+        float activeHighlightLimit = highlightLimit;
+
+        if (tonemapMethod == 1) {
+            // OpenDRT expects 0.18 middle grey anchor.
+            activeTargetMidtone = 0.18f;
+        } else {
+            // ACES has a brighter shoulder than OpenDRT. Keep its scene anchor
+            // conservative and leave enough room below the display white point
+            // for saturated skies and specular highlights.
+            activeTargetMidtone = 0.10f;
+            activeHighlightLimit = Math.min(activeHighlightLimit, 0.85f);
+        }
+
         // GLProg already clears its Defines list right after every
         // useProgram()/useAssetProgram() call (see GLProg.useShader()), so
         // GLHistogram.Compute() below never actually leaves anything behind on
@@ -112,19 +136,20 @@ public class ModernAutoExposure extends Node {
 
         // 3. Estimate Exposure Multiplier
         float compensation = PreferenceKeys.getModernExposureCompensation();
-        float targetMidtoneCompensated = targetMidtone * (float) Math.pow(2.0, compensation);
+        float targetMidtoneCompensated = activeTargetMidtone *
+            (float) Math.pow(2.0, compensation);
 
         float medianLum = (float) Math.pow(2.0, medianEv);
-        float mpy = targetMidtoneCompensated / (medianLum + 1e-6f);
+        float mpy = targetMidtoneCompensated / Math.max(medianLum, 1e-6f);
 
         // Highlight Headroom
         float highLum = (float) Math.pow(2.0, highEv);
-        float headroom = highlightLimit / (highLum * mpy + 1e-6f);
+        float headroom = activeHighlightLimit / (highLum * mpy + 1e-6f);
         Log.d(TAG, String.format(java.util.Locale.US, "Highlight Headroom: %.2f stops", Math.log(headroom) / Math.log(2.0)));
 
         // Highlight Protection
-        if (highLum * mpy > highlightLimit) {
-            float reduction = highlightLimit / (highLum * mpy);
+        if (highLum * mpy > activeHighlightLimit) {
+            float reduction = activeHighlightLimit / (highLum * mpy);
             // Blend based on highlightProtection strength
             float finalMpy = mpy * (1.0f - highlightProtection + highlightProtection * reduction);
             Log.d(TAG, String.format(java.util.Locale.US, "Highlight Protection: mpy %.6f -> %.6f", mpy, finalMpy));
