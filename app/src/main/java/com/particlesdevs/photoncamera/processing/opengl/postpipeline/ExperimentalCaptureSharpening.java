@@ -37,6 +37,13 @@ public class ExperimentalCaptureSharpening extends Node {
     @Override
     public void Run() {
         GLTexture input = previousNode.WorkingTexture;
+        int selectedIterations = Math.max(0, Math.min(iterations, MAX_ITERATIONS));
+        if (debugResponse == 0 && selectedIterations == 0) {
+            WorkingTexture = input;
+            glProg.closed = true;
+            return;
+        }
+
         GLTexture blurredOriginalH = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
         blur(input, blurredOriginalH, true, 0, null, null, null);
         GLTexture blurredOriginal = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
@@ -56,9 +63,8 @@ public class ExperimentalCaptureSharpening extends Node {
             return;
         }
 
-        int selectedIterations = Math.max(0, Math.min(iterations, MAX_ITERATIONS));
         GLTexture estimate = input;
-        for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        for (int iteration = 0; iteration < selectedIterations; iteration++) {
             GLTexture blurredEstimateH = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
             blur(estimate, blurredEstimateH, true, 0, null, null, null);
             GLTexture blurredEstimate = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
@@ -68,7 +74,7 @@ public class ExperimentalCaptureSharpening extends Node {
             GLTexture correctionH = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
             blur(input, correctionH, true, 1, blurredEstimate, blurredOriginal, null);
             GLTexture correction = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
-            blur(input, correction, false, 1, blurredEstimate, blurredOriginal, correctionH);
+            blur(input, correction, false, 0, null, null, correctionH);
             correctionH.close();
             blurredEstimate.close();
 
