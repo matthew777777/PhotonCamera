@@ -561,6 +561,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             // This method is called when the camera is opened.  We start camera preview here.
             mCameraOpenCloseLock.release();
+            if (!isCameraResumed) {
+                cameraDevice.close();
+                return;
+            }
             mCameraDevice = cameraDevice;
             mImageSaver = new ImageSaver(cameraEventsListener);
             createCameraPreviewSession(false);
@@ -591,6 +595,9 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
         @Override
         public void onSurfaceTextureAvailable(@NonNull SurfaceTexture texture, int width, int height) {
+            if (!isCameraResumed || texture != mTextureView.getSurfaceTexture()) {
+                return;
+            }
             try {
                 String curID = PhotonCamera.getSettings().mCameraID;
                 if(curID.contains("-")){
@@ -912,6 +919,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      * Closes the current {@link CameraDevice}.
      */
     public void closeCamera() {
+        isCameraResumed = false;
         try {
             mCameraOpenCloseLock.acquire();
             if (null != mCaptureSession) {
@@ -1325,6 +1333,9 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     public void openCamera(int width, int height) {
         //Open camera in non ui thread
         processExecutor.execute(()->{
+            if (!isCameraResumed) {
+                return;
+            }
             CameraFragment.mSelectedMode = PhotonCamera.getSettings().selectedMode;
             if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -1338,6 +1349,9 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             setUpCameraOutputs(width, height);
             configureTransform(width, height);
             try {
+                if (!isCameraResumed) {
+                    return;
+                }
                 if (!mCameraOpenCloseLock.tryAcquire(1000, TimeUnit.MILLISECONDS)) {
                     throw new RuntimeException("Time out waiting to lock camera opening.");
                 }
@@ -1510,6 +1524,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         //activity.runOnUiThread(() -> cameraEventsListener.onCharacteristicsUpdated(characteristics));
     }
     Surface surface;
+    /** True only while the camera fragment is foregrounded and owns a preview surface. */
+    private volatile boolean isCameraResumed;
     public void createCameraPreviewSession(boolean isBurstSession) {
         try {
             SensorConfigInjector.applyToSensor(physicalID, this);
@@ -2559,12 +2575,16 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         super.finalize();
     }
     public void resumeCamera() {
+        isCameraResumed = true;
         if(PhotonCamera.getSettings().previewFormat != 0) {
             mPreviewTargetFormat = PhotonCamera.getSettings().previewFormat;
         } else {
             mPreviewTargetFormat = ImageFormat.JPEG;
         }
         processExecutor.execute(() -> {
+            if (!isCameraResumed) {
+                return;
+            }
             if (mTextureView == null)
                 mTextureView = new GLPreview(activity);
             if (mTextureView.isAvailable()) {

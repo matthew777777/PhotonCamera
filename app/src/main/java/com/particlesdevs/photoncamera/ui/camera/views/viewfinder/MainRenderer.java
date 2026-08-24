@@ -29,7 +29,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private final FloatBuffer pTexCoord;
     private final float[] mTexRotateMatrix = new float[] { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 
-    private SurfaceTexture mSTexture;
+    private volatile SurfaceTexture mSTexture;
 
     private boolean mGLInit = false;
     private boolean mUpdateST = false;
@@ -85,6 +85,11 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        mGLInit = false;
+        SurfaceTexture oldTexture = mSTexture;
+        if (oldTexture != null) {
+            oldTexture.release();
+        }
         initTex();
         mSTexture = new SurfaceTexture(hTex[0]);
         mSTexture.setOnFrameAvailableListener(this);
@@ -105,6 +110,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glEnableVertexAttribArray(vTexCoord);
         GLES20.glUniform2f(GLES20.glGetUniformLocation(hProgram, "resolution"), mView.getWidth(), mView.getHeight());
         mGLInit = true;
+        mView.onSurfaceTextureCreated(mSTexture);
         mView.fireOnSurfaceTextureAvailable(mSTexture, 0, 0);
     }
 
@@ -114,6 +120,13 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
 
     public SurfaceTexture getmSTexture() {
         return mSTexture;
+    }
+
+    void invalidateSurfaceTexture(SurfaceTexture surfaceTexture) {
+        if (mSTexture == surfaceTexture) {
+            mSTexture = null;
+            mGLInit = false;
+        }
     }
 
     private void initTex() {
@@ -127,6 +140,9 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     }
 
     public synchronized void onFrameAvailable(SurfaceTexture st) {
+        if (st != mSTexture) {
+            return;
+        }
         mUpdateST = true;
         mView.requestRender();
     }

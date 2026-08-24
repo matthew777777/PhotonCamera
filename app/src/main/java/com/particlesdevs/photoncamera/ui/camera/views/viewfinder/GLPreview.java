@@ -85,7 +85,9 @@ public class GLPreview extends GLSurfaceView {
 
     public void fireOnSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int w, int h) {
         handler.post(() -> {
-            if (surfaceTextureListener != null)
+            // GLSurfaceView may recreate its EGL context while this runnable is queued. Do not
+            // hand the camera a SurfaceTexture that belonged to the previous context.
+            if (available && surfaceTexture == getSurfaceTexture() && surfaceTextureListener != null)
                 surfaceTextureListener.onSurfaceTextureAvailable(surfaceTexture, w, h);
         });
     }
@@ -122,9 +124,15 @@ public class GLPreview extends GLSurfaceView {
 
     @Override
     public void onPause() {
+        SurfaceTexture surfaceTexture = getSurfaceTexture();
         available = false;
-        fireOnSurfaceTextureDestroyed(getSurfaceTexture());
-        // mRenderer.onPause();
+        // The SurfaceTexture is tied to the EGL context and cannot be reused once the view is
+        // paused. Clear it before GLSurfaceView starts its asynchronous teardown so callers
+        // cannot reopen the camera against the stale texture.
+        mRenderer.invalidateSurfaceTexture(surfaceTexture);
+        if (surfaceTexture != null) {
+            fireOnSurfaceTextureDestroyed(surfaceTexture);
+        }
         super.onPause();
     }
 
@@ -173,7 +181,7 @@ public class GLPreview extends GLSurfaceView {
     }
 
     public SurfaceTexture getSurfaceTexture() {
-        return mRenderer.getmSTexture();
+        return mRenderer == null ? null : mRenderer.getmSTexture();
     }
 
     public void setTransform(Matrix matrix) {
@@ -195,15 +203,18 @@ public class GLPreview extends GLSurfaceView {
         requestRender();
     }
 
-    boolean available = false;
+    private volatile boolean available = false;
 
     public boolean isAvailable() {
-        return available;
+        return available && getSurfaceTexture() != null;
     }
 
     public void setSurfaceTextureListener(TextureView.SurfaceTextureListener l) {
         this.surfaceTextureListener = l;
-        available = true;
+    }
+
+    void onSurfaceTextureCreated(SurfaceTexture surfaceTexture) {
+        available = surfaceTexture != null;
     }
 
     public void scale(int in_width, int in_height, int out_width, int out_height, int or) {
