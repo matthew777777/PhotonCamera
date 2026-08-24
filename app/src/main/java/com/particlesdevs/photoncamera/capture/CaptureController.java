@@ -415,6 +415,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     public int mPreviewAEMode;
     public MeteringRectangle[] mPreviewMeteringAF;
     public MeteringRectangle[] mPreviewMeteringAE;
+    private MeteringRectangle[] mInitialMeteringAF;
+    private MeteringRectangle[] mInitialMeteringAE;
     /**
      * The {@link Size} of camera preview.
      */
@@ -1577,6 +1579,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                         //mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
                         // Flash is automatically enabled when necessary.
                         resetPreviewAEMode();
+                        applyAeMeteringRegions(mPreviewRequestBuilder);
                         Camera2ApiAutoFix.applyPrev(mPreviewRequestBuilder);
                         VendorTagUtils.builderSessionApply(mPreviewRequestBuilder, false, useMaximumResolutionKey, physicalID);
                         //if(isZslMode()){
@@ -1586,7 +1589,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                 Log.d(TAG, "Failed to set LENS_SHADING_MAP_MODE_ON for ZSL mode:" + Log.getStackTraceString(e));
                             }
                         //}
-                        
+
                         // Apply dynamic OIS for preview stream
                         applyOisMode(mPreviewRequestBuilder, false);
 
@@ -1699,7 +1702,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         if (isZslMode()) {
             mPreviewRequestBuilder.addTarget(mImageReaderRaw.getSurface());
         }
-        mPreviewMeteringAF = mPreviewRequestBuilder.get(CONTROL_AF_REGIONS);
+        mInitialMeteringAF = mPreviewRequestBuilder.get(CONTROL_AF_REGIONS);
+        mPreviewMeteringAF = mInitialMeteringAF;
         mPreviewAFMode = PreferenceKeys.getAfMode();
         if (mIsRecordingVideo) {
             mPreviewRequestBuilder.set(CONTROL_AF_MODE, CONTROL_AF_MODE_CONTINUOUS_VIDEO);
@@ -1708,7 +1712,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 mPreviewRequestBuilder.set(CONTROL_VIDEO_STABILIZATION_MODE, CONTROL_VIDEO_STABILIZATION_MODE_ON);
             }
         }
-        mPreviewMeteringAE = mPreviewRequestBuilder.get(CONTROL_AE_REGIONS);
+        mInitialMeteringAE = mPreviewRequestBuilder.get(CONTROL_AE_REGIONS);
+        mPreviewMeteringAE = mInitialMeteringAE;
         mPreviewAEMode = mPreviewRequestBuilder.get(CONTROL_AE_MODE);
     }
 
@@ -1802,6 +1807,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
             cameraEventsListener.onCaptureStillPictureStarted("CaptureStarted!");
             mMeasuredFrameCnt = 0;
+            applyAeMeteringRegions(builder);
             mImageSaver.implementation = new DebugSender(cameraEventsListener);
 
             cameraEventsListener.onBurstPrepared(null);
@@ -2072,7 +2078,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             if (mFlashed) captureBuilder.set(FLASH_MODE, FLASH_MODE_TORCH);
             Log.d(TAG, "Focus:" + focus);
             captureBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL);
-           
+
             int[] stabilizationModes = mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION);
             if (stabilizationModes != null && stabilizationModes.length > 1) {
                 Log.d(TAG, "LENS_OPTICAL_STABILIZATION_MODE");
@@ -2086,6 +2092,12 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             //setAutoFlash(captureBuilder);
             //int rotation = Interface.getGravity().getCameraRotation();//activity.getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, PhotonCamera.getGravity().getCameraRotation(mSensorOrientation));
+            if (mTouchFocus != null && mTouchFocus.isTouchFocus) {
+                captureBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AE_REGIONS));
+                captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AF_REGIONS));
+            } else {
+                applyAeMeteringRegions(captureBuilder);
+            }
             VendorTagUtils.builderSessionApply(captureBuilder, true, useMaximumResolutionKey, physicalID);
             try {
                 captureBuilder.set(CaptureRequest.STATISTICS_LENS_SHADING_MAP_MODE, CaptureRequest.STATISTICS_LENS_SHADING_MAP_MODE_ON);
@@ -2352,6 +2364,81 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         PhotonCamera.getSettings().fpsMode = PreferenceKeys.getFpsMode();
         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, getSelectedFpsRange());
         rebuildPreviewBuilder();
+    }
+
+    private void applyAeMeteringRegions(CaptureRequest.Builder builder) {
+        int mode = PreferenceKeys.getAeMeteringStd();
+        Log.d(TAG, "applyAeMeteringRegions mode:" + mode);
+        MeteringRectangle[] rectangles = getAEMeteringRectangles(mode);
+        if (mode == -1) {
+            rectangles = mInitialMeteringAE;
+        }
+        Integer maxAeRegions = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+        if (maxAeRegions != null && maxAeRegions > 0) {
+            builder.set(CaptureRequest.CONTROL_AE_REGIONS, rectangles);
+            if (builder == mPreviewRequestBuilder) {
+                mPreviewMeteringAE = rectangles;
+            }
+        }
+    }
+
+    private MeteringRectangle[] getAEMeteringRectangles(int mode) {
+        Rect activeArray = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        if (activeArray == null) return null;
+
+        int width = activeArray.width();
+        int height = activeArray.height();
+
+        switch (mode) {
+            case 0: // Center Weighted
+                Integer maxRegionsObj = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+                int maxRegions = maxRegionsObj != null ? maxRegionsObj : 0;
+                if (maxRegions >= 3) {
+                    // Concentric overlapping rectangles
+                    // 1. Large Base: 70%, Weight: 200
+                    int w1 = (int) (width * 0.70);
+                    int h1 = (int) (height * 0.70);
+                    int x1 = (width - w1) / 2;
+                    int y1 = (height - h1) / 2;
+
+                    // 2. Medium Core: 45%, Weight: 300
+                    int w2 = (int) (width * 0.45);
+                    int h2 = (int) (height * 0.45);
+                    int x2 = (width - w2) / 2;
+                    int y2 = (height - h2) / 2;
+
+                    // 3. Small Center: 20%, Weight: 500
+                    int w3 = (int) (width * 0.20);
+                    int h3 = (int) (height * 0.20);
+                    int x3 = (width - w3) / 2;
+                    int y3 = (height - h3) / 2;
+
+                    return new MeteringRectangle[]{
+                            new MeteringRectangle(x1, y1, w1, h1, 200),
+                            new MeteringRectangle(x2, y2, w2, h2, 300),
+                            new MeteringRectangle(x3, y3, w3, h3, 500)
+                    };
+                } else {
+                    // Fallback: single large center rectangle (60%)
+                    int cwWidth = (int) (width * 0.60);
+                    int cwHeight = (int) (height * 0.60);
+                    int cwX = (width - cwWidth) / 2;
+                    int cwY = (height - cwHeight) / 2;
+                    return new MeteringRectangle[]{new MeteringRectangle(cwX, cwY, cwWidth, cwHeight, MeteringRectangle.METERING_WEIGHT_MAX)};
+                }
+            case 1: // Frame Average
+                // Full active array
+                return new MeteringRectangle[]{new MeteringRectangle(0, 0, width, height, MeteringRectangle.METERING_WEIGHT_MAX)};
+            case 2: // Spot Metering
+                // Approximately 2.5% of the sensor area (sqrt(0.025) ≈ 0.158)
+                int sWidth = (int) (width * 0.158);
+                int sHeight = (int) (height * 0.158);
+                int sX = (width - sWidth) / 2;
+                int sY = (height - sHeight) / 2;
+                return new MeteringRectangle[]{new MeteringRectangle(sX, sY, sWidth, sHeight, MeteringRectangle.METERING_WEIGHT_MAX)};
+            default:
+                return null;
+        }
     }
 
     public void resetPreviewAEMode() {

@@ -1,6 +1,7 @@
 package com.particlesdevs.photoncamera.control;
 
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.MeteringRectangle;

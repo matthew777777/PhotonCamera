@@ -10,5 +10,5 @@ public enum SettingType {
     EIS,
     RAW,
     BATTERY_SAVER,
-    BRACKETING
+    AE_METERING_STD,
 }

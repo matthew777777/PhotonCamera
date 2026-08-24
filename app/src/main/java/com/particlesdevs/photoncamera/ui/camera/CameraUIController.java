@@ -260,6 +260,10 @@ final class CameraUIController implements CameraUIEventsListener,
                         // Update HDR class to use the new bracketing mode
                         IsoExpoSelector.HDR = (Integer) value > 0;
                         break;
+                    case AE_METERING_STD:
+                        PreferenceKeys.setAeMeteringStd((Integer) value);
+                        cameraFragment.captureController.applyAeMetering();
+                        break;
 
                 }
                 cameraFragment.cameraFragmentBinding.layoutTopbar.invalidateAll();
