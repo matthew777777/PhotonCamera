@@ -21,13 +21,10 @@ public class ExperimentalCaptureSharpening extends Node {
     public int iterations = 1;
     @Tunable(title = "Debug Mask", description = "Show the sharpening mask", category = "Capture Sharpening", subTab = "Experimental Pipeline", min = 0.0f, max = 1.0f, defaultValue = 0.0f, step = 1.0f)
     public int debugResponse = 0;
-    @Tunable(title = "Max Sigma", description = "Upper limit for the Gaussian radius", category = "Capture Sharpening", subTab = "Experimental Pipeline", min = 0.5f, max = 2.0f, defaultValue = 2.0f, step = 0.05f)
-    public float maxSigma = 2.0f;
     @Tunable(title = "Min Correction", description = "Per-iteration correction floor", category = "Capture Sharpening", subTab = "Experimental Pipeline", min = 0.0f, max = 1.0f, defaultValue = 0.25f, step = 0.05f)
     public float minCorrection = 0.25f;
     @Tunable(title = "Max Correction", description = "Per-iteration correction ceiling", category = "Capture Sharpening", subTab = "Experimental Pipeline", min = 1.0f, max = 10.0f, defaultValue = 4.0f, step = 0.1f)
     public float maxCorrection = 4.0f;
-
     public float epsilon = 1e-4f;
     public float maxOutput = 1.0f;
 
@@ -44,20 +41,12 @@ public class ExperimentalCaptureSharpening extends Node {
             return;
         }
 
-        GLTexture blurredOriginalH = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
-        blur(input, blurredOriginalH, true, 0, null, null, null);
         GLTexture blurredOriginal = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
-        blur(blurredOriginalH, blurredOriginal, false, 0, null, null, null);
-        blurredOriginalH.close();
+        filter(input, blurredOriginal, 0, null);
 
         if (debugResponse == 1) {
             WorkingTexture = basePipeline.getMain();
-            glProg.useAssetProgram("demosaic/capturesharpen/capturesharpen");
-            glProg.setTexture("OriginalBuffer", input);
-            glProg.setTexture("BlurredOriginal", blurredOriginal);
-            glProg.setVar("contrastThreshold", contrastThreshold);
-            glProg.setVar("debugResponse", 1);
-            glProg.drawBlocks(WorkingTexture);
+            runCombine(input, blurredOriginal, input, input, WorkingTexture, selectedIterations, selectedIterations, 1);
             blurredOriginal.close();
             glProg.closed = true;
             return;
@@ -65,34 +54,16 @@ public class ExperimentalCaptureSharpening extends Node {
 
         GLTexture estimate = input;
         for (int iteration = 0; iteration < selectedIterations; iteration++) {
-            GLTexture blurredEstimateH = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
-            blur(estimate, blurredEstimateH, true, 0, null, null, null);
             GLTexture blurredEstimate = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
-            blur(blurredEstimateH, blurredEstimate, false, 0, null, null, null);
-            blurredEstimateH.close();
-
-            GLTexture correctionH = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
-            blur(input, correctionH, true, 1, blurredEstimate, blurredOriginal, null);
+            filter(estimate, blurredEstimate, 0, null);
             GLTexture correction = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
-            blur(input, correction, false, 0, null, null, correctionH);
-            correctionH.close();
+            filter(input, correction, 1, blurredEstimate);
             blurredEstimate.close();
 
-            glProg.useAssetProgram("demosaic/capturesharpen/capturesharpen");
-            glProg.setTexture("OriginalBuffer", input);
-            glProg.setTexture("BlurredOriginal", blurredOriginal);
-            glProg.setTexture("EstimateBuffer", estimate);
-            glProg.setTexture("CorrectionBuffer", correction);
-            glProg.setVar("iterationIndex", iteration);
-            glProg.setVar("iterations", selectedIterations);
-            glProg.setVar("contrastThreshold", contrastThreshold);
-            glProg.setVar("debugResponse", 0);
-            glProg.setVar("minCorrection", minCorrection);
-            glProg.setVar("maxCorrection", maxCorrection);
-            glProg.setVar("maxOutput", maxOutput);
-
-            GLTexture nextEstimate = basePipeline.getMain();
-            glProg.drawBlocks(nextEstimate);
+            GLTexture nextEstimate = new GLTexture(input.mSize, input.mFormat, null, GL_LINEAR, GL_CLAMP_TO_EDGE);
+            runCombine(input, blurredOriginal, estimate, correction, nextEstimate,
+                    iteration, selectedIterations, 0);
+            if (estimate != input) estimate.close();
             estimate = nextEstimate;
             correction.close();
         }
@@ -102,22 +73,37 @@ public class ExperimentalCaptureSharpening extends Node {
         glProg.closed = true;
     }
 
-    private void blur(GLTexture source, GLTexture target, boolean horizontal, int mode,
-                      GLTexture blurredEstimate, GLTexture blurredOriginal, GLTexture previousPass) {
-        glProg.useAssetProgram("demosaic/capturesharpen/capturesharpenblur");
-        glProg.setTexture("SourceBuffer", previousPass == null ? source : previousPass);
-        glProg.setVar("direction", horizontal ? 1f : 0f, horizontal ? 0f : 1f);
+    private void filter(GLTexture source, GLTexture target, int mode, GLTexture blurredEstimate) {
+        glProg.setLayout(8, 8, 1);
+        glProg.useAssetProgram("demosaic/capturesharpen/capturesharpenblur", true);
+        glProg.setTextureCompute("SourceBuffer", source, false);
+        // Keep every declared image bound. The inactive inputs are ignored by
+        // mode 0, while mode 1 reads the original and blurred estimate tiles.
+        glProg.setTextureCompute("OriginalBuffer", source, false);
+        glProg.setTextureCompute("BlurredEstimate", mode == 1 ? blurredEstimate : source, false);
+        glProg.setTextureCompute("OutputBuffer", target, true);
         glProg.setVar("mode", mode);
         glProg.setVar("radius", radius);
         glProg.setVar("cornerBoost", cornerBoost);
-        glProg.setVar("maxSigma", Math.min(maxSigma, 2.0f));
-        if (mode == 1) {
-            glProg.setTexture("OriginalBuffer", source);
-            glProg.setTexture("BlurredEstimate", blurredEstimate);
-            glProg.setTexture("BlurredOriginal", blurredOriginal);
-            glProg.setVar("contrastThreshold", contrastThreshold);
-            glProg.setVar("epsilon", epsilon);
-        }
+        glProg.setVar("epsilon", epsilon);
+        glProg.computeAuto(target.mSize, 1, false);
+    }
+
+    private void runCombine(GLTexture original, GLTexture blurredOriginal, GLTexture estimate,
+                            GLTexture correction, GLTexture target, int iteration, int iterationCount,
+                            int debug) {
+        glProg.useAssetProgram("demosaic/capturesharpen/capturesharpen");
+        glProg.setTexture("OriginalBuffer", original);
+        glProg.setTexture("BlurredOriginal", blurredOriginal);
+        glProg.setTexture("EstimateBuffer", estimate);
+        glProg.setTexture("CorrectionBuffer", correction);
+        glProg.setVar("contrastThreshold", contrastThreshold);
+        glProg.setVar("iterationIndex", iteration);
+        glProg.setVar("iterations", iterationCount);
+        glProg.setVar("debugResponse", debug);
+        glProg.setVar("minCorrection", minCorrection);
+        glProg.setVar("maxCorrection", maxCorrection);
+        glProg.setVar("maxOutput", maxOutput);
         glProg.drawBlocks(target);
     }
 }

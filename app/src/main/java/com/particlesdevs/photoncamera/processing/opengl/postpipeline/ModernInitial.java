@@ -113,6 +113,10 @@ public class ModernInitial extends Node {
 
         // 1. Set Defines and Program FIRST
         glProg.setDefine("USE_GAINMAP", useGainMap);
+        ColorCorrectionTransform.CorrectionMode correctionMode = basePipeline.mParameters.CCT.correctionMode;
+        boolean useCubeCorrection = correctionMode == ColorCorrectionTransform.CorrectionMode.CUBE
+            || correctionMode == ColorCorrectionTransform.CorrectionMode.CUBES;
+        glProg.setDefine("CCT_CUBE", useCubeCorrection);
         // Noise model (slope/offset) - used to fade the shading correction out
         // in noisy/dark regions, same role NOISES/NOISEO play in initial.glsl.
         glProg.setDefine("NOISES", basePipeline.noiseS);
@@ -126,6 +130,19 @@ public class ModernInitial extends Node {
         glProg.setVar("vignette", vignetteCorrection);
         glProg.setVar("sensorToIntermediate", sensorToIntermediate);
         glProg.setVar("intermediateToSRGB", intermediateToSRGB);
+
+        if (useCubeCorrection) {
+            float[][] cube;
+            if (correctionMode == ColorCorrectionTransform.CorrectionMode.CUBES) {
+                cube = basePipeline.mParameters.CCT.cubes[0].Combine(
+                        basePipeline.mParameters.CCT.cubes[1], basePipeline.mParameters.whitePoint);
+            } else {
+                cube = basePipeline.mParameters.CCT.cubes[0].cube;
+            }
+            glProg.setVar("CUBE0", cube[0]);
+            glProg.setVar("CUBE1", cube[1]);
+            glProg.setVar("CUBE2", cube[2]);
+        }
 
         float[] WP = basePipeline.mParameters.whitePoint;
         if (WP == null || WP.length < 3 || WP[0] == 0) WP = new float[]{1.0f, 1.0f, 1.0f};

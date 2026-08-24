@@ -8,14 +8,14 @@ precision highp sampler2D;
 // SourceBuffer's total sum is preserved at every level. Called
 // ceil(log2(max(width,height))) times, starting from
 // highlight_recovery_ratio.glsl's output, until the output is 1x1 - that
-// single texel then holds the image-wide (R-candidate-sum, R-weight-sum,
-// B-candidate-sum, B-weight-sum), which highlight_recovery_apply.glsl
-// divides to get the two average correction ratios.
+// single texel then holds the image-wide (R-offset-sum,R-weight-sum,
+// B-offset-sum,B-weight-sum), which highlight_recovery_apply.glsl
+// divides to get the two average chroma offsets.
 //
 // Plain float sums over realistic sensor pixel counts (tens of millions of
 // terms, each O(1)) stay well inside highp float's exact-integer range
 // (2^24) for the weight channels and lose only harmless fractional
-// precision on the ratio-sum channels - fine for an averaged correction
+// precision on the offset-sum channels - fine for an averaged correction
 // factor. See highlight_recovery_ratio.glsl for the license/attribution
 // note that applies to this whole pass group.
 

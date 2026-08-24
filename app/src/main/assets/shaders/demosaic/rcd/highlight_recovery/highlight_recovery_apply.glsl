@@ -7,14 +7,9 @@ precision highp sampler2D;
 // pass overview that apply to this whole group.
 //
 // CoeffBuffer is the final 1x1 output of the highlight_recovery_reduce.glsl
-// chain: (R-candidate-sum, R-weight-sum, B-candidate-sum, B-weight-sum) for
-// the whole image. Dividing gives the two global correction ratios used to
-// reconstruct any genuinely clipped R or B photosite from its local G. G
-// photosites and unclipped R/B photosites pass through unchanged - this
-// only touches pixels that are actually clipped. If a channel had zero
-// valid candidates anywhere in the frame (totals.g or totals.a == 0), its
-// coefficient falls back to 1.0 (reconstruct as pure local G) rather than
-// dividing by zero.
+// chain: (R-offset-sum, R-weight-sum, B-offset-sum, B-weight-sum). Dividing
+// gives the global chroma offsets used with each pixel's local opposing
+// reference, matching darktable's opposed reconstruction.
 
 uniform sampler2D InputBuffer;
 uniform sampler2D CoeffBuffer;
@@ -45,21 +40,47 @@ float localG(ivec2 xy) {
     return g * 0.25;
 }
 
+float opposingReference(ivec2 xy, int target) {
+    ivec2 size = textureSize(InputBuffer, 0);
+    float sumR = 0.0;
+    float sumG = 0.0;
+    float sumB = 0.0;
+    float countR = 0.0;
+    float countG = 0.0;
+    float countB = 0.0;
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            ivec2 sampleXY = clamp(xy + ivec2(dx, dy), ivec2(0), size - ivec2(1));
+            int channel = bayerChannel(sampleXY, cfaPattern);
+            float sampleValue = max(texelFetch(InputBuffer, sampleXY, 0).r, 0.0);
+            if (channel == 0) { sumR += sampleValue; countR += 1.0; }
+            else if (channel == 1) { sumG += sampleValue; countG += 1.0; }
+            else { sumB += sampleValue; countB += 1.0; }
+        }
+    }
+    float rootR = pow(sumR / max(countR, 1.0), 1.0 / 3.0);
+    float rootG = pow(sumG / max(countG, 1.0), 1.0 / 3.0);
+    float rootB = pow(sumB / max(countB, 1.0), 1.0 / 3.0);
+    float opposingRoot = target == 0 ? 0.5 * (rootG + rootB)
+        : (target == 1 ? 0.5 * (rootR + rootB) : 0.5 * (rootR + rootG));
+    return opposingRoot * opposingRoot * opposingRoot;
+}
+
 void main() {
     ivec2 xy = ivec2(gl_FragCoord.xy);
     float value = texelFetch(InputBuffer, xy, 0).r;
     int ch = bayerChannel(xy, cfaPattern);
 
     vec4 totals = texelFetch(CoeffBuffer, ivec2(0, 0), 0);
-    float coeffR = totals.g > 0.0 ? totals.r / totals.g : 1.0;
-    float coeffB = totals.a > 0.0 ? totals.b / totals.a : 1.0;
+    float chromaR = totals.g > 0.0 ? totals.r / totals.g : 0.0;
+    float chromaB = totals.a > 0.0 ? totals.b / totals.a : 0.0;
 
     bool clipped = (ch != 1) && value >= clipThreshold;
     float result = value;
 
     if (clipped) {
-        float g = localG(xy);
-        result = g * (ch == 0 ? coeffR : coeffB);
+        float reference = opposingReference(xy, ch);
+        result = max(value, reference + (ch == 0 ? chromaR : chromaB));
     }
 
     if (debugMask == 1) {

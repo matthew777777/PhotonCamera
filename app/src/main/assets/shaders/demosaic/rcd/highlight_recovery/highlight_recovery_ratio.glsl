@@ -1,7 +1,7 @@
 precision highp float;
 precision highp sampler2D;
 
-// HighlightRecovery - pass 1/3: candidate chroma-ratio accumulation.
+// HighlightRecovery - pass 1/3: candidate chroma-offset accumulation.
 //
 // Reimplements the first stage of "Inpaint Opposed" highlight reconstruction
 // as used by RawTherapee (ported there from the G'MIC/darktable team - see
@@ -23,19 +23,17 @@ precision highp sampler2D;
 //
 // Runs once, at full resolution, on the raw Bayer mosaic (InputBuffer, one
 // native channel per photosite in .r - matches this node's demosaic/rcd/
-// placement, i.e. before RCD demosaic runs). For every R or B photosite
-// that is unclipped, with an unclipped and bright-enough local G
-// neighborhood, this emits a candidate (value/G) ratio.
+// placement, i.e. before RCD demosaic runs). For every bright, unclipped
+// photosite near clipped data of the same color, this emits a candidate
+// chroma offset from the local opposing reference.
 // highlight_recovery_reduce.glsl then sums these across the whole image so
-// highlight_recovery_apply.glsl can read back two image-wide average
-// ratios (R/G and B/G) and use them to reconstruct genuinely clipped
-// photosites.
+// highlight_recovery_apply.glsl can read back image-wide average chroma
+// offsets and use them with each clipped pixel's local reference.
 
 uniform sampler2D InputBuffer;   // raw Bayer mosaic, one channel in .r per texel
 uniform float clipThreshold;     // photosite values >= this are "clipped"
 uniform float chromaSampleMin;   // ignore candidates whose local G is darker than this -
-                                  // a ratio measured near black isn't representative of
-                                  // the ratio near clipping
+                                  // avoid using noisy dark samples for chroma correction
 uniform int cfaPattern;          // 0=RGGB 1=BGGR 2=GRBG 3=GBRG
 
 out vec4 Output; // (R candidate * weight, R weight, B candidate * weight, B weight)
@@ -63,6 +61,46 @@ float localG(ivec2 xy) {
     return g * 0.25;
 }
 
+float opposingReference(ivec2 xy, int target) {
+    ivec2 size = textureSize(InputBuffer, 0);
+    float sumR = 0.0;
+    float sumG = 0.0;
+    float sumB = 0.0;
+    float countR = 0.0;
+    float countG = 0.0;
+    float countB = 0.0;
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            ivec2 sampleXY = clamp(xy + ivec2(dx, dy), ivec2(0), size - ivec2(1));
+            int channel = bayerChannel(sampleXY, cfaPattern);
+            float sampleValue = max(texelFetch(InputBuffer, sampleXY, 0).r, 0.0);
+            if (channel == 0) { sumR += sampleValue; countR += 1.0; }
+            else if (channel == 1) { sumG += sampleValue; countG += 1.0; }
+            else { sumB += sampleValue; countB += 1.0; }
+        }
+    }
+    float rootR = pow(sumR / max(countR, 1.0), 1.0 / 3.0);
+    float rootG = pow(sumG / max(countG, 1.0), 1.0 / 3.0);
+    float rootB = pow(sumB / max(countB, 1.0), 1.0 / 3.0);
+    float opposingRoot = target == 0 ? 0.5 * (rootG + rootB)
+        : (target == 1 ? 0.5 * (rootR + rootB) : 0.5 * (rootR + rootG));
+    return opposingRoot * opposingRoot * opposingRoot;
+}
+
+bool nearbyClipped(ivec2 xy, int target) {
+    ivec2 size = textureSize(InputBuffer, 0);
+    for (int dy = -4; dy <= 4; dy++) {
+        for (int dx = -4; dx <= 4; dx++) {
+            ivec2 sampleXY = clamp(xy + ivec2(dx, dy), ivec2(0), size - ivec2(1));
+            if (bayerChannel(sampleXY, cfaPattern) == target
+                    && texelFetch(InputBuffer, sampleXY, 0).r >= clipThreshold) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void main() {
     ivec2 xy = ivec2(gl_FragCoord.xy);
     int ch = bayerChannel(xy, cfaPattern);
@@ -73,15 +111,15 @@ void main() {
     }
 
     float value = texelFetch(InputBuffer, xy, 0).r;
-    float g = localG(xy);
-    bool valid = value < clipThreshold && g < clipThreshold && g >= chromaSampleMin;
-
-    float ratio = valid ? (value / max(g, 1e-4)) : 0.0;
+    bool valid = value < clipThreshold
+        && value >= max(0.2 * clipThreshold, chromaSampleMin)
+        && nearbyClipped(xy, ch);
+    float offset = valid ? (value - opposingReference(xy, ch)) : 0.0;
     float w = valid ? 1.0 : 0.0;
 
     if (ch == 0) { // R photosite
-        Output = vec4(ratio * w, w, 0.0, 0.0);
+        Output = vec4(offset * w, w, 0.0, 0.0);
     } else { // B photosite
-        Output = vec4(0.0, 0.0, ratio * w, w);
+        Output = vec4(0.0, 0.0, offset * w, w);
     }
 }

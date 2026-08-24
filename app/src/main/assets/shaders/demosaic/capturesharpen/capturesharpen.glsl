@@ -19,12 +19,9 @@ void main() {
     ivec2 xy = ivec2(gl_FragCoord.xy);
     vec3 original = texelFetch(OriginalBuffer, xy, 0).rgb;
     float originalLuma = dot(original, vec3(0.2126, 0.7152, 0.0722));
-    float blurredLuma = dot(texelFetch(BlurredOriginal, xy, 0).rgb,
-        vec3(0.2126, 0.7152, 0.0722));
+    float blurredLuma = dot(texelFetch(BlurredOriginal, xy, 0).rgb, vec3(0.2126, 0.7152, 0.0722));
     float detail = abs(originalLuma - blurredLuma) * 100.0;
-    float mask = smoothstep(contrastThreshold * 0.5,
-        contrastThreshold * 1.5, detail);
-
+    float mask = smoothstep(contrastThreshold * 0.5, contrastThreshold * 1.5, detail);
     if (debugResponse == 1) {
         Output = vec4(vec3(mask), 1.0);
         return;
@@ -34,9 +31,6 @@ void main() {
         Output = vec4(estimate, 1.0);
         return;
     }
-
-    float correction = clamp(texelFetch(CorrectionBuffer, xy, 0).r,
-        minCorrection, maxCorrection);
-    Output = vec4(clamp(mix(estimate, estimate * correction, mask),
-        0.0, maxOutput), 1.0);
+    float correction = clamp(texelFetch(CorrectionBuffer, xy, 0).r, minCorrection, maxCorrection);
+    Output = vec4(clamp(mix(estimate, estimate * correction, mask), 0.0, maxOutput), 1.0);
 }

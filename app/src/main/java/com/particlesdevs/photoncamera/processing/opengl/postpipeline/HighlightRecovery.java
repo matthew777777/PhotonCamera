@@ -32,15 +32,15 @@ public class HighlightRecovery extends Node {
     float clipThreshold = 0.98f;
 
     @Tunable(
-        title = "Chroma Sample Floor",
+        title = "Candidate Brightness Floor",
         category = "Highlight Recovery",
         subTab = "Experimental Pipeline",
         min = 0.0f,
         max = 1.0f,
-        defaultValue = 0.5f,
-        description = "Ignore R/G or B/G ratio candidates whose local green is darker than this"
+        defaultValue = 0.2f,
+        description = "Ignore candidate photosites darker than this value"
     )
-    float chromaSampleMin = 0.5f;
+    float chromaSampleMin = 0.2f;
 
     @Tunable(
         title = "CFA Pattern Override",

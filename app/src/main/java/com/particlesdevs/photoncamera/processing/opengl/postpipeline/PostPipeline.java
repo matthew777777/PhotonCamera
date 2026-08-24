@@ -269,11 +269,12 @@ public class PostPipeline extends GLBasePipeline {
         // Stage 3: Experimental Capture Sharpening (RT port)
         // Must run on linear data immediately after demosaicing.
         Log.d("PostPipeline", "Adding ExperimentalCaptureSharpening");
-        add(new ExperimentalCaptureSharpening());
-
-        // Black Level Correction (dynamic) - Moved after Demosaic to match RGB expectation
+        // Black level must be corrected before sharpening so the estimator and
+        // sharpening mask do not treat sensor offset as image detail.
         Log.d("PostPipeline", "Adding ABLC");
         add(new ABLC());
+
+        add(new ExperimentalCaptureSharpening());
 
         // Lens Correction
         Log.d("PostPipeline", "Adding CorrectingFlow");

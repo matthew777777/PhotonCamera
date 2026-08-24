@@ -1,57 +1,73 @@
+#define LAYOUT //
+LAYOUT
 precision highp float;
-precision highp sampler2D;
 
-uniform sampler2D SourceBuffer;
-uniform sampler2D OriginalBuffer;
-uniform sampler2D BlurredEstimate;
-uniform sampler2D BlurredOriginal;
-uniform vec2 direction;
-uniform int mode;
+// An 8x8 output block is expanded to a 16x16 source tile. Adjacent workgroups
+// overlap by the four-pixel halo, and every lane cooperatively loads four samples.
+layout(rgba16f, binding = 0) uniform highp readonly image2D SourceBuffer;
+layout(rgba16f, binding = 1) uniform highp readonly image2D OriginalBuffer;
+layout(rgba16f, binding = 2) uniform highp readonly image2D BlurredEstimate;
+layout(rgba16f, binding = 3) uniform highp writeonly image2D OutputBuffer;
+
+uniform int mode; // 0: blur SourceBuffer luminance; 1: blur O / (G * estimate)
 uniform float radius;
 uniform float cornerBoost;
-uniform float maxSigma;
-uniform float contrastThreshold;
 uniform float epsilon;
 
-out vec4 Output;
+const int LOCAL_SIZE = 8;
+const int TILE_SIZE = 16;
+const int HALO = 4;
+const vec3 LUMA = vec3(0.212671, 0.715160, 0.072169);
+// Literal shared-array dimensions keep this valid on stricter GLES 3.1 drivers.
+shared float tile[16][16];
 
-ivec2 clampCoord(ivec2 point, ivec2 size) {
-    return clamp(point, ivec2(0), size - ivec2(1));
+ivec2 clampCoord(ivec2 point, ivec2 size) { return clamp(point, ivec2(0), size - ivec2(1)); }
+
+float imageValue(ivec2 point, ivec2 size) {
+    point = clampCoord(point, size);
+    if (mode == 0) return dot(imageLoad(SourceBuffer, point).rgb, LUMA);
+    return dot(imageLoad(OriginalBuffer, point).rgb, LUMA) /
+        max(imageLoad(BlurredEstimate, point).r, epsilon);
 }
 
-float maskAt(ivec2 point) {
-    ivec2 size = textureSize(OriginalBuffer, 0);
-    point = clampCoord(point, size);
-    float original = dot(texelFetch(OriginalBuffer, point, 0).rgb, vec3(0.2126, 0.7152, 0.0722));
-    float blurred = dot(texelFetch(BlurredOriginal, point, 0).rgb, vec3(0.2126, 0.7152, 0.0722));
-    float detail = abs(original - blurred) * 100.0;
-    return smoothstep(contrastThreshold * 0.5, contrastThreshold * 1.5, detail);
-}
-
-float ratioAt(ivec2 point) {
-    ivec2 size = textureSize(OriginalBuffer, 0);
-    point = clampCoord(point, size);
-    float original = dot(texelFetch(OriginalBuffer, point, 0).rgb, vec3(0.2126, 0.7152, 0.0722));
-    float estimate = dot(texelFetch(BlurredEstimate, point, 0).rgb, vec3(0.2126, 0.7152, 0.0722));
-    return mix(1.0, original / max(estimate, epsilon), maskAt(point));
+float tileValue(ivec2 point, ivec2 workgroupStart, ivec2 size) {
+    ivec2 local = point - workgroupStart + ivec2(HALO);
+    // Radius 2 can reach six pixels. Its outer fringe falls back to image loads;
+    // all samples inside the overlapping 16x16 window stay in shared memory.
+    if (all(greaterThanEqual(local, ivec2(0))) && all(lessThan(local, ivec2(TILE_SIZE))))
+        return tile[local.y][local.x];
+    return imageValue(point, size);
 }
 
 void main() {
-    ivec2 xy = ivec2(gl_FragCoord.xy);
-    ivec2 size = textureSize(SourceBuffer, 0);
-    vec2 resolution = vec2(size);
-    vec2 centered = (gl_FragCoord.xy - 0.5 * resolution) / (0.5 * length(resolution));
-    float cornerDistance = clamp(length(centered), 0.0, 1.0);
-    float sigma = clamp(radius + cornerBoost * cornerDistance, 0.02, maxSigma);
-    float twoSigma2 = 2.0 * sigma * sigma;
-    vec3 sum = vec3(0.0);
+    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 lid = ivec2(gl_LocalInvocationID.xy);
+    ivec2 size = imageSize(SourceBuffer);
+    ivec2 workgroupStart = ivec2(gl_WorkGroupID.xy) * ivec2(LOCAL_SIZE);
+
+    int lane = lid.y * LOCAL_SIZE + lid.x;
+    for (int tap = 0; tap < 4; ++tap) {
+        int index = lane + tap * LOCAL_SIZE * LOCAL_SIZE;
+        ivec2 sharedPos = ivec2(index % TILE_SIZE, index / TILE_SIZE);
+        tile[sharedPos.y][sharedPos.x] = imageValue(workgroupStart + sharedPos - ivec2(HALO), size);
+    }
+    memoryBarrierShared();
+    barrier();
+
+    if (any(greaterThanEqual(xy, size))) return;
+    vec2 center = (vec2(xy) + 0.5 - 0.5 * vec2(size)) / (0.5 * length(vec2(size)));
+    float sigma = min(2.0, radius + cornerBoost * length(center));
+    int halfWidth = sigma < 0.6 ? 1 : sigma <= 0.84 ? 2 : sigma <= 1.15 ? 3 : sigma <= 1.5 ? 4 : 6;
+    float support2 = halfWidth == 1 ? 2.0 : halfWidth == 2 ? 6.3504 : halfWidth == 3 ? 11.9025 : halfWidth == 4 ? 20.25 : 36.0;
+    float twoSigma2 = 2.0 * max(sigma * sigma, 0.0004);
+    float sum = 0.0;
     float weightSum = 0.0;
-    for (int offset = -6; offset <= 6; ++offset) {
-        float weight = exp(-float(offset * offset) / twoSigma2);
-        ivec2 point = clampCoord(xy + ivec2(direction) * offset, size);
-        vec3 value = mode == 1 ? vec3(ratioAt(point)) : texelFetch(SourceBuffer, point, 0).rgb;
-        sum += value * weight;
+    for (int y = -6; y <= 6; ++y) for (int x = -6; x <= 6; ++x) {
+        int distance2i = x * x + y * y;
+        if (abs(x) > halfWidth || abs(y) > halfWidth || float(distance2i) > support2) continue;
+        float weight = exp(-float(distance2i) / twoSigma2);
+        sum += tileValue(xy + ivec2(x, y), workgroupStart, size) * weight;
         weightSum += weight;
     }
-    Output = vec4(sum / weightSum, 1.0);
+    imageStore(OutputBuffer, xy, vec4(vec3(sum / weightSum), 1.0));
 }

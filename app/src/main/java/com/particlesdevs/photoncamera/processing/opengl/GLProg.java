@@ -234,6 +234,13 @@ public class GLProg implements AutoCloseable {
 
     }
     public void computeAuto(Point size, int z) {
+        computeAuto(size, z, true);
+    }
+
+    /** Dispatch using the program's declared local size. Set finish false for
+     * dependent compute passes; the memory barriers still make their image
+     * writes visible to the next dispatch without a CPU/GPU round trip. */
+    public void computeAuto(Point size, int z, boolean finish) {
         if(!isCompute) {
             new Exception("Program must be compute!").printStackTrace();
             return;
@@ -254,7 +261,7 @@ public class GLProg implements AutoCloseable {
                 z/glComputeLayout.z + z0);
         glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
         glMemoryBarrier(GL_ALL_SHADER_BITS);
-        glFinish();
+        if (finish) glFinish();
     }
     public void computeManual(int x,int y, int z) {
         if(!isCompute) {

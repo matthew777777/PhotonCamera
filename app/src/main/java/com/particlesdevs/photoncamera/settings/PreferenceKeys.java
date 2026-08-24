@@ -62,7 +62,7 @@ public class PreferenceKeys {
         Resources resources = context.getResources();
 
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_HDRX, resources.getBoolean(R.bool.pref_hdrx_mode_default));
-        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_PIPELINE, false);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_PIPELINE, true);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SHOW_ROUND_EDGE, resources.getBoolean(R.bool.pref_show_roundedge_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_SHOW_HISTOGRAM, resources.getBoolean(R.bool.pref_show_histogram_default));
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EIS_PHOTO, resources.getBoolean(R.bool.pref_eis_photo_default));
@@ -86,7 +86,7 @@ public class PreferenceKeys {
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_CROP_169, true);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EXPERIMENTAL_JPEG_QUALITY, 100);
 
-        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_CORE_BALANCING, false);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_CORE_BALANCING, true);
         settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_MODERN_EXPOSURE_COMPENSATION, "0.0");
 
         settingsManager.setDefaults(Key.CAMERA_ID, resources.getString(R.string.camera_id_default), new String[]{"0", "1"});

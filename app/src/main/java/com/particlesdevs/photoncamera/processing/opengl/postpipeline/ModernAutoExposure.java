@@ -15,17 +15,29 @@ public class ModernAutoExposure extends Node {
     @Tunable(title = "Target Midtone", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.0f, max = 1.0f, defaultValue = 0.10f)
     float targetMidtone = 0.10f;
 
-    @Tunable(title = "Highlight Percentile", category = "Modern AE", subTab = "Experimental Pipeline", min = 90.0f, max = 100.0f, defaultValue = 99.0f)
-    float highlightPercentile = 99.0f;
+    @Tunable(title = "Highlight Percentile", category = "Modern AE", subTab = "Experimental Pipeline", min = 90.0f, max = 100.0f, defaultValue = 98.0f)
+    float highlightPercentile = 98.0f;
 
-    @Tunable(title = "Highlight Protection", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.0f, max = 1.0f, defaultValue = 0.70f)
-    float highlightProtection = 0.70f;
+    @Tunable(title = "Highlight Protection", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.0f, max = 1.0f, defaultValue = 0.50f)
+    float highlightProtection = 0.50f;
 
     @Tunable(title = "Highlight Limit", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.5f, max = 5.0f, defaultValue = 1.5f)
     float highlightLimit = 1.5f;
 
     @Tunable(title = "Exposure Smoothing", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.0f, max = 0.99f, defaultValue = 0.0f)
     float exposureSmoothing = 0.0f;
+
+    @Tunable(title = "Center Metering Weight", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.1f, max = 4.0f, defaultValue = 2.0f)
+    float centerMeteringWeight = 2.0f;
+
+    @Tunable(title = "Edge Metering Weight", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.1f, max = 2.0f, defaultValue = 0.5f)
+    float edgeMeteringWeight = 0.5f;
+
+    @Tunable(title = "Metering Radius", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.1f, max = 1.0f, defaultValue = 0.75f)
+    float meteringRadius = 0.75f;
+
+    @Tunable(title = "Shadow Rejection Floor", category = "Modern AE", subTab = "Experimental Pipeline", min = 0.0f, max = 0.1f, defaultValue = 0.001f)
+    float shadowRejectionFloor = 0.001f;
 
     // Deliberately static: PostPipeline.BuildDefaultPipeline() constructs a brand
     // new ModernAutoExposure node for every capture, so an instance field could
@@ -69,17 +81,16 @@ public class ModernAutoExposure extends Node {
             Log.w(TAG, "Failed to read tonemapMethod preference, defaulting to ACES");
         }
 
-        float activeTargetMidtone;
+        float activeTargetMidtone = targetMidtone;
         float activeHighlightLimit = highlightLimit;
 
         if (tonemapMethod == 1) {
             // OpenDRT expects 0.18 middle grey anchor.
-            activeTargetMidtone = 0.18f;
+            activeTargetMidtone = targetMidtone * (0.18f / 0.10f);
         } else {
             // ACES has a brighter shoulder than OpenDRT. Keep its scene anchor
             // conservative and leave enough room below the display white point
             // for saturated skies and specular highlights.
-            activeTargetMidtone = 0.10f;
             activeHighlightLimit = Math.min(activeHighlightLimit, 0.85f);
         }
 
@@ -103,14 +114,25 @@ public class ModernAutoExposure extends Node {
         // throughout initial.glsl, rather than adding a second luma formula.
         histogram.CustomProgram =
             "float lum = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));" +
+            "includeSample = lum >= shadowFloor;" +
             "float ev = log2(lum + 1e-6);" +
             "float normEv = (ev - input1) / (input2 - input1);" +
             "texColorUint.r = uint(clamp(normEv * 255.0, 0.0, 255.0));";
 
         histogram.input1 = evMin;
         histogram.input2 = evMax;
+        histogram.meteringCenterWeight = Math.max(centerMeteringWeight, 0.1f);
+        histogram.meteringEdgeWeight = Math.max(edgeMeteringWeight, 0.1f);
+        histogram.meteringRadius = Math.max(meteringRadius, 0.1f);
+        histogram.shadowFloor = Math.max(shadowRejectionFloor, 0.0f);
+        histogram.meteringEnabled = 1;
 
-        int[][] result = histogram.Compute(previousNode.WorkingTexture);
+        int[][] result;
+        try {
+            result = histogram.Compute(previousNode.WorkingTexture);
+        } finally {
+            histogram.close();
+        }
         int[] hist = result[0];
 
         // 2. Compute Statistics
@@ -187,7 +209,7 @@ public class ModernAutoExposure extends Node {
     }
 
     private float getPercentileEv(int[] hist, int totalPixels, float percentile) {
-        int threshold = (int) (totalPixels * percentile);
+        int threshold = Math.max(1, (int) Math.ceil(totalPixels * Math.max(0.0f, Math.min(1.0f, percentile))));
         int count = 0;
         for (int i = 0; i < hist.length; i++) {
             count += hist[i];
