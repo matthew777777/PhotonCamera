@@ -71,6 +71,7 @@ out vec3 Output;
 #define FUSIONNORM 64.0
 #define VIGNETTE 0.0
 #define LTMMIX 0.0
+#define OPENDRT 0
 #import coords
 #import interpolation
 #import gaussian
@@ -421,6 +422,12 @@ vec3 applyColorSpace(vec3 pRGB,float tonemapGain, float gainsVal){
     gainsVal = mix(float(1.0), gainsVal, 1.0);
     //br = clamp(reinhard_extended(br*gainsVal,max(1.0,gainsVal)),0.0,1.0);
     //br = clamp(reinhard_extended(br*tonemapGain,max(1.0,tonemapGain)),0.0,1.0);
+    #if OPENDRT == 1
+    // OpenDRT owns the display tone scale.  Keep this stage scene-linear while
+    // retaining the camera matrix, white balance and gain-map corrections.
+    return max(pRGB * gainsVal, vec3(0.0));
+    #endif
+
     pRGB = clamp(pRGB*mix(tonemapGain,1.0,LTMMIX), 0.0,1.0);
     //pRGB = clamp(reinhard_extended(pRGB*tonemapGain,max(1.0,tonemapGain)),vec3(0.0),vec3(1.0));
 
@@ -535,6 +542,10 @@ void main() {
     gains.rgb = vec3(gains.r,(gains.g+gains.b)/2.0,gains.a);
     float gainsVal = dot(gains.rgb,vec3(1.0/3.0));
     sRGB = applyColorSpace(sRGB,tonemapGain, gainsVal);
+    #if OPENDRT == 1
+    Output = sRGB;
+    return;
+    #endif
     //sRGB = vec3(tonemapGain);
     #if LUT == 1
     //sRGB = lookup(sRGB);

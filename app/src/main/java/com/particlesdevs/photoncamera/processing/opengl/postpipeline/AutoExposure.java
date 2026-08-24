@@ -76,11 +76,16 @@
             sum += result[0][i] * i + result[1][i] * i + result[2][i] * i;
             cnt += result[0][i] + result[1][i] + result[2][i];
         }
+        boolean openDrt = ((PostPipeline) basePipeline).toneMapper == 1;
+        glProg.setDefine("OPENDRT", openDrt);
         glProg.useAssetProgram("autoexposure/apply");
         glProg.setTexture("InputBuffer", previousNode.WorkingTexture);
 
-        float avg = sum / cnt;
-        float mpy = (histSize / 256.0f) * target / avg;
+        float avg = cnt > 0 ? sum / cnt : Float.NaN;
+        // A clipped/empty histogram must not poison the entire output with a
+        // NaN or infinite gain.  Unity gain is the least surprising fallback.
+        float mpy = (!Float.isFinite(avg) || avg <= 0.0f)
+                ? 1.0f : (histSize / 256.0f) * target / avg;
 
         sum = 0;
         int cnt2 = 0;
@@ -130,15 +135,23 @@
             Log.d("AutoExposure", "Clamping gain by max from " + mpy + " to " + gainMax);
             mpy = gainMax;
         }
-        float normL = 0.0f;
-        float normR = 0.0f;
-        for (int i = 0; i < histSize; i++) {
-            float val = ((float)(i) / (histSize-1.0f)) * mpy;
-            normL += Math.min(val, 1.0f);
-            normR += (val * (1.0f + (val / (mpy * mpy))))/(1.0f + val);
+        if (!Float.isFinite(mpy) || mpy <= 0.0f) {
+            Log.w("AutoExposure", "Invalid exposure gain " + mpy + "; using unity gain");
+            mpy = 1.0f;
         }
-        Log.d("AutoExposure", "Reinhard normalizer:" + normR + " normL:" + normL + " base Mpy:" + mpy);
-        mpy *= normL / normR;
+        if (!openDrt) {
+            float normL = 0.0f;
+            float normR = 0.0f;
+            for (int i = 0; i < histSize; i++) {
+                float val = ((float)(i) / (histSize-1.0f)) * mpy;
+                normL += Math.min(val, 1.0f);
+                normR += (val * (1.0f + (val / (mpy * mpy))))/(1.0f + val);
+            }
+            Log.d("AutoExposure", "Reinhard normalizer:" + normR + " normL:" + normL + " base Mpy:" + mpy);
+            mpy *= normL / normR;
+        } else {
+            Log.d("AutoExposure", "OpenDRT scene-linear exposure gain: " + mpy);
+        }
 
         whiteMax *= mpy;
         Log.d("AutoExposure", "Reinhard white max (top 0.5%): " + whiteMax);

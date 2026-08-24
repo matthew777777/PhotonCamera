@@ -1,8 +1,11 @@
 package com.particlesdevs.photoncamera.processing;
 
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.Gainmap;
 import android.graphics.ImageFormat;
 import android.graphics.Point;
+import android.os.Build;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
@@ -118,18 +121,67 @@ public class ImageSaver {
     public static class Util {
         public static boolean saveBitmapAsJPG(Path fileToSave, Bitmap img, int jpgQuality, ParseExif.ExifData exifData) {
             exifData.COMPRESSION = String.valueOf(jpgQuality);
+            // Bitmap's JPEG encoder writes the embedded ICC profile.  EXIF's
+            // ColorSpace tag has no Display-P3 value, so mark non-sRGB files
+            // as uncalibrated and let the ICC profile remain authoritative.
+            exifData.COLOR_SPACE = img.getColorSpace().isSrgb() ? "1" : "65535";
             try {
                 OutputStream outputStream = Files.newOutputStream(fileToSave);
-                img.compress(Bitmap.CompressFormat.JPEG, jpgQuality, outputStream);
+                Bitmap jpeg = img;
+                if (SETTINGS.ultraHdr && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    jpeg = UltraHdrApi34.withHighlightGainMap(img);
+                }
+                boolean compressed = jpeg.compress(Bitmap.CompressFormat.JPEG, jpgQuality, outputStream);
                 outputStream.flush();
                 outputStream.close();
+                if (jpeg != img) jpeg.recycle();
                 img.recycle();
+                if (!compressed) return false;
                 ExifInterface inter = ParseExif.setAllAttributes(fileToSave.toFile(), exifData);
                 inter.saveAttributes();
                 return true;
             } catch (IOException e) {
                 e.printStackTrace();
                 return false;
+            }
+        }
+
+        /** Android 14's gain-map APIs are isolated so older devices never resolve them. */
+        private static final class UltraHdrApi34 {
+            private static final float MAX_HDR_RATIO = 4.0f;
+
+            private static Bitmap withHighlightGainMap(Bitmap source) {
+                Bitmap base = source.isMutable() ? source : source.copy(source.getConfig(), true);
+                if (base == null) return source;
+                int width = Math.max(1, (base.getWidth() + 3) / 4);
+                int height = Math.max(1, (base.getHeight() + 3) / 4);
+                Bitmap contents = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8);
+                ByteBuffer bytes = ByteBuffer.allocate(width * height);
+                for (int y = 0; y < height; y++) {
+                    int sourceY = Math.min(base.getHeight() - 1, y * 4 + 2);
+                    for (int x = 0; x < width; x++) {
+                        int pixel = base.getPixel(Math.min(base.getWidth() - 1, x * 4 + 2), sourceY);
+                        float luminance = (0.2126f * Color.red(pixel) + 0.7152f * Color.green(pixel)
+                                + 0.0722f * Color.blue(pixel)) / 255.0f;
+                        float highlight = smoothstep(0.65f, 1.0f, luminance);
+                        bytes.put((byte) Math.round(highlight * 255.0f));
+                    }
+                }
+                bytes.rewind();
+                contents.copyPixelsFromBuffer(bytes);
+                Gainmap gainmap = new Gainmap(contents);
+                gainmap.setRatioMin(1.0f, 1.0f, 1.0f);
+                gainmap.setRatioMax(MAX_HDR_RATIO, MAX_HDR_RATIO, MAX_HDR_RATIO);
+                gainmap.setGamma(1.0f, 1.0f, 1.0f);
+                gainmap.setMinDisplayRatioForHdrTransition(1.0f);
+                gainmap.setDisplayRatioForFullHdr(MAX_HDR_RATIO);
+                base.setGainmap(gainmap);
+                return base;
+            }
+
+            private static float smoothstep(float edge0, float edge1, float value) {
+                float t = Math.max(0.0f, Math.min(1.0f, (value - edge0) / (edge1 - edge0)));
+                return t * t * (3.0f - 2.0f * t);
             }
         }
 

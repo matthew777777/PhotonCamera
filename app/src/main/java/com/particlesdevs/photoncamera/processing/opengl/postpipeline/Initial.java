@@ -120,6 +120,10 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
             WorkingTexture = super.previousNode.WorkingTexture;
             return;
         }
+        boolean openDrt = ((PostPipeline) basePipeline).toneMapper == 1;
+        // The post LUT is display-referred.  In the OpenDRT path it must run
+        // after the display transform, not on scene-linear values here.
+        ((PostPipeline) basePipeline).openDrtPostLut = openDrt ? postlut : null;
         // Values are automatically injected in BeforeRun()!
         intenseCurveX = new float[curvePointsCount];
         intenseCurveY = new float[curvePointsCount];
@@ -214,8 +218,9 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
         glProg.setDefine("NOISES",  basePipeline.noiseS);
         glProg.setDefine("EPS", eps);
         glProg.setDefine("SOFTKNEE", highlightSoftness);
+        glProg.setDefine("OPENDRT", ((PostPipeline) basePipeline).toneMapper == 1);
 
-        if(postlut != null && postlut.exists()){
+        if(!openDrt && postlut != null && postlut.exists()){
             lutbm = new GLImage(postlut);
             postLut = new GLTexture(lutbm,GL_LINEAR,GL_CLAMP_TO_EDGE,0);
             glProg.setDefine("POSTLUT",true);

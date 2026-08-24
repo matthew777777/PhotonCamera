@@ -2,6 +2,7 @@ package com.particlesdevs.photoncamera.processing.opengl;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.ColorSpace;
 import android.graphics.Point;
 import java.io.Closeable;
 import java.io.File;
@@ -64,9 +65,13 @@ public class GLImage implements AutoCloseable {
         return getBufferedImage(4);
     }
     public Bitmap getBufferedImage(int channels){
+        return getBufferedImage(channels, ColorSpace.get(ColorSpace.Named.SRGB));
+    }
+    /** Creates an SDR bitmap tagged with the colour space used by the final shader. */
+    public Bitmap getBufferedImage(int channels, ColorSpace colorSpace){
         byteBuffer.position(0);
         GLFormat bitmapF = new GLFormat(GLFormat.DataType.UNSIGNED_8, channels);
-        Bitmap preview = Bitmap.createBitmap(size.x, size.y, bitmapF.getBufferedImageConfig());
+        Bitmap preview = Bitmap.createBitmap(size.x, size.y, bitmapF.getBufferedImageConfig(), false, colorSpace);
         preview.copyPixelsFromBuffer(byteBuffer);
         return preview;
     }

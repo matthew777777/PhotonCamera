@@ -4,6 +4,7 @@ uniform sampler2D InputBuffer;
 uniform float mpy;
 uniform float whiteMax;
 uniform float applyGammaMix;
+#define OPENDRT 0
 out vec4 Output;
 vec3 reinhard_extended(vec3 v, float max_white){
     vec3 numerator = v * (vec3(1.0f) + (v / vec3(max_white * max_white)));
@@ -47,6 +48,13 @@ vec3 tonemap(vec3 rgb, float gain) {
 void main() {
     ivec2 xy = ivec2(gl_FragCoord.xy);
     vec4 inp = texelFetch(InputBuffer, xy, 0);
+    #if OPENDRT == 1
+    // OpenDRT expects scene-linear values. Auto exposure still supplies the
+    // adaptive gain, but its legacy Reinhard/gamma operator is intentionally
+    // skipped so there is only one display transform.
+    Output.rgb = max(inp.rgb * mpy, vec3(0.0));
+    return;
+    #endif
     //Output.rgb = reinhard_extended(inp.rgb * mpy, mpy);
     Output.rgb = tonemap(mix(inp.rgb,sqrt(inp.rgb), applyGammaMix), mpy);
     Output.rgb = mix(Output.rgb,Output.rgb * Output.rgb, applyGammaMix);

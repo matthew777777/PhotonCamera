@@ -1,6 +1,7 @@
 package com.particlesdevs.photoncamera.processing.opengl.postpipeline;
 
 import android.graphics.Bitmap;
+import android.graphics.ColorSpace;
 import android.graphics.Point;
 import com.particlesdevs.photoncamera.util.Log;
 
@@ -21,6 +22,7 @@ import com.particlesdevs.photoncamera.settings.annotations.Tunable;
 import com.particlesdevs.photoncamera.util.Allocator;
 
 import java.nio.ByteBuffer;
+import java.io.File;
 import java.util.ArrayList;
 
 public class PostPipeline extends GLBasePipeline {
@@ -38,6 +40,12 @@ public class PostPipeline extends GLBasePipeline {
     float AecCorr = 1.f;
     float fusionGain = 1.f;
     float softLight = 1.f;
+    /**
+     * The Initial node owns the existing post-LUT preference.  OpenDRT consumes
+     * the same file after its display transform so a selected LUT retains its
+     * established display-referred meaning.
+     */
+    File openDrtPostLut;
 
     public PostPipeline() {
         super("PostPipeline");
@@ -76,6 +84,28 @@ public class PostPipeline extends GLBasePipeline {
         step = 1.0f
     )
     int demosaicingMethod = 1;
+
+    @Tunable(
+        title = "Tone Mapper",
+        description = "0 = existing LTM/Initial tone mapping (default); 1 = OpenDRT display transform",
+        category = "Color & Tone",
+        min = 0.0f,
+        max = 1.0f,
+        defaultValue = 0.0f,
+        step = 1.0f
+    )
+    int toneMapper = 0;
+
+    @Tunable(
+        title = "OpenDRT SDR Output",
+        description = "0 = tagged sRGB JPEG (default); 1 = tagged Display-P3 JPEG. Only affects OpenDRT.",
+        category = "OpenDRT",
+        min = 0.0f,
+        max = 1.0f,
+        defaultValue = 0.0f,
+        step = 1.0f
+    )
+    int openDrtOutput = 0;
 
     public Bitmap Run(ByteBuffer inBuffer, Parameters parameters) {
         mParameters = parameters;
@@ -126,10 +156,14 @@ public class PostPipeline extends GLBasePipeline {
 
         // Inject tunable values for PostPipeline (since it doesn't extend Node)
         com.particlesdevs.photoncamera.settings.TunableInjector.inject(this);
+        openDrtPostLut = null;
         
         BuildDefaultPipeline();
         GLImage resImg = runAll();
-        Bitmap res = resImg.getBufferedImage();
+        ColorSpace outputColorSpace = toneMapper == 1 && openDrtOutput == 1
+                ? ColorSpace.get(ColorSpace.Named.DISPLAY_P3)
+                : ColorSpace.get(ColorSpace.Named.SRGB);
+        Bitmap res = resImg.getBufferedImage(4, outputColorSpace);
         Allocator.free(resImg.byteBuffer);
         GLTexture.closeAll();
         return res;
@@ -205,6 +239,10 @@ public class PostPipeline extends GLBasePipeline {
         add(new Initial());
 
         add(new AutoExposure());
+
+        // This node is a no-op unless Tone Mapper is set to OpenDRT.  Keeping it
+        // in the graph preserves the legacy LTM path exactly when disabled.
+        add(new OpenDRT());
 
 
         //add(new GlobalToneMapping());
