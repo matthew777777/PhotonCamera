@@ -1,6 +1,7 @@
 package com.particlesdevs.photoncamera.ui.camera.views.viewfinder;
 
 import java.util.Arrays;
+import java.nio.FloatBuffer;
 
 /**
  * A grid of RGB 3x4 affine transforms indexed by image x/y and guide luminance.
@@ -82,6 +83,20 @@ public final class BilateralGrid {
                     packed, cell * COEFFICIENTS_PER_ROW, COEFFICIENTS_PER_ROW);
         }
         return new FloatBufferData(packed);
+    }
+
+    void writeRow(int row, FloatBuffer destination) {
+        if (row < 0 || row >= ROWS) throw new IllegalArgumentException("Invalid affine row " + row);
+        int cells = width * height * depth;
+        if (destination.capacity() < cells * COEFFICIENTS_PER_ROW) {
+            throw new IllegalArgumentException("Coefficient destination is too small");
+        }
+        destination.position(0);
+        for (int cell = 0; cell < cells; cell++) {
+            destination.put(coefficients, cell * COEFFICIENTS_PER_CELL
+                    + row * COEFFICIENTS_PER_ROW, COEFFICIENTS_PER_ROW);
+        }
+        destination.position(0);
     }
 
     /** Small wrapper keeps the mutable upload array package-private. */

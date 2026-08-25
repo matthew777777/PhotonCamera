@@ -13,11 +13,16 @@ import androidx.annotation.NonNull;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.capture.CaptureController;
 import com.particlesdevs.photoncamera.circularbarlib.api.ManualModeConsole;
+import com.particlesdevs.photoncamera.processing.live.RawSuperPixel;
+import com.particlesdevs.photoncamera.processing.opengl.StreamedPostPipeline;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -38,28 +43,43 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private boolean bilateralGridUpdatePending;
     private BilateralGrid currentGrid;
     private final int[] bilateralTextures = new int[3];
+    private final FloatBuffer[] bilateralUploadBuffers = new FloatBuffer[3];
     private int bguBlend;
     private RawPreviewFrame pendingRawFrame;
-    private ByteBuffer pendingRawCopy;
     private boolean rawFrameUpdatePending;
     private int hProgram;
     private int downsampleProgram;
     private int downsampleFramebuffer;
     private int downsampleTexture;
     private int downsampleUvTransform;
+    private int downsampleSampleStep;
     private float frameCropScaleX = 1.0f;
     private float frameCropScaleY = 1.0f;
     private int downsampleWidth;
     private int downsampleHeight;
     private int surfaceWidth;
     private int surfaceHeight;
-    private ByteBuffer downsamplePixels;
+    private ByteBuffer estimatorInput;
+    private final AtomicBoolean estimatorBusy = new AtomicBoolean();
+    private final ExecutorService estimatorExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "BguEstimator");
+        thread.setPriority(Thread.NORM_PRIORITY - 1);
+        return thread;
+    });
+    private static final long TIMESTAMP_TOLERANCE_NS = 3_000_000L;
     /** Debug: render the read-back ISP preview pixels instead of the camera preview. */
     private static final boolean DEBUG_ISP_PREVIEW = false;
     private int ispPreviewTexture;
     private int enableIspPreview;
     private final BilateralGridEstimator bilateralGridEstimator = new BilateralGridEstimator(
             BilateralGridEstimator.Options.previewDefaults());
+    private final StreamedPostPipeline streamedPostPipeline = new StreamedPostPipeline();
+    private long bguTimingWindowStartedNs;
+    private long bguSplatUs;
+    private long bguBlurUs;
+    private long bguSolveUs;
+    private long bguTotalUs;
+    private int bguTimingSamples;
 
     private final GLPreview mView;
     private ManualModeConsole mManualModeConsole;
@@ -117,6 +137,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         deleteBilateralTextures();
+        streamedPostPipeline.reset();
         downsampleProgram = 0;
         downsampleFramebuffer = 0;
         downsampleTexture = 0;
@@ -199,23 +220,40 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             return;
         }
 
-        deleteBilateralTextures();
-        GLES30.glGenTextures(3, bilateralTextures, 0);
+        boolean allocateTextures = bilateralTextures[0] == 0 || currentGrid == null
+                || currentGrid.getWidth() != grid.getWidth()
+                || currentGrid.getHeight() != grid.getHeight()
+                || currentGrid.getDepth() != grid.getDepth();
+        if (allocateTextures) {
+            deleteBilateralTextures();
+            GLES30.glGenTextures(3, bilateralTextures, 0);
+        }
+        int rowValues = grid.getWidth() * grid.getHeight() * grid.getDepth()
+                * BilateralGrid.COEFFICIENTS_PER_ROW;
         for (int row = 0; row < 3; row++) {
-            float[] values = grid.row(row).values;
-            FloatBuffer data = ByteBuffer.allocateDirect(values.length * Float.BYTES)
-                    .order(ByteOrder.nativeOrder()).asFloatBuffer();
-            data.put(values).position(0);
+            if (bilateralUploadBuffers[row] == null
+                    || bilateralUploadBuffers[row].capacity() != rowValues) {
+                bilateralUploadBuffers[row] = ByteBuffer.allocateDirect(rowValues * Float.BYTES)
+                        .order(ByteOrder.nativeOrder()).asFloatBuffer();
+            }
+            FloatBuffer data = bilateralUploadBuffers[row];
+            grid.writeRow(row, data);
             GLES20.glActiveTexture(GLES20.GL_TEXTURE1 + row);
             GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
-            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE);
-            GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGBA16F,
-                    grid.getWidth(), grid.getHeight(), grid.getDepth(), 0,
-                    GLES30.GL_RGBA, GLES30.GL_FLOAT, data);
+            if (allocateTextures) {
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE);
+                GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGBA16F,
+                        grid.getWidth(), grid.getHeight(), grid.getDepth(), 0,
+                        GLES30.GL_RGBA, GLES30.GL_FLOAT, data);
+            } else {
+                GLES30.glTexSubImage3D(GLES30.GL_TEXTURE_3D, 0, 0, 0, 0,
+                        grid.getWidth(), grid.getHeight(), grid.getDepth(),
+                        GLES30.GL_RGBA, GLES30.GL_FLOAT, data);
+            }
         }
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         currentGrid = grid;
@@ -257,45 +295,101 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     }
 
     public synchronized void setRawPreviewFrame(RawPreviewFrame frame) {
-        if (frame == null) {
-            pendingRawFrame = null;
-        } else {
-            int bytes = frame.getWidth() * frame.getHeight() * 4;
-            if (pendingRawCopy == null || pendingRawCopy.capacity() != bytes) {
-                pendingRawCopy = ByteBuffer.allocateDirect(bytes);
-            }
-            ByteBuffer source = frame.pixels().duplicate();
-            source.position(0).limit(bytes);
-            pendingRawCopy.position(0);
-            pendingRawCopy.put(source).position(0);
-            pendingRawFrame = new RawPreviewFrame(frame.getWidth(), frame.getHeight(), pendingRawCopy);
-        }
+        if (pendingRawFrame != null) pendingRawFrame.close();
+        pendingRawFrame = frame;
         rawFrameUpdatePending = true;
+    }
+
+    synchronized boolean shouldProcessRawPreviewFrame() {
+        // No artificial frequency limit: accept every RAW frame whenever the
+        // previous model has completed. Never queue an unpaired RAW target,
+        // because its matching SurfaceTexture frame would be gone by then.
+        return !estimatorBusy.get() && !rawFrameUpdatePending;
     }
 
     private synchronized void estimatePendingRawFrame() {
         if (!rawFrameUpdatePending) return;
+        if (estimatorBusy.get()) return;
         RawPreviewFrame target = pendingRawFrame;
-        pendingRawFrame = null;
-        rawFrameUpdatePending = false;
         if (target == null) {
+            pendingRawFrame = null;
+            rawFrameUpdatePending = false;
             setBilateralGrid(null);
             return;
         }
+        long previewTimestamp = mSTexture.getTimestamp();
+        long timestampDelta = previewTimestamp - target.getTimestampNs();
+        if (timestampDelta < -TIMESTAMP_TOLERANCE_NS) return; // Matching ISP frame has not arrived.
+        if (timestampDelta > TIMESTAMP_TOLERANCE_NS) {
+            // The SurfaceTexture has advanced beyond this RAW frame. Never fit
+            // spatial coefficients from different moments.
+            pendingRawFrame = null;
+            rawFrameUpdatePending = false;
+            target.close();
+            return;
+        }
+        pendingRawFrame = null;
+        rawFrameUpdatePending = false;
         try {
-            ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight());
+            int bytes = target.getWidth() * target.getHeight() * 4;
+            if (estimatorInput == null || estimatorInput.capacity() != bytes) {
+                estimatorInput = ByteBuffer.allocateDirect(bytes);
+            }
             ByteBuffer output = target.pixels();
+            streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
+                    surfaceWidth, surfaceHeight);
+            ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight(), estimatorInput);
             if (DEBUG_ISP_PREVIEW) {
                 uploadIspPreview(output, target.getWidth(), target.getHeight());
             }
 
-            input.position(0);
-            output.position(0);
-            setBilateralGrid(bilateralGridEstimator.estimateRgba8(input, output,
-                    target.getWidth(), target.getHeight()));
+            estimatorBusy.set(true);
+            final ByteBuffer fitInput = estimatorInput;
+            final ByteBuffer fitTarget = output;
+            final int fitWidth = target.getWidth();
+            final int fitHeight = target.getHeight();
+            estimatorExecutor.execute(() -> {
+                try {
+                    BilateralGrid grid = bilateralGridEstimator.estimateRgba8(
+                            fitInput, fitTarget, fitWidth, fitHeight);
+                    recordBguTiming(bilateralGridEstimator.getLastTiming());
+                    setBilateralGrid(grid);
+                } catch (Exception error) {
+                    Log.w("MainRenderer", "BGU worker failed: " + error.getMessage());
+                } finally {
+                    target.close();
+                    estimatorBusy.set(false);
+                    // Publish immediately; the next RAW callback may now start
+                    // another timestamp-matched model.
+                    mView.requestRender();
+                }
+            });
         } catch (Exception error) {
+            target.close();
+            estimatorBusy.set(false);
             Log.w("MainRenderer", "BGU preview estimate failed: " + error.getMessage());
         }
+    }
+
+    private void recordBguTiming(BilateralGridEstimator.Timing timing) {
+        long now = System.nanoTime();
+        if (bguTimingWindowStartedNs == 0) bguTimingWindowStartedNs = now;
+        bguSplatUs += timing.splatUs;
+        bguBlurUs += timing.blurUs;
+        bguSolveUs += timing.solveUs;
+        bguTotalUs += timing.totalUs;
+        bguTimingSamples++;
+        if (now - bguTimingWindowStartedNs < 1_000_000_000L) return;
+        float divisor = 1000.0f * bguTimingSamples;
+        Log.d("MainRenderer", String.format(java.util.Locale.US,
+                "BGU %dx%d avg %.2f ms (splat %.2f, blur %.2f, solve %.2f), %.1f fits/s",
+                RawSuperPixel.OUTPUT_WIDTH, RawSuperPixel.OUTPUT_HEIGHT,
+                bguTotalUs / divisor, bguSplatUs / divisor, bguBlurUs / divisor,
+                bguSolveUs / divisor, bguTimingSamples * 1.0e9f /
+                        (now - bguTimingWindowStartedNs)));
+        bguTimingWindowStartedNs = now;
+        bguSplatUs = bguBlurUs = bguSolveUs = bguTotalUs = 0;
+        bguTimingSamples = 0;
     }
 
     /** Debug: pushes the exact read-back pixels the estimator receives on screen. */
@@ -335,7 +429,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         else frameCropScaleY = bufferAspect / frameAspect;
     }
 
-    private ByteBuffer captureIspPreview(int width, int height) {
+    private ByteBuffer captureIspPreview(int width, int height, ByteBuffer destination) {
         ensureDownsampleTarget(width, height);
         computeFrameCrop(width, height);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, downsampleFramebuffer);
@@ -352,15 +446,17 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glUniform1i(GLES20.glGetUniformLocation(downsampleProgram, "sTexture"), 0);
         GLES20.glUniform4f(downsampleUvTransform, frameCropScaleX, frameCropScaleY,
                 (1.0f - frameCropScaleX) * 0.5f, (1.0f - frameCropScaleY) * 0.5f);
+        GLES20.glUniform2f(downsampleSampleStep,
+                frameCropScaleX / width / 4.0f, frameCropScaleY / height / 4.0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-        downsamplePixels.position(0);
+        destination.position(0);
         GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
-                downsamplePixels);
-        downsamplePixels.position(0);
+                destination);
+        destination.position(0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
         GLES20.glUseProgram(hProgram);
-        return downsamplePixels;
+        return destination;
     }
 
     private void ensureDownsampleTarget(int width, int height) {
@@ -382,10 +478,15 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                     + "gl_Position=vec4(vPosition,0.0,1.0);}";
             String fragment = "#extension GL_OES_EGL_image_external_essl3 : require\n"
                     + "precision mediump float; uniform samplerExternalOES sTexture;"
+                    + "uniform vec2 sampleStep;"
                     + "in vec2 texCoord; out vec4 Output;"
-                    + "void main(){Output=texture(sTexture,texCoord);}";
+                    + "void main(){vec4 sum=vec4(0.0);"
+                    + "for(int y=0;y<4;y++)for(int x=0;x<4;x++){"
+                    + "vec2 o=(vec2(x,y)-vec2(1.5))*sampleStep;"
+                    + "sum+=texture(sTexture,texCoord+o);}Output=sum/16.0;}";
             downsampleProgram = loadShader(vertex, fragment);
             downsampleUvTransform = GLES20.glGetUniformLocation(downsampleProgram, "uvTransform");
+            downsampleSampleStep = GLES20.glGetUniformLocation(downsampleProgram, "sampleStep");
         }
         int[] names = new int[1];
         GLES20.glGenTextures(1, names, 0);
@@ -407,7 +508,6 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         downsampleWidth = width;
         downsampleHeight = height;
-        downsamplePixels = ByteBuffer.allocateDirect(width * height * 4);
     }
 
     public synchronized void onFrameAvailable(SurfaceTexture st) {

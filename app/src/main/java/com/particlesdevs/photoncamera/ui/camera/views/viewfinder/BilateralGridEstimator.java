@@ -45,11 +45,35 @@ public final class BilateralGridEstimator {
         }
 
         public static Options previewDefaults() {
-            return new Options(32, 24, 8, 2, 1.0e-4f);
+            // A coarser spatial grid is intentionally used for a streamed
+            // model. It is faster and prevents a one-frame-old fit from
+            // attaching strong local color transforms to moving objects.
+            return new Options(12, 9, 8, 2, 1.0e-3f);
         }
     }
 
     private final Options options;
+    private Timing lastTiming = Timing.ZERO;
+
+    public static final class Timing {
+        static final Timing ZERO = new Timing(0, 0, 0, 0);
+        public final long splatUs;
+        public final long blurUs;
+        public final long solveUs;
+        public final long totalUs;
+
+        Timing(long splatUs, long blurUs, long solveUs, long totalUs) {
+            this.splatUs = splatUs;
+            this.blurUs = blurUs;
+            this.solveUs = solveUs;
+            this.totalUs = totalUs;
+        }
+
+        static Timing fromNative(long[] values) {
+            return values == null || values.length != 4 ? ZERO
+                    : new Timing(values[0], values[1], values[2], values[3]);
+        }
+    }
 
     public BilateralGridEstimator(Options options) {
         if (options == null) throw new IllegalArgumentException("Options are required");
@@ -103,9 +127,15 @@ public final class BilateralGridEstimator {
             throw new IllegalArgumentException("Estimator requires direct RGBA8 buffers");
         }
         requireNative();
-        return makeGrid(nativeEstimateRgba8(inputRgba, targetRgba, width, height,
+        BilateralGrid grid = makeGrid(nativeEstimateRgba8(inputRgba, targetRgba, width, height,
                 options.gridWidth, options.gridHeight, options.gridDepth,
                 options.blurPasses, options.regularization));
+        lastTiming = Timing.fromNative(nativeGetLastTimingUs());
+        return grid;
+    }
+
+    public Timing getLastTiming() {
+        return lastTiming;
     }
 
     public BilateralGrid estimate(FloatBuffer inputRgb, FloatBuffer targetRgb,
@@ -141,4 +171,6 @@ public final class BilateralGridEstimator {
     private static native float[] nativeEstimateRgba8(
             ByteBuffer inputRgba, ByteBuffer targetRgba, int width, int height,
             int gridWidth, int gridHeight, int gridDepth, int blurPasses, float regularization);
+
+    private static native long[] nativeGetLastTimingUs();
 }

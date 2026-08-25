@@ -17,22 +17,28 @@ import java.nio.ByteOrder;
 public final class RawSuperPixel {
     public static final int OUTPUT_WIDTH = 512;
     public static final int OUTPUT_HEIGHT = 384;
-    /**
-     * Pre-allocated output buffer, reused across frames. Frames handed to the
-     * renderer alias this buffer, so only the newest frame stays valid.
-     */
-    private static final ByteBuffer OUTPUT =
-            ByteBuffer.allocateDirect(OUTPUT_WIDTH * OUTPUT_HEIGHT * 4)
-                    .order(ByteOrder.nativeOrder());
+    private static final int BUFFER_COUNT = 3;
+    private static final ByteBuffer[] OUTPUTS = new ByteBuffer[BUFFER_COUNT];
+    private static final boolean[] IN_USE = new boolean[BUFFER_COUNT];
+    private static final Runnable[] RELEASERS = new Runnable[BUFFER_COUNT];
 
     static {
         System.loadLibrary("rawSuperPixel");
+        for (int i = 0; i < BUFFER_COUNT; i++) {
+            final int slot = i;
+            OUTPUTS[i] = ByteBuffer.allocateDirect(OUTPUT_WIDTH * OUTPUT_HEIGHT * 4)
+                    .order(ByteOrder.nativeOrder());
+            RELEASERS[i] = () -> release(slot);
+        }
     }
 
     private RawSuperPixel() {}
 
     public static RawPreviewFrame process(Image image, int cfa, BlackLevelPattern blackPattern,
                                           int whiteLevel, Rational[] neutralColorPoint) {
+        int slot = acquire();
+        if (slot < 0) return null;
+        ByteBuffer output = OUTPUTS[slot];
         Image.Plane plane = image.getPlanes()[0];
         ByteBuffer raw = plane.getBuffer().duplicate().order(ByteOrder.nativeOrder());
         int sourceWidth = image.getWidth();
@@ -55,10 +61,30 @@ public final class RawSuperPixel {
         gainG *= gainScale;
         gainB *= gainScale;
 
-        process(raw, OUTPUT, plane.getRowStride(), plane.getPixelStride(),
-                cropLeft, cropTop, cropWidth, cropHeight, cfa, black, whiteLevel,
-                gainR, gainG, gainB);
-        return new RawPreviewFrame(OUTPUT_WIDTH, OUTPUT_HEIGHT, OUTPUT);
+        try {
+            process(raw, output, plane.getRowStride(), plane.getPixelStride(),
+                    cropLeft, cropTop, cropWidth, cropHeight, cfa, black, whiteLevel,
+                    gainR, gainG, gainB);
+            return new RawPreviewFrame(OUTPUT_WIDTH, OUTPUT_HEIGHT, output,
+                    image.getTimestamp(), RELEASERS[slot]);
+        } catch (RuntimeException error) {
+            release(slot);
+            throw error;
+        }
+    }
+
+    private static synchronized int acquire() {
+        for (int i = 0; i < BUFFER_COUNT; i++) {
+            if (!IN_USE[i]) {
+                IN_USE[i] = true;
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static synchronized void release(int slot) {
+        IN_USE[slot] = false;
     }
 
     private static native void process(ByteBuffer raw, ByteBuffer out,

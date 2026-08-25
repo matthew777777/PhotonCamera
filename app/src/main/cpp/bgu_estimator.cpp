@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <vector>
@@ -23,8 +24,7 @@ struct Workspace {
     std::vector<float> statistics;
     std::vector<float> scratch;
     std::vector<float> coefficients;
-    std::vector<float> rgb_input;
-    std::vector<float> rgb_target;
+    std::array<int64_t, 4> timing_us{}; // splat, blur, solve, total
 };
 
 thread_local Workspace workspace;
@@ -91,6 +91,52 @@ bool splat(const float* input, const float* target, const float* supplied_guide,
 
             const float gx = scaled_coordinate(x, image_width, config.width);
             const float gz = std::max(0.0f, std::min(raw_guide, 1.0f)) * (config.depth - 1);
+            const int x0 = static_cast<int>(std::floor(gx));
+            const int x1 = std::min(x0 + 1, config.width - 1);
+            const int z0 = static_cast<int>(std::floor(gz));
+            const int z1 = std::min(z0 + 1, config.depth - 1);
+            const float fx = gx - x0;
+            const float fz = gz - z0;
+            for (int dz = 0; dz < 2; ++dz) {
+                const int z = dz == 0 ? z0 : z1;
+                const float wz = dz == 0 ? 1.0f - fz : fz;
+                for (int dy = 0; dy < 2; ++dy) {
+                    const int cy = dy == 0 ? y0 : y1;
+                    const float wy = dy == 0 ? 1.0f - fy : fy;
+                    for (int dx = 0; dx < 2; ++dx) {
+                        const int cx = dx == 0 ? x0 : x1;
+                        const float wx = dx == 0 ? 1.0f - fx : fx;
+                        accumulate(statistics.data(), cell_index(cx, cy, z, config),
+                                   r, g, b, out_r, out_g, out_b, wx * wy * wz);
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool splat_rgba8(const unsigned char* input, const unsigned char* target,
+                 int image_width, int image_height, const Config& config,
+                 std::vector<float>& statistics) {
+    constexpr float scale = 1.0f / 255.0f;
+    for (int y = 0; y < image_height; ++y) {
+        const float gy = scaled_coordinate(y, image_height, config.height);
+        const int y0 = static_cast<int>(std::floor(gy));
+        const int y1 = std::min(y0 + 1, config.height - 1);
+        const float fy = gy - y0;
+        for (int x = 0; x < image_width; ++x) {
+            const int rgba = (y * image_width + x) * 4;
+            const float r = input[rgba] * scale;
+            const float g = input[rgba + 1] * scale;
+            const float b = input[rgba + 2] * scale;
+            const float out_r = target[rgba] * scale;
+            const float out_g = target[rgba + 1] * scale;
+            const float out_b = target[rgba + 2] * scale;
+            const float guide = std::max(0.0f, std::min(
+                    0.299f * r + 0.587f * g + 0.114f * b, 1.0f));
+            const float gx = scaled_coordinate(x, image_width, config.width);
+            const float gz = guide * (config.depth - 1);
             const int x0 = static_cast<int>(std::floor(gx));
             const int x1 = std::min(x0 + 1, config.width - 1);
             const int z0 = static_cast<int>(std::floor(gz));
@@ -193,21 +239,54 @@ void solve(const std::vector<float>& statistics, const Config& config,
     }
 }
 
-bool estimate(const float* input, const float* target, const float* guide,
-              int image_width, int image_height, const Config& config) {
-    const int cells = config.width * config.height * config.depth;
-    workspace.statistics.assign(static_cast<size_t>(cells) * kTerms, 0.0f);
-    workspace.scratch.resize(workspace.statistics.size());
-    if (!splat(input, target, guide, image_width, image_height, config,
-               workspace.statistics)) return false;
+void finish_estimate(int cells, const Config& config,
+                     std::chrono::steady_clock::time_point started) {
+    const auto blur_started = std::chrono::steady_clock::now();
     for (int pass = 0; pass < config.blur_passes; ++pass) {
         blur_axis(workspace.statistics, workspace.scratch, config, 0);
         blur_axis(workspace.scratch, workspace.statistics, config, 1);
         blur_axis(workspace.statistics, workspace.scratch, config, 2);
         workspace.statistics.swap(workspace.scratch);
     }
+    const auto solve_started = std::chrono::steady_clock::now();
     workspace.coefficients.assign(static_cast<size_t>(cells) * kCoefficientsPerCell, 0.0f);
     solve(workspace.statistics, config, workspace.coefficients);
+    const auto finished = std::chrono::steady_clock::now();
+    workspace.timing_us[1] = std::chrono::duration_cast<std::chrono::microseconds>(
+            solve_started - blur_started).count();
+    workspace.timing_us[2] = std::chrono::duration_cast<std::chrono::microseconds>(
+            finished - solve_started).count();
+    workspace.timing_us[3] = std::chrono::duration_cast<std::chrono::microseconds>(
+            finished - started).count();
+}
+
+bool estimate(const float* input, const float* target, const float* guide,
+              int image_width, int image_height, const Config& config) {
+    const auto started = std::chrono::steady_clock::now();
+    const int cells = config.width * config.height * config.depth;
+    workspace.statistics.assign(static_cast<size_t>(cells) * kTerms, 0.0f);
+    workspace.scratch.resize(workspace.statistics.size());
+    if (!splat(input, target, guide, image_width, image_height, config,
+               workspace.statistics)) return false;
+    const auto splat_finished = std::chrono::steady_clock::now();
+    workspace.timing_us[0] = std::chrono::duration_cast<std::chrono::microseconds>(
+            splat_finished - started).count();
+    finish_estimate(cells, config, started);
+    return true;
+}
+
+bool estimate_rgba8(const unsigned char* input, const unsigned char* target,
+                    int image_width, int image_height, const Config& config) {
+    const auto started = std::chrono::steady_clock::now();
+    const int cells = config.width * config.height * config.depth;
+    workspace.statistics.assign(static_cast<size_t>(cells) * kTerms, 0.0f);
+    workspace.scratch.resize(workspace.statistics.size());
+    if (!splat_rgba8(input, target, image_width, image_height, config,
+                     workspace.statistics)) return false;
+    const auto splat_finished = std::chrono::steady_clock::now();
+    workspace.timing_us[0] = std::chrono::duration_cast<std::chrono::microseconds>(
+            splat_finished - started).count();
+    finish_estimate(cells, config, started);
     return true;
 }
 
@@ -254,6 +333,16 @@ Java_com_particlesdevs_photoncamera_ui_camera_views_viewfinder_BilateralGridEsti
     return result;
 }
 
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_particlesdevs_photoncamera_ui_camera_views_viewfinder_BilateralGridEstimator_nativeGetLastTimingUs(
+        JNIEnv* env, jclass) {
+    jlong values[4];
+    for (int i = 0; i < 4; ++i) values[i] = workspace.timing_us[i];
+    jlongArray result = env->NewLongArray(4);
+    if (result != nullptr) env->SetLongArrayRegion(result, 0, 4, values);
+    return result;
+}
+
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_particlesdevs_photoncamera_ui_camera_views_viewfinder_BilateralGridEstimator_nativeEstimateDirect(
         JNIEnv* env, jclass, jobject input_buffer, jobject target_buffer,
@@ -283,21 +372,14 @@ Java_com_particlesdevs_photoncamera_ui_camera_views_viewfinder_BilateralGridEsti
         throw_illegal_argument(env, "RGBA estimator buffers must be direct");
         return nullptr;
     }
-    const int pixels = image_width * image_height;
-    workspace.rgb_input.resize(static_cast<size_t>(pixels) * 3);
-    workspace.rgb_target.resize(static_cast<size_t>(pixels) * 3);
-    constexpr float scale = 1.0f / 255.0f;
-    for (int pixel = 0; pixel < pixels; ++pixel) {
-        const int rgba = pixel * 4;
-        const int rgb = pixel * 3;
-        workspace.rgb_input[rgb] = input[rgba] * scale;
-        workspace.rgb_input[rgb + 1] = input[rgba + 1] * scale;
-        workspace.rgb_input[rgb + 2] = input[rgba + 2] * scale;
-        workspace.rgb_target[rgb] = target[rgba] * scale;
-        workspace.rgb_target[rgb + 1] = target[rgba + 1] * scale;
-        workspace.rgb_target[rgb + 2] = target[rgba + 2] * scale;
-    }
     Config config{grid_width, grid_height, grid_depth, blur_passes, regularization};
-    return make_result(env, workspace.rgb_input.data(), workspace.rgb_target.data(), nullptr,
-                       image_width, image_height, config);
+    if (!estimate_rgba8(input, target, image_width, image_height, config)) {
+        throw_illegal_argument(env, "Invalid RGBA estimator input");
+        return nullptr;
+    }
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(workspace.coefficients.size()));
+    if (result != nullptr)
+        env->SetFloatArrayRegion(result, 0, static_cast<jsize>(workspace.coefficients.size()),
+                                 workspace.coefficients.data());
+    return result;
 }

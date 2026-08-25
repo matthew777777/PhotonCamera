@@ -234,6 +234,10 @@ public class GLPreview extends GLSurfaceView {
         }
     }
 
+    public boolean shouldProcessRawPreviewFrame() {
+        return mRenderer != null && mRenderer.shouldProcessRawPreviewFrame();
+    }
+
     public void clearRawPreviewFrame() {
         setRawPreviewFrame(null);
     }

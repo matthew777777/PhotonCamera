@@ -39,10 +39,10 @@ void main() {
                         texture(bilateralGridG, gridPosition), bguBlend);
         vec4 rowB = mix(texture(bilateralGridBPrev, gridPosition),
                         texture(bilateralGridB, gridPosition), bguBlend);
-        color.rgb = vec3(
+        color.rgb = clamp(vec3(
                 dot(rowR, affineInput),
                 dot(rowG, affineInput),
-                dot(rowB, affineInput));
+                dot(rowB, affineInput)), 0.0, 1.0);
     }
     vec2 size = resolution;
     // focus peaking

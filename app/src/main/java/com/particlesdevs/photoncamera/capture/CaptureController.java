@@ -53,6 +53,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 
 import com.particlesdevs.photoncamera.processing.live.RawSuperPixel;
+import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.RawPreviewFrame;
 import com.particlesdevs.photoncamera.util.Allocator;
 import com.particlesdevs.photoncamera.util.Log;
 import android.util.Range;
@@ -366,22 +367,20 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                     return;
                 }
                 try {
+                    if (!mTextureView.shouldProcessRawPreviewFrame()) {
+                        enqueueZslImage(img);
+                        return;
+                    }
                     Integer cfa = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT);
                     Integer white = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL);
                     BlackLevelPattern black = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN);
-                    mTextureView.setRawPreviewFrame(RawSuperPixel.process(img,
-                            cfa == null ? 0 : cfa, black, white == null ? 1023 : white, mPreviewTemp));
+                    RawPreviewFrame rawPreview = RawSuperPixel.process(img,
+                            cfa == null ? 0 : cfa, black, white == null ? 1023 : white, mPreviewTemp);
+                    if (rawPreview != null) mTextureView.setRawPreviewFrame(rawPreview);
                 } catch (Exception e) {
                     Log.w(TAG, "RAW preview frame failed: " + e.getMessage());
                 }
-                synchronized (mZslBufferLock) {
-                    mZslRingBuffer.addLast(img);
-                    int maxFrames = Math.min(PhotonCamera.getSettings().frameCount, 37);
-                    while (mZslRingBuffer.size() > maxFrames) {
-                        Image old = mZslRingBuffer.pollFirst();
-                        if (old != null) old.close();
-                    }
-                }
+                enqueueZslImage(img);
                 return;
             }
             if (onUnlimited && !unlimitedStarted) {
@@ -409,6 +408,17 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         }
 
     };
+
+    private void enqueueZslImage(Image image) {
+        synchronized (mZslBufferLock) {
+            mZslRingBuffer.addLast(image);
+            int maxFrames = Math.min(PhotonCamera.getSettings().frameCount, 37);
+            while (mZslRingBuffer.size() > maxFrames) {
+                Image old = mZslRingBuffer.pollFirst();
+                if (old != null) old.close();
+            }
+        }
+    }
     private Range<Integer> FpsRangeAuto;
     private int[] mCameraAfModes;
     private int mPreviewWidth;
