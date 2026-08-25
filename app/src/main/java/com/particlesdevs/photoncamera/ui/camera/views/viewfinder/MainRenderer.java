@@ -38,6 +38,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private boolean bilateralGridUpdatePending;
     private BilateralGrid currentGrid;
     private final int[] bilateralTextures = new int[3];
+    private int bguBlend;
     private RawPreviewFrame pendingRawFrame;
     private ByteBuffer pendingRawCopy;
     private boolean rawFrameUpdatePending;
@@ -45,13 +46,18 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int downsampleProgram;
     private int downsampleFramebuffer;
     private int downsampleTexture;
+    private int downsampleUvTransform;
+    private float frameCropScaleX = 1.0f;
+    private float frameCropScaleY = 1.0f;
     private int downsampleWidth;
     private int downsampleHeight;
     private int surfaceWidth;
     private int surfaceHeight;
     private ByteBuffer downsamplePixels;
-    private long lastBguEstimateNs;
-    private static final long BGU_ESTIMATE_INTERVAL_NS = 500_000_000L;
+    /** Debug: render the read-back ISP preview pixels instead of the camera preview. */
+    private static final boolean DEBUG_ISP_PREVIEW = false;
+    private int ispPreviewTexture;
+    private int enableIspPreview;
     private final BilateralGridEstimator bilateralGridEstimator = new BilateralGridEstimator(
             BilateralGridEstimator.Options.previewDefaults());
 
@@ -116,6 +122,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         downsampleTexture = 0;
         downsampleWidth = 0;
         downsampleHeight = 0;
+        ispPreviewTexture = 0;
         initTex();
         mSTexture = new SurfaceTexture(hTex[0]);
         mSTexture.setOnFrameAvailableListener(this);
@@ -132,10 +139,16 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         mirror = GLES20.glGetUniformLocation(hProgram, "mirror");
         enableBilateralGrid = GLES20.glGetUniformLocation(hProgram, "enableBilateralGrid");
         bilateralGridSize = GLES20.glGetUniformLocation(hProgram, "bilateralGridSize");
+        enableIspPreview = GLES20.glGetUniformLocation(hProgram, "enableIspPreview");
         GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "sTexture"), 0);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridR"), 1);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridG"), 2);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridB"), 3);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridRPrev"), 5);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridGPrev"), 6);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridBPrev"), 7);
+        bguBlend = GLES20.glGetUniformLocation(hProgram, "bguBlend");
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "ispPreview"), 4);
         GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 4 * 2, pVertex);
         GLES20.glVertexAttribPointer(vTexCoord, 2, GLES20.GL_FLOAT, false, 4 * 2, pTexCoord);
         GLES20.glEnableVertexAttribArray(vPosition);
@@ -209,6 +222,13 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     }
 
     private void bindBilateralGrid() {
+        GLES20.glUniform1i(enableIspPreview,
+                DEBUG_ISP_PREVIEW && ispPreviewTexture != 0 ? 1 : 0);
+        if (DEBUG_ISP_PREVIEW && ispPreviewTexture != 0) {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE4);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ispPreviewTexture);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        }
         boolean enabled = currentGrid != null && bilateralTextures[0] != 0;
         GLES20.glUniform1i(enableBilateralGrid, enabled ? 1 : 0);
         if (!enabled) {
@@ -216,8 +236,13 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         }
         GLES20.glUniform3f(bilateralGridSize, currentGrid.getWidth(),
                 currentGrid.getHeight(), currentGrid.getDepth());
+        GLES20.glUniform1f(bguBlend, 1.0f);
         for (int row = 0; row < 3; row++) {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE1 + row);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
+            // Interpolation is disabled; the prev samplers alias the current grid
+            // so the shader's mix() is a no-op.
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE5 + row);
             GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
         }
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
@@ -250,8 +275,6 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
 
     private synchronized void estimatePendingRawFrame() {
         if (!rawFrameUpdatePending) return;
-        long now = System.nanoTime();
-        if (pendingRawFrame != null && now - lastBguEstimateNs < BGU_ESTIMATE_INTERVAL_NS) return;
         RawPreviewFrame target = pendingRawFrame;
         pendingRawFrame = null;
         rawFrameUpdatePending = false;
@@ -262,18 +285,59 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         try {
             ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight());
             ByteBuffer output = target.pixels();
+            if (DEBUG_ISP_PREVIEW) {
+                uploadIspPreview(output, target.getWidth(), target.getHeight());
+            }
+
             input.position(0);
             output.position(0);
             setBilateralGrid(bilateralGridEstimator.estimateRgba8(input, output,
                     target.getWidth(), target.getHeight()));
-            lastBguEstimateNs = now;
         } catch (Exception error) {
             Log.w("MainRenderer", "BGU preview estimate failed: " + error.getMessage());
         }
     }
 
+    /** Debug: pushes the exact read-back pixels the estimator receives on screen. */
+    private void uploadIspPreview(ByteBuffer pixels, int width, int height) {
+        if (ispPreviewTexture == 0) {
+            int[] texture = new int[1];
+            GLES20.glGenTextures(1, texture, 0);
+            ispPreviewTexture = texture[0];
+        }
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE4);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ispPreviewTexture);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+        pixels.position(0);
+        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8,
+                width, height, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+    }
+
+    /**
+     * Central-crop scales mapping the preview buffer's field of view onto the
+     * RAW frame's aspect ratio. The wider dimension of the buffer is cropped so
+     * scene geometry stays undistorted (e.g. a 16:9 stream is a center crop of
+     * the 4:3 sensor, so its central 4:3 rect corresponds to a central 4:3
+     * rect of the RAW frame, just at a smaller scale).
+     */
+    private void computeFrameCrop(int frameWidth, int frameHeight) {
+        frameCropScaleX = 1.0f;
+        frameCropScaleY = 1.0f;
+        android.graphics.Point buffer = mView.cameraSize;
+        if (buffer == null || buffer.x <= 0 || buffer.y <= 0) return;
+        float frameAspect = (float) frameWidth / frameHeight;
+        float bufferAspect = (float) buffer.x / buffer.y;
+        if (bufferAspect > frameAspect) frameCropScaleX = frameAspect / bufferAspect;
+        else frameCropScaleY = bufferAspect / frameAspect;
+    }
+
     private ByteBuffer captureIspPreview(int width, int height) {
         ensureDownsampleTarget(width, height);
+        computeFrameCrop(width, height);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, downsampleFramebuffer);
         GLES20.glViewport(0, 0, width, height);
         GLES20.glUseProgram(downsampleProgram);
@@ -286,6 +350,8 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glEnableVertexAttribArray(position);
         GLES20.glEnableVertexAttribArray(textureCoordinate);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(downsampleProgram, "sTexture"), 0);
+        GLES20.glUniform4f(downsampleUvTransform, frameCropScaleX, frameCropScaleY,
+                (1.0f - frameCropScaleX) * 0.5f, (1.0f - frameCropScaleY) * 0.5f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
         downsamplePixels.position(0);
         GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
@@ -302,14 +368,24 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         if (downsampleTexture != 0) GLES20.glDeleteTextures(1, new int[] {downsampleTexture}, 0);
         if (downsampleFramebuffer != 0) GLES20.glDeleteFramebuffers(1, new int[] {downsampleFramebuffer}, 0);
         if (downsampleProgram == 0) {
+            // Samples the SurfaceTexture in plain sensor orientation (the display
+            // path's 90-degree coordinate rotation must NOT be applied here).
+            // OES textures sample with the image vertically flipped under identity
+            // sampling; undoing it (instead of glReadPixels' bottom-up rows) makes
+            // the readback buffer line up with the sensor-oriented RAW frame's
+            // row/column order. uvTransform crops the preview's field of view to
+            // the RAW frame's aspect ratio.
             String vertex = "in vec2 vPosition; in vec2 vTexCoord; out vec2 texCoord;"
-                    + "void main(){texCoord.yx=vTexCoord.xy;texCoord.x=1.0-texCoord.x;"
+                    + "uniform vec4 uvTransform;"
+                    + "void main(){texCoord=vTexCoord.xy*uvTransform.xy+uvTransform.zw;"
+                    + "texCoord.y=1.0-texCoord.y;"
                     + "gl_Position=vec4(vPosition,0.0,1.0);}";
             String fragment = "#extension GL_OES_EGL_image_external_essl3 : require\n"
                     + "precision mediump float; uniform samplerExternalOES sTexture;"
                     + "in vec2 texCoord; out vec4 Output;"
                     + "void main(){Output=texture(sTexture,texCoord);}";
             downsampleProgram = loadShader(vertex, fragment);
+            downsampleUvTransform = GLES20.glGetUniformLocation(downsampleProgram, "uvTransform");
         }
         int[] names = new int[1];
         GLES20.glGenTextures(1, names, 0);

@@ -1603,6 +1603,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
             //Camera output
             texture.setDefaultBufferSize(mBufferSize.getHeight(), mBufferSize.getWidth());
+            // Sensor-oriented preview buffer size, used to align the BGU ISP capture with the RAW frame.
+            mTextureView.cameraSize = new Point(mBufferSize.getHeight(), mBufferSize.getWidth());
 
             // This is the output Surface we need to start preview.
             if(surface == null)
