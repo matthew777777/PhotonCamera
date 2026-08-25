@@ -61,6 +61,15 @@ public final class BilateralGrid {
         return depth;
     }
 
+    public float getCoefficient(int x, int y, int z, int row, int column) {
+        if (x < 0 || x >= width || y < 0 || y >= height || z < 0 || z >= depth
+                || row < 0 || row >= ROWS || column < 0 || column >= COEFFICIENTS_PER_ROW) {
+            throw new IndexOutOfBoundsException("Coefficient outside bilateral grid");
+        }
+        int cell = (z * height + y) * width + x;
+        return coefficients[cell * COEFFICIENTS_PER_CELL + row * COEFFICIENTS_PER_ROW + column];
+    }
+
     /** Returns one tightly packed RGBA texture containing an affine output row. */
     FloatBufferData row(int row) {
         if (row < 0 || row >= ROWS) {

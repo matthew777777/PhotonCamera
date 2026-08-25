@@ -198,6 +198,9 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
 add_library(allocator SHARED
     ${SRC_DIR}/allocator.cpp
 )
+add_library(bgu SHARED
+    ${SRC_DIR}/bgu_estimator.cpp
+)
 add_library(flacRecorder SHARED
     ${SRC_DIR}/flacRecorder.cpp
 )
@@ -221,6 +224,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 target_link_libraries(allocator PRIVATE
         log
 )
+
+target_compile_options(bgu PRIVATE -O3)
+target_link_libraries(bgu PRIVATE log)
 
 target_link_libraries(flacRecorder PRIVATE
     log
