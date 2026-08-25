@@ -201,6 +201,9 @@ add_library(allocator SHARED
 add_library(flacRecorder SHARED
     ${SRC_DIR}/flacRecorder.cpp
 )
+add_library(rawSuperPixel SHARED
+    ${SRC_DIR}/rawSuperPixel.cpp
+)
 add_library(
         camera2native SHARED ${SRC_DIR}/native-engine.cpp
 )
@@ -220,7 +223,11 @@ target_link_libraries(allocator PRIVATE
 )
 
 target_link_libraries(flacRecorder PRIVATE
-        log
+    log
+)
+
+target_link_libraries(rawSuperPixel PRIVATE
+    log
 )
 
 target_link_libraries(

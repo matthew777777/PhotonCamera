@@ -52,6 +52,7 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.SystemClock;
 
+import com.particlesdevs.photoncamera.processing.live.RawSuperPixel;
 import com.particlesdevs.photoncamera.util.Allocator;
 import com.particlesdevs.photoncamera.util.Log;
 import android.util.Range;
@@ -368,7 +369,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                     Integer cfa = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT);
                     Integer white = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL);
                     BlackLevelPattern black = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN);
-                    mTextureView.setRawPreviewFrame(RawPreviewProcessor.process(img,
+                    mTextureView.setRawPreviewFrame(RawSuperPixel.process(img,
                             cfa == null ? 0 : cfa, black, white == null ? 1023 : white, mPreviewTemp));
                 } catch (Exception e) {
                     Log.w(TAG, "RAW preview frame failed: " + e.getMessage());

@@ -247,9 +247,8 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
-        byte[] values = frame.pixels();
-        ByteBuffer pixels = ByteBuffer.allocateDirect(values.length);
-        pixels.put(values).position(0);
+        ByteBuffer pixels = frame.pixels();
+        pixels.position(0);
         GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8,
                 frame.getWidth(), frame.getHeight(), 0, GLES20.GL_RGBA,
                 GLES20.GL_UNSIGNED_BYTE, pixels);
