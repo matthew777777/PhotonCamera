@@ -34,6 +34,14 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private boolean mGLInit = false;
     private boolean mUpdateST = false;
     private volatile boolean mMirrorPreview;
+    private BilateralGrid pendingGrid;
+    private boolean bilateralGridUpdatePending;
+    private BilateralGrid currentGrid;
+    private final int[] bilateralTextures = new int[3];
+    private RawPreviewFrame pendingRawFrame;
+    private boolean rawFrameUpdatePending;
+    private int rawPreviewTexture;
+    private boolean rawPreviewEnabled;
 
     private final GLPreview mView;
     private ManualModeConsole mManualModeConsole;
@@ -66,6 +74,9 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 mUpdateST = false;
             }
         }
+        uploadPendingGrid();
+        uploadPendingRawFrame();
+        bindBilateralGrid();
         GLES20.glUniformMatrix4fv(uTexRotateMatrix, 1, false, mTexRotateMatrix, 0);
         int peakEnabled = getPeakEnabled();
         GLES20.glUniform1i(enablePeak, peakEnabled);
@@ -82,9 +93,15 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int vTexCoord;
     private int enablePeak;
     private int mirror;
+    private int enableBilateralGrid;
+    private int bilateralGridSize;
+    private int enableRawPreview;
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        deleteBilateralTextures();
+        rawPreviewTexture = 0;
+        rawPreviewEnabled = false;
         initTex();
         mSTexture = new SurfaceTexture(hTex[0]);
         mSTexture.setOnFrameAvailableListener(this);
@@ -99,12 +116,22 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         vTexCoord = GLES20.glGetAttribLocation(hProgram, "vTexCoord");
         enablePeak = GLES20.glGetUniformLocation(hProgram, "enablePeak");
         mirror = GLES20.glGetUniformLocation(hProgram, "mirror");
+        enableBilateralGrid = GLES20.glGetUniformLocation(hProgram, "enableBilateralGrid");
+        bilateralGridSize = GLES20.glGetUniformLocation(hProgram, "bilateralGridSize");
+        enableRawPreview = GLES20.glGetUniformLocation(hProgram, "enableRawPreview");
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "sTexture"), 0);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridR"), 1);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridG"), 2);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridB"), 3);
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "rawPreview"), 4);
         GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 4 * 2, pVertex);
         GLES20.glVertexAttribPointer(vTexCoord, 2, GLES20.GL_FLOAT, false, 4 * 2, pTexCoord);
         GLES20.glEnableVertexAttribArray(vPosition);
         GLES20.glEnableVertexAttribArray(vTexCoord);
         GLES20.glUniform2f(GLES20.glGetUniformLocation(hProgram, "resolution"), mView.getWidth(), mView.getHeight());
         mGLInit = true;
+        // A context recreation invalidates texture names, but not the CPU model.
+        setBilateralGrid(currentGrid);
         mView.fireOnSurfaceTextureAvailable(mSTexture, 0, 0);
     }
 
@@ -119,11 +146,115 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private void initTex() {
         hTex = new int[1];
         GLES20.glGenTextures(1, hTex, 0);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
-        GLES20.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-        GLES20.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
-        GLES20.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+    }
+
+    public synchronized void setBilateralGrid(BilateralGrid grid) {
+        pendingGrid = grid;
+        bilateralGridUpdatePending = true;
+    }
+
+    private synchronized void uploadPendingGrid() {
+        if (!bilateralGridUpdatePending) {
+            return;
+        }
+        BilateralGrid grid = pendingGrid;
+        pendingGrid = null;
+        bilateralGridUpdatePending = false;
+        if (grid == null) {
+            currentGrid = null;
+            deleteBilateralTextures();
+            return;
+        }
+
+        deleteBilateralTextures();
+        GLES30.glGenTextures(3, bilateralTextures, 0);
+        for (int row = 0; row < 3; row++) {
+            float[] values = grid.row(row).values;
+            FloatBuffer data = ByteBuffer.allocateDirect(values.length * Float.BYTES)
+                    .order(ByteOrder.nativeOrder()).asFloatBuffer();
+            data.put(values).position(0);
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1 + row);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+            GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE);
+            GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGBA16F,
+                    grid.getWidth(), grid.getHeight(), grid.getDepth(), 0,
+                    GLES30.GL_RGBA, GLES30.GL_FLOAT, data);
+        }
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        currentGrid = grid;
+    }
+
+    private void bindBilateralGrid() {
+        GLES20.glUniform1i(enableRawPreview, rawPreviewEnabled ? 1 : 0);
+        if (rawPreviewEnabled) {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE4);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, rawPreviewTexture);
+        }
+        boolean enabled = currentGrid != null && bilateralTextures[0] != 0;
+        GLES20.glUniform1i(enableBilateralGrid, enabled ? 1 : 0);
+        if (!enabled) {
+            return;
+        }
+        GLES20.glUniform3f(bilateralGridSize, currentGrid.getWidth(),
+                currentGrid.getHeight(), currentGrid.getDepth());
+        for (int row = 0; row < 3; row++) {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1 + row);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
+        }
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
+    }
+
+    private void deleteBilateralTextures() {
+        if (bilateralTextures[0] != 0) {
+            GLES30.glDeleteTextures(3, bilateralTextures, 0);
+            Arrays.fill(bilateralTextures, 0);
+        }
+    }
+
+    public synchronized void setRawPreviewFrame(RawPreviewFrame frame) {
+        pendingRawFrame = frame;
+        rawFrameUpdatePending = true;
+    }
+
+    private synchronized void uploadPendingRawFrame() {
+        if (!rawFrameUpdatePending) return;
+        RawPreviewFrame frame = pendingRawFrame;
+        pendingRawFrame = null;
+        rawFrameUpdatePending = false;
+        if (frame == null) {
+            rawPreviewEnabled = false;
+            return;
+        }
+        if (rawPreviewTexture == 0) {
+            int[] texture = new int[1];
+            GLES20.glGenTextures(1, texture, 0);
+            rawPreviewTexture = texture[0];
+        }
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE4);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, rawPreviewTexture);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+        byte[] values = frame.pixels();
+        ByteBuffer pixels = ByteBuffer.allocateDirect(values.length);
+        pixels.put(values).position(0);
+        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8,
+                frame.getWidth(), frame.getHeight(), 0, GLES20.GL_RGBA,
+                GLES20.GL_UNSIGNED_BYTE, pixels);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        rawPreviewEnabled = true;
     }
 
     public synchronized void onFrameAvailable(SurfaceTexture st) {

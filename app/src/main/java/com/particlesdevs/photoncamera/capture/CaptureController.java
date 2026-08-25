@@ -36,6 +36,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.ColorSpaceTransform;
+import android.hardware.camera2.params.BlackLevelPattern;
 import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.OutputConfiguration;
 import android.hardware.camera2.params.SessionConfiguration;
@@ -362,6 +363,15 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 if (mZslCapturing) {
                     img.close();
                     return;
+                }
+                try {
+                    Integer cfa = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT);
+                    Integer white = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL);
+                    BlackLevelPattern black = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN);
+                    mTextureView.setRawPreviewFrame(RawPreviewProcessor.process(img,
+                            cfa == null ? 0 : cfa, black, white == null ? 1023 : white, mPreviewTemp));
+                } catch (Exception e) {
+                    Log.w(TAG, "RAW preview frame failed: " + e.getMessage());
                 }
                 synchronized (mZslBufferLock) {
                     mZslRingBuffer.addLast(img);
@@ -1598,6 +1608,9 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 surface = new Surface(texture);
             // We set up a CaptureRequest.Builder with the output Surface.
             setCaptureRequestBuilder();
+            if (!isZslMode()) {
+                mTextureView.clearRawPreviewFrame();
+            }
 
             // Here, we create a CameraCaptureSession for camera preview.
             List<Surface> surfaces = configureSurfaces(isBurstSession);

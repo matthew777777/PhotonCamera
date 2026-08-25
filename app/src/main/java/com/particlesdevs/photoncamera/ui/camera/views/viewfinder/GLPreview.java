@@ -52,7 +52,9 @@ public class GLPreview extends GLSurfaceView {
         handler = new Handler(Looper.getMainLooper());
         mRenderer = new MainRenderer(this);
 
-        setEGLContextClientVersion(2);
+        // The preview uses GLSL ES 3.00 and BGU coefficients are sampled from
+        // 3D textures, both of which require an OpenGL ES 3 context.
+        setEGLContextClientVersion(3);
         setRenderer(mRenderer);
         setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
     }
@@ -204,6 +206,36 @@ public class GLPreview extends GLSurfaceView {
     public void setMirror(boolean mirror) {
         mRenderer.setMirror(mirror);
         requestRender();
+    }
+
+    /**
+     * Replaces the affine bilateral grid used by the live preview. The grid is
+     * copied by {@link BilateralGrid}, then uploaded on the GL thread.
+     */
+    public void setBilateralGrid(BilateralGrid grid) {
+        if (mRenderer != null) {
+            mRenderer.setBilateralGrid(grid);
+            requestRender();
+        }
+    }
+
+    /** Disables BGU slicing and returns to the unmodified camera preview. */
+    public void clearBilateralGrid() {
+        if (mRenderer != null) {
+            mRenderer.setBilateralGrid(null);
+            requestRender();
+        }
+    }
+
+    public void setRawPreviewFrame(RawPreviewFrame frame) {
+        if (mRenderer != null) {
+            mRenderer.setRawPreviewFrame(frame);
+            requestRender();
+        }
+    }
+
+    public void clearRawPreviewFrame() {
+        setRawPreviewFrame(null);
     }
 
     public boolean isAvailable() {
