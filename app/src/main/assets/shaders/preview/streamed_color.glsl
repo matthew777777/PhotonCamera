@@ -46,7 +46,7 @@ void main() {
     float luma = max(dot(rgb, vec3(0.2126, 0.7152, 0.0722)), 1e-6);
     float coordinate = clamp((log2(luma) + 12.0) / 14.0, 0.0, 1.0);
     float mapped = texture(ToneCurve, vec2(coordinate, 0.5)).r;
-    //rgb *= mapped / luma;
+    rgb *= mapped / luma;
     // Gamma encoding also lives here (moved from the native SuperPixel downsampler).
     rgb = pow(clamp(rgb, 0.0, 1.0), vec3(1.0 / 2.2));
     imageStore(OutputBuffer, gid, vec4(rgb, 1.0));
