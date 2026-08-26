@@ -24,9 +24,9 @@
 #define HISTOGRAM_BINS 256
 #define HISTOGRAM_THREADS 4
 
-static std::mutex gCurveMutex;
-static std::array<float, HISTOGRAM_BINS> gPreviousCurve;
-static bool gCurveInitialized = false;
+static std::mutex gToneMutex;
+static std::array<float, 4> gPreviousToneParameters;
+static bool gToneInitialized = false;
 
 static inline uint8_t toLinear8(float x) {
     if (x < 0.0f) x = 0.0f;
@@ -49,7 +49,7 @@ static int percentileBin(const std::array<uint32_t, HISTOGRAM_BINS>& histogram,
     return HISTOGRAM_BINS - 1;
 }
 
-static void buildToneCurve(const uint8_t* rgba, float* curve,
+static void buildToneParameters(const uint8_t* rgba, float* parameters,
                            float gainR, float gainG, float gainB,
                            float exposureCompensation, float compressor) {
     std::array<std::array<uint32_t, HISTOGRAM_BINS>, HISTOGRAM_THREADS> local{};
@@ -87,21 +87,26 @@ static void buildToneCurve(const uint8_t* rgba, float* curve,
     const float white = sourceForBin(percentileBin(histogram, total, 0.995f));
     float exposure = 0.18f / std::max(middle - black, 1.0e-4f);
     exposure *= exp2f(std::max(-4.0f, std::min(exposureCompensation, 4.0f)));
-    float whiteMapped = std::max((white - black) * exposure, 1.0f);
-    whiteMapped *= 1.0f + std::max(compressor, 0.0f) * 0.20f;
+    // Keep the 99.5th percentile inside AgX's upper log2 domain. Compressor
+    // reserves progressively more highlight headroom without changing the
+    // shape of the AgX contrast curve itself.
+    const float maxEv = 4.026069f
+            - std::max(0.0f, std::min(compressor, 8.0f)) * 0.20f;
+    const float maxExposure = exp2f(maxEv) / std::max(white - black, 1.0e-4f);
+    exposure = std::max(0.03125f, std::min(exposure, maxExposure));
 
-    std::lock_guard<std::mutex> lock(gCurveMutex);
-    for (int i = 0; i < HISTOGRAM_BINS; ++i) {
-        const float source = sourceForBin(i);
-        const float x = std::max(source - black, 0.0f) * exposure;
-        const float mapped = std::max(0.0f, std::min(
-                x * (1.0f + x / (whiteMapped * whiteMapped)) / (1.0f + x), 1.0f));
-        if (!gCurveInitialized) gPreviousCurve[i] = std::min(source, 1.0f);
-        const float smoothed = gPreviousCurve[i] * 0.85f + mapped * 0.15f;
-        curve[i] = smoothed;
-        gPreviousCurve[i] = smoothed;
-    }
-    gCurveInitialized = true;
+    const std::array<float, 4> measured = {exposure, black, middle, white};
+    std::lock_guard<std::mutex> lock(gToneMutex);
+    if (!gToneInitialized) gPreviousToneParameters = measured;
+    // Smooth exposure in stops, where a fixed blend has perceptually uniform
+    // behavior. Percentiles remain linear and deliberately react slowly to
+    // bright objects crossing the small preview histogram.
+    parameters[0] = exp2f(0.85f * log2f(std::max(gPreviousToneParameters[0], 1.0e-6f))
+            + 0.15f * log2f(std::max(measured[0], 1.0e-6f)));
+    for (int i = 1; i < 4; ++i)
+        parameters[i] = 0.85f * gPreviousToneParameters[i] + 0.15f * measured[i];
+    for (int i = 0; i < 4; ++i) gPreviousToneParameters[i] = parameters[i];
+    gToneInitialized = true;
 }
 
 extern "C"
@@ -200,7 +205,7 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
     // The stored pixels carry the minWhite/whitePoint encoding, so undo it in
     // the histogram gains to keep the curve anchored to the same luminances
     // the shader sees after reconstructing brightness.
-    buildToneCurve(out, toneCurve,
+    buildToneParameters(out, toneCurve,
                    gainR * whiteR / minWhite,
                    gainG * whiteG / minWhite,
                    gainB * whiteB / minWhite,

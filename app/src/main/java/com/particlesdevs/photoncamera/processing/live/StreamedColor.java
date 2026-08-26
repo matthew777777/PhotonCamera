@@ -11,8 +11,8 @@ import com.particlesdevs.photoncamera.processing.render.Parameters;
  * Compute-shader node of the streamed preview pipeline. Applies the same
  * matrix color correction chain as the capture pipeline's Initial
  * (initial.glsl applyColorSpace()): white point, sensor -> ProPhoto
- * intermediate, intermediate -> sRGB, followed by the histogram GTM curve
- * produced by the native SuperPixel pass and gamma encoding. Writes the
+ * intermediate, intermediate -> sRGB, followed by histogram-adapted AgX and
+ * display encoding. Writes the
  * result via imageStore, so no fragment draw is needed after Run().
  */
 public class StreamedColor extends Node {

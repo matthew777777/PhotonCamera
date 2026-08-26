@@ -25,7 +25,7 @@ public final class RawPreviewFrame implements AutoCloseable {
                            com.particlesdevs.photoncamera.processing.render.Parameters parameters) {
         if (width < 1 || height < 1 || rgba == null
                 || rgba.capacity() < width * height * 4
-                || toneCurve == null || toneCurve.capacity() < 256 * Float.BYTES
+                || toneCurve == null || toneCurve.capacity() < 4 * Float.BYTES
                 || gains == null || gains.length < 3) {
             throw new IllegalArgumentException("Invalid RAW preview frame");
         }

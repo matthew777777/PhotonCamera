@@ -20,9 +20,9 @@ import java.nio.ByteBuffer;
  * {@link com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline},
  * but it runs on the viewfinder's existing GL context and retains its
  * program/textures across frames instead of building a per-shot
- * GLCoreBlockProcessing context. Histogram analysis and the dynamic GTM curve
- * are produced by native SuperPixel; StreamedColor applies it together with
- * the matrix color chain and StreamedInitial applies the tone controls.
+ * GLCoreBlockProcessing context. Native SuperPixel derives stable scene
+ * statistics from its histogram; StreamedColor uses them to adapt the AgX
+ * transform and StreamedInitial applies the user tone controls.
  */
 public final class StreamedPostPipeline extends GLBasePipeline {
     private static final String TAG = "StreamedPostPipeline";
@@ -83,8 +83,8 @@ public final class StreamedPostPipeline extends GLBasePipeline {
      * gamma-encoded result back into that same buffer. {@code parameters} is
      * the fully filled capture-style Parameters used for matrix color
      * correction; may be null to fall back to plain white-balance gains.
-     * {@code toneCurve} is the 256-entry histogram GTM curve produced by the
-     * native SuperPixel pass for this frame.
+     * {@code toneCurve} contains the four histogram-derived AgX parameters
+     * produced by the native SuperPixel pass for this frame.
      */
     public ByteBuffer process(ByteBuffer pixels, int frameWidth, int frameHeight,
                               int restoreWidth, int restoreHeight, float[] whiteBalanceGains,
@@ -92,7 +92,7 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         if (pixels == null || !pixels.isDirect()
                 || pixels.capacity() < frameWidth * frameHeight * 4
                 || toneCurve == null || !toneCurve.isDirect()
-                || toneCurve.capacity() < 256 * Float.BYTES) {
+                || toneCurve.capacity() < 4 * Float.BYTES) {
             throw new IllegalArgumentException("Streamed pipeline requires direct image and curve buffers");
         }
         System.arraycopy(whiteBalanceGains, 0, gains, 0, 3);
@@ -182,9 +182,9 @@ public final class StreamedPostPipeline extends GLBasePipeline {
 
     private void ensureToneResources() {
         if (toneCurveTexture != null) return;
-        toneCurveTexture = new GLTexture(new Point(256, 1),
+        toneCurveTexture = new GLTexture(new Point(4, 1),
                 new GLFormat(GLFormat.DataType.FLOAT_16), null,
-                GLES20.GL_LINEAR, GLES20.GL_CLAMP_TO_EDGE);
+                GLES20.GL_NEAREST, GLES20.GL_CLAMP_TO_EDGE);
     }
 
     /** Like GLBasePipeline.runAll(), minus the GLCoreBlockProcessing output pass. */

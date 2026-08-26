@@ -34,7 +34,8 @@ public final class RawSuperPixel {
             final int slot = i;
             OUTPUTS[i] = ByteBuffer.allocateDirect(OUTPUT_WIDTH * OUTPUT_HEIGHT * 4)
                     .order(ByteOrder.nativeOrder());
-            TONE_CURVES[i] = ByteBuffer.allocateDirect(256 * Float.BYTES)
+            // exposure, black percentile, median, white percentile
+            TONE_CURVES[i] = ByteBuffer.allocateDirect(4 * Float.BYTES)
                     .order(ByteOrder.nativeOrder());
             RELEASERS[i] = () -> release(slot);
         }
