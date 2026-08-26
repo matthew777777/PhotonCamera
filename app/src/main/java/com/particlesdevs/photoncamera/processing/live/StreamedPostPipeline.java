@@ -10,6 +10,7 @@ import com.particlesdevs.photoncamera.processing.opengl.GLBasePipeline;
 import com.particlesdevs.photoncamera.processing.opengl.GLProg;
 import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
+import com.particlesdevs.photoncamera.processing.render.ColorCorrectionTransform;
 import com.particlesdevs.photoncamera.processing.render.Parameters;
 
 import java.nio.ByteBuffer;
@@ -20,7 +21,8 @@ import java.nio.ByteBuffer;
  * {@link com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline},
  * but it runs on the viewfinder's existing GL context and retains its
  * program/textures across frames instead of building a per-shot
- * GLCoreBlockProcessing context.
+ * GLCoreBlockProcessing context. Histogram analysis and the dynamic curve are
+ * produced by native SuperPixel, leaving one fused image shader here.
  */
 public final class StreamedPostPipeline extends GLBasePipeline {
     private static final String TAG = "StreamedPostPipeline";
@@ -31,6 +33,10 @@ public final class StreamedPostPipeline extends GLBasePipeline {
     private int height;
     private GLTexture gainMapTexture;
     private Point gainMapSize;
+    private int gainMapLogState;
+    private GLTexture toneCurveTexture;
+    private static final float[] IDENTITY = new float[]{
+            1.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f};
     /** Per-frame white-balance gains (R, G, B), produced by RawSuperPixel. */
     public final float[] gains = {1.f, 1.f, 1.f};
 
@@ -44,13 +50,15 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         Nodes.clear();
         try {
             if (inputTexture != null) inputTexture.close();
-            if (main1 != null) main1.close();
             if (outputTexture != null) outputTexture.close();
             if (gainMapTexture != null) gainMapTexture.close();
+            if (toneCurveTexture != null) toneCurveTexture.close();
         } catch (Exception ignored) {
         }
-        inputTexture = main1 = outputTexture = gainMapTexture = null;
+        inputTexture = outputTexture = gainMapTexture = toneCurveTexture = null;
+        main1 = main2 = null;
         gainMapSize = null;
+        gainMapLogState = 0;
         program = null;
         glint = null;
         width = height = 0;
@@ -76,10 +84,12 @@ public final class StreamedPostPipeline extends GLBasePipeline {
      */
     public ByteBuffer process(ByteBuffer pixels, int frameWidth, int frameHeight,
                               int restoreWidth, int restoreHeight, float[] whiteBalanceGains,
-                              Parameters parameters) {
+                              ByteBuffer toneCurve, Parameters parameters) {
         if (pixels == null || !pixels.isDirect()
-                || pixels.capacity() < frameWidth * frameHeight * 4) {
-            throw new IllegalArgumentException("Streamed pipeline requires direct RGBA8 input");
+                || pixels.capacity() < frameWidth * frameHeight * 4
+                || toneCurve == null || !toneCurve.isDirect()
+                || toneCurve.capacity() < 256 * Float.BYTES) {
+            throw new IllegalArgumentException("Streamed pipeline requires direct image and curve buffers");
         }
         System.arraycopy(whiteBalanceGains, 0, gains, 0, 3);
         mParameters = parameters;
@@ -90,6 +100,8 @@ public final class StreamedPostPipeline extends GLBasePipeline {
 
         pixels.position(0);
         inputTexture.loadData(pixels);
+        toneCurve.position(0);
+        toneCurveTexture.loadData(toneCurve);
 
         BuildDefaultPipeline();
         runStreamed();
@@ -112,6 +124,15 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         float[] map = params != null && params.gainMap != null ? params.gainMap
                 : new float[]{1.f, 1.f, 1.f, 1.f};
         Point size = params != null && params.mapSize != null ? params.mapSize : new Point(1, 1);
+        boolean active = params != null && params.hasGainMap && map.length >= 4
+                && (size.x > 1 || size.y > 1);
+        int mapState = active ? 2 : 1;
+        if (gainMapLogState != mapState) {
+            com.particlesdevs.photoncamera.util.Log.d(TAG,
+                    "Lens shading map " + (active ? "active " : "unavailable ")
+                            + size.x + "x" + size.y);
+            gainMapLogState = mapState;
+        }
         if (gainMapTexture == null || gainMapSize == null || !gainMapSize.equals(size)) {
             if (gainMapTexture != null) {
                 try { gainMapTexture.close(); } catch (Exception ignored) {}
@@ -129,8 +150,46 @@ public final class StreamedPostPipeline extends GLBasePipeline {
     }
 
     private void BuildDefaultPipeline() {
-        add(new StreamedColor());
-        add(new StreamedInitial());
+        add(new StreamedRender());
+    }
+
+    GLTexture currentToneCurve() {
+        return toneCurveTexture;
+    }
+
+    void configureColorProgram(GLProg glProg, Parameters params) {
+        if (params != null && params.CCT != null) {
+            float[] cct = params.CCT.matrix;
+            if (params.CCT.correctionMode == ColorCorrectionTransform.CorrectionMode.MATRIXES) {
+                cct = params.CCT.combineMatrix(params.whitePoint);
+            }
+            glProg.setVar("sensorToIntermediate", params.sensorToProPhoto);
+            glProg.setVar("intermediateToSRGB", cct);
+            glProg.setVar("neutralPoint", 1.f, 1.f, 1.f);
+        } else {
+            glProg.setVar("sensorToIntermediate", IDENTITY);
+            glProg.setVar("intermediateToSRGB", IDENTITY);
+            glProg.setVar("neutralPoint", gains[0], gains[1], gains[2]);
+        }
+        glProg.setTexture("GainMap", ensureGainMap(params));
+        float cropScaleX = 1.0f;
+        float cropScaleY = 1.0f;
+        if (params != null && params.rawSize != null
+                && params.rawSize.x > 0 && params.rawSize.y > 0) {
+            int cropWidth = Math.min(params.rawSize.x, params.rawSize.y * 4 / 3) & ~1;
+            int cropHeight = Math.min(params.rawSize.y, params.rawSize.x * 3 / 4) & ~1;
+            cropScaleX = (float) cropWidth / params.rawSize.x;
+            cropScaleY = (float) cropHeight / params.rawSize.y;
+        }
+        glProg.setVar("gainMapTransform", cropScaleX, cropScaleY,
+                (1.0f - cropScaleX) * 0.5f, (1.0f - cropScaleY) * 0.5f);
+    }
+
+    private void ensureToneResources() {
+        if (toneCurveTexture != null) return;
+        toneCurveTexture = new GLTexture(new Point(256, 1),
+                new GLFormat(GLFormat.DataType.FLOAT_16), null,
+                GLES20.GL_LINEAR, GLES20.GL_CLAMP_TO_EDGE);
     }
 
     /** Like GLBasePipeline.runAll(), minus the GLCoreBlockProcessing output pass. */
@@ -177,11 +236,13 @@ public final class StreamedPostPipeline extends GLBasePipeline {
             program = new GLProg();
             glint = new GLInterface(program);
         }
-        if (inputTexture != null && main1 != null
-                && width == frameWidth && height == frameHeight) return;
+        if (inputTexture != null && outputTexture != null
+                && width == frameWidth && height == frameHeight) {
+            ensureToneResources();
+            return;
+        }
         try {
             if (inputTexture != null) inputTexture.close();
-            if (main1 != null) main1.close();
             if (outputTexture != null) outputTexture.close();
         } catch (Exception ignored) {
         }
@@ -189,8 +250,8 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         height = frameHeight;
         GLFormat format = new GLFormat(GLFormat.DataType.SIMPLE_8, 4);
         inputTexture = new GLTexture(new Point(frameWidth, frameHeight), format);
-        main1 = new GLTexture(new Point(frameWidth, frameHeight), format);
         outputTexture = new GLTexture(new Point(frameWidth, frameHeight), format);
+        ensureToneResources();
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
     }
 }

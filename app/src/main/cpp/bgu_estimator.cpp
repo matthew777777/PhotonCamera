@@ -59,7 +59,7 @@ inline void accumulate_cell(float* stats, int cell, const float* base, float wei
 #if BGU_NEON
     const float32x4_t w = vdupq_n_f32(weight);
     for (int j = 0; j < kStatsStride; j += 4)
-        vst1q_f32(row + j, vfmaq_f32(vld1q_f32(row + j), vld1q_f32(base + j), w));
+        vst1q_f32(row + j, vmlaq_f32(vld1q_f32(row + j), vld1q_f32(base + j), w));
 #else
     for (int j = 0; j < kStatsStride; ++j) row[j] += weight * base[j];
 #endif

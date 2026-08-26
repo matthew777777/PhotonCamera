@@ -5,6 +5,7 @@ import android.media.Image;
 import android.util.Rational;
 
 import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.RawPreviewFrame;
+import com.particlesdevs.photoncamera.app.PhotonCamera;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -21,6 +22,7 @@ public final class RawSuperPixel {
     public static final int OUTPUT_HEIGHT = 384;
     private static final int BUFFER_COUNT = 3;
     private static final ByteBuffer[] OUTPUTS = new ByteBuffer[BUFFER_COUNT];
+    private static final ByteBuffer[] TONE_CURVES = new ByteBuffer[BUFFER_COUNT];
     private static final boolean[] IN_USE = new boolean[BUFFER_COUNT];
     private static final Runnable[] RELEASERS = new Runnable[BUFFER_COUNT];
 
@@ -29,6 +31,8 @@ public final class RawSuperPixel {
         for (int i = 0; i < BUFFER_COUNT; i++) {
             final int slot = i;
             OUTPUTS[i] = ByteBuffer.allocateDirect(OUTPUT_WIDTH * OUTPUT_HEIGHT * 4)
+                    .order(ByteOrder.nativeOrder());
+            TONE_CURVES[i] = ByteBuffer.allocateDirect(256 * Float.BYTES)
                     .order(ByteOrder.nativeOrder());
             RELEASERS[i] = () -> release(slot);
         }
@@ -42,6 +46,7 @@ public final class RawSuperPixel {
         int slot = acquire();
         if (slot < 0) return null;
         ByteBuffer output = OUTPUTS[slot];
+        ByteBuffer toneCurve = TONE_CURVES[slot];
         Image.Plane plane = image.getPlanes()[0];
         ByteBuffer raw = plane.getBuffer().duplicate().order(ByteOrder.nativeOrder());
         int sourceWidth = image.getWidth();
@@ -65,11 +70,16 @@ public final class RawSuperPixel {
         gainB *= gainScale;
 
         try {
-            process(raw, output, plane.getRowStride(), plane.getPixelStride(),
-                    cropLeft, cropTop, cropWidth, cropHeight, cfa, black, whiteLevel);
+            toneCurve.position(0);
+            process(raw, output, toneCurve, plane.getRowStride(), plane.getPixelStride(),
+                    cropLeft, cropTop, cropWidth, cropHeight, cfa, black, whiteLevel,
+                    gainR, gainG, gainB,
+                    (float) PhotonCamera.getSettings().exposureCompensation,
+                    (float) PhotonCamera.getSettings().compressor);
+            toneCurve.position(0);
             return new RawPreviewFrame(OUTPUT_WIDTH, OUTPUT_HEIGHT, output,
                     image.getTimestamp(), RELEASERS[slot], new float[]{gainR, gainG, gainB},
-                    parameters);
+                    toneCurve, parameters);
         } catch (RuntimeException error) {
             release(slot);
             throw error;
@@ -90,10 +100,12 @@ public final class RawSuperPixel {
         IN_USE[slot] = false;
     }
 
-    private static native void process(ByteBuffer raw, ByteBuffer out,
+    private static native void process(ByteBuffer raw, ByteBuffer out, ByteBuffer toneCurve,
                                        int rowStride, int pixelStride,
                                        int cropLeft, int cropTop, int cropWidth, int cropHeight,
-                                       int cfa, float[] black, int whiteLevel);
+                                       int cfa, float[] black, int whiteLevel,
+                                       float gainR, float gainG, float gainB,
+                                       float exposureCompensation, float compressor);
 
     private static float neutralGain(Rational[] neutral, int channel) {
         if (neutral == null || neutral.length <= channel || neutral[channel] == null) return 1.0f;

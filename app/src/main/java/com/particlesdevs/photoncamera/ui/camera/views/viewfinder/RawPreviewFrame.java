@@ -11,6 +11,7 @@ public final class RawPreviewFrame implements AutoCloseable {
     private final int width;
     private final int height;
     private final ByteBuffer rgba;
+    private final ByteBuffer toneCurve;
     private final long timestampNs;
     private final Runnable release;
     /** White-balance gains (R, G, B) for the linear pixels; applied by StreamedPostPipeline. */
@@ -20,21 +21,18 @@ public final class RawPreviewFrame implements AutoCloseable {
     private boolean closed;
 
     public RawPreviewFrame(int width, int height, ByteBuffer rgba, long timestampNs,
-                           Runnable release, float[] gains) {
-        this(width, height, rgba, timestampNs, release, gains, null);
-    }
-
-    public RawPreviewFrame(int width, int height, ByteBuffer rgba, long timestampNs,
-                           Runnable release, float[] gains,
+                           Runnable release, float[] gains, ByteBuffer toneCurve,
                            com.particlesdevs.photoncamera.processing.render.Parameters parameters) {
         if (width < 1 || height < 1 || rgba == null
                 || rgba.capacity() < width * height * 4
+                || toneCurve == null || toneCurve.capacity() < 256 * Float.BYTES
                 || gains == null || gains.length < 3) {
             throw new IllegalArgumentException("Invalid RAW preview frame");
         }
         this.width = width;
         this.height = height;
         this.rgba = rgba;
+        this.toneCurve = toneCurve;
         this.timestampNs = timestampNs;
         this.release = release;
         this.gains = gains;
@@ -45,6 +43,7 @@ public final class RawPreviewFrame implements AutoCloseable {
     public int getHeight() { return height; }
     public long getTimestampNs() { return timestampNs; }
     public float[] getGains() { return gains; }
+    public ByteBuffer getToneCurve() { return toneCurve; }
     public com.particlesdevs.photoncamera.processing.render.Parameters getParameters() { return parameters; }
     ByteBuffer pixels() { return rgba; }
 

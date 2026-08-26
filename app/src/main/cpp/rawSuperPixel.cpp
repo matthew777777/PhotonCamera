@@ -9,11 +9,20 @@
 
 #include <jni.h>
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cmath>
+#include <mutex>
+#include <thread>
 
 #define OUTPUT_WIDTH 512
 #define OUTPUT_HEIGHT 384
+#define HISTOGRAM_BINS 256
+#define HISTOGRAM_THREADS 4
+
+static std::mutex gCurveMutex;
+static std::array<float, HISTOGRAM_BINS> gPreviousCurve;
+static bool gCurveInitialized = false;
 
 static inline uint8_t toLinear8(float x) {
     if (x < 0.0f) x = 0.0f;
@@ -21,18 +30,92 @@ static inline uint8_t toLinear8(float x) {
     return (uint8_t) (x * 255.0f + 0.5f);
 }
 
+static inline float sourceForBin(int bin) {
+    return exp2f(-12.0f + 14.0f * (float) bin / (HISTOGRAM_BINS - 1));
+}
+
+static int percentileBin(const std::array<uint32_t, HISTOGRAM_BINS>& histogram,
+                         uint32_t total, float percentile) {
+    const uint32_t threshold = std::max(1u, (uint32_t) ceilf(total * percentile));
+    uint32_t cumulative = 0;
+    for (int i = 0; i < HISTOGRAM_BINS; ++i) {
+        cumulative += histogram[i];
+        if (cumulative >= threshold) return i;
+    }
+    return HISTOGRAM_BINS - 1;
+}
+
+static void buildToneCurve(const uint8_t* rgba, float* curve,
+                           float gainR, float gainG, float gainB,
+                           float exposureCompensation, float compressor) {
+    std::array<std::array<uint32_t, HISTOGRAM_BINS>, HISTOGRAM_THREADS> local{};
+    std::array<std::thread, HISTOGRAM_THREADS> workers;
+    for (int worker = 0; worker < HISTOGRAM_THREADS; ++worker) {
+        workers[worker] = std::thread([=, &local]() {
+            const int beginY = worker * OUTPUT_HEIGHT / HISTOGRAM_THREADS;
+            const int endY = (worker + 1) * OUTPUT_HEIGHT / HISTOGRAM_THREADS;
+            auto& histogram = local[worker];
+            for (int y = beginY; y < endY; ++y) {
+                const uint8_t* pixel = rgba + (size_t) y * OUTPUT_WIDTH * 4;
+                for (int x = 0; x < OUTPUT_WIDTH; ++x, pixel += 4) {
+                    const float r = pixel[0] * (gainR / 255.0f);
+                    const float g = pixel[1] * (gainG / 255.0f);
+                    const float b = pixel[2] * (gainB / 255.0f);
+                    const float luminance = std::max(
+                            0.2126f * r + 0.7152f * g + 0.0722f * b,
+                            0.000244140625f);
+                    const float coordinate = std::max(0.0f, std::min(
+                            (log2f(luminance) + 12.0f) / 14.0f, 1.0f));
+                    const int bin = (int) (coordinate * (HISTOGRAM_BINS - 1) + 0.5f);
+                    ++histogram[bin];
+                }
+            }
+        });
+    }
+    for (auto& worker : workers) worker.join();
+
+    std::array<uint32_t, HISTOGRAM_BINS> histogram{};
+    for (const auto& localHistogram : local)
+        for (int i = 0; i < HISTOGRAM_BINS; ++i) histogram[i] += localHistogram[i];
+    const uint32_t total = OUTPUT_WIDTH * OUTPUT_HEIGHT;
+    const float black = sourceForBin(percentileBin(histogram, total, 0.005f));
+    const float middle = sourceForBin(percentileBin(histogram, total, 0.50f));
+    const float white = sourceForBin(percentileBin(histogram, total, 0.995f));
+    float exposure = 0.18f / std::max(middle - black, 1.0e-4f);
+    exposure *= exp2f(std::max(-4.0f, std::min(exposureCompensation, 4.0f)));
+    float whiteMapped = std::max((white - black) * exposure, 1.0f);
+    whiteMapped *= 1.0f + std::max(compressor, 0.0f) * 0.20f;
+
+    std::lock_guard<std::mutex> lock(gCurveMutex);
+    for (int i = 0; i < HISTOGRAM_BINS; ++i) {
+        const float source = sourceForBin(i);
+        const float x = std::max(source - black, 0.0f) * exposure;
+        const float mapped = std::max(0.0f, std::min(
+                x * (1.0f + x / (whiteMapped * whiteMapped)) / (1.0f + x), 1.0f));
+        if (!gCurveInitialized) gPreviousCurve[i] = std::min(source, 1.0f);
+        const float smoothed = gPreviousCurve[i] * 0.85f + mapped * 0.15f;
+        curve[i] = smoothed;
+        gPreviousCurve[i] = smoothed;
+    }
+    gCurveInitialized = true;
+}
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
         JNIEnv *env, jclass clazz, jobject rawBuffer, jobject outBuffer,
+        jobject toneCurveBuffer,
         jint rowStride, jint pixelStride,
         jint cropLeft, jint cropTop, jint cropWidth, jint cropHeight,
-        jint cfa, jfloatArray blackArr, jint whiteLevel) {
+        jint cfa, jfloatArray blackArr, jint whiteLevel,
+        jfloat gainR, jfloat gainG, jfloat gainB,
+        jfloat exposureCompensation, jfloat compressor) {
     const uint8_t *base = static_cast<const uint8_t *>(env->GetDirectBufferAddress(rawBuffer));
     uint8_t *out = static_cast<uint8_t *>(env->GetDirectBufferAddress(outBuffer));
+    float *toneCurve = static_cast<float *>(env->GetDirectBufferAddress(toneCurveBuffer));
     jfloat black[4];
     env->GetFloatArrayRegion(blackArr, 0, 4, black);
-    if (base == nullptr || out == nullptr) return;
+    if (base == nullptr || out == nullptr || toneCurve == nullptr) return;
 
     // Bayer offset: position of red inside the 2x2 tile, derived from the CFA
     // arrangement without per-pixel branching. Blue sits diagonally opposite,
@@ -96,4 +179,6 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
             dst += 4;
         }
     }
+    buildToneCurve(out, toneCurve, gainR, gainG, gainB,
+                   exposureCompensation, compressor);
 }

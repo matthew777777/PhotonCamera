@@ -337,7 +337,8 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             }
             ByteBuffer output = target.pixels();
             streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
-                    surfaceWidth, surfaceHeight, target.getGains(), target.getParameters());
+                    surfaceWidth, surfaceHeight, target.getGains(), target.getToneCurve(),
+                    target.getParameters());
             ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight(), estimatorInput);
             if (DEBUG_ISP_PREVIEW) {
                 uploadIspPreview(output, target.getWidth(), target.getHeight());
