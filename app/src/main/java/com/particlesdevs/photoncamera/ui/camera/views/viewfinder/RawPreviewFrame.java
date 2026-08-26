@@ -13,12 +13,23 @@ public final class RawPreviewFrame implements AutoCloseable {
     private final ByteBuffer rgba;
     private final long timestampNs;
     private final Runnable release;
+    /** White-balance gains (R, G, B) for the linear pixels; applied by StreamedPostPipeline. */
+    private final float[] gains;
+    /** Fully filled capture-style parameters for color correction; may be null. */
+    private final com.particlesdevs.photoncamera.processing.render.Parameters parameters;
     private boolean closed;
 
     public RawPreviewFrame(int width, int height, ByteBuffer rgba, long timestampNs,
-                           Runnable release) {
+                           Runnable release, float[] gains) {
+        this(width, height, rgba, timestampNs, release, gains, null);
+    }
+
+    public RawPreviewFrame(int width, int height, ByteBuffer rgba, long timestampNs,
+                           Runnable release, float[] gains,
+                           com.particlesdevs.photoncamera.processing.render.Parameters parameters) {
         if (width < 1 || height < 1 || rgba == null
-                || rgba.capacity() < width * height * 4) {
+                || rgba.capacity() < width * height * 4
+                || gains == null || gains.length < 3) {
             throw new IllegalArgumentException("Invalid RAW preview frame");
         }
         this.width = width;
@@ -26,11 +37,15 @@ public final class RawPreviewFrame implements AutoCloseable {
         this.rgba = rgba;
         this.timestampNs = timestampNs;
         this.release = release;
+        this.gains = gains;
+        this.parameters = parameters;
     }
 
     public int getWidth() { return width; }
     public int getHeight() { return height; }
     public long getTimestampNs() { return timestampNs; }
+    public float[] getGains() { return gains; }
+    public com.particlesdevs.photoncamera.processing.render.Parameters getParameters() { return parameters; }
     ByteBuffer pixels() { return rgba; }
 
     @Override

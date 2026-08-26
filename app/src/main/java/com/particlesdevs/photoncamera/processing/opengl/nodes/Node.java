@@ -23,6 +23,13 @@ public class Node {
     public GLUtils glUtils;
     public GLProg glProg;
     public boolean LastNode = false;
+    /**
+     * Whether Run() produced a fresh WorkingTexture. Pass-through nodes that
+     * reuse previousNode.WorkingTexture set this to false so the pipeline
+     * skips the (pointless and harmful) draw of the still-bound program into
+     * the previous target. Reset to true in BeforeRun().
+     */
+    public boolean OwnTexture = true;
     public Properties mProp;
     private final boolean loggedTuning = false;
 
@@ -77,6 +84,7 @@ public class Node {
         Log.d(Name, name + " elapsed:" + (System.currentTimeMillis() - timeStart) + " ms");
     }
     public void BeforeRun(){
+        OwnTexture = true;
         // Automatically inject tunable values before each run
         // This ensures settings changes are always picked up
         com.particlesdevs.photoncamera.settings.TunableInjector.inject(this);

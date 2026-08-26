@@ -2,15 +2,29 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
+#include <sched.h>
+#include <thread>
 #include <vector>
 
+#if defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h>
+#define BGU_NEON 1
+#else
+#define BGU_NEON 0
+#endif
+
 namespace {
-constexpr int kGramTerms = 10;
-constexpr int kTerms = 22;
+// Statistics rows are padded to 24 floats (a 96-byte, 16-byte-aligned block
+// per cell) so the per-cell accumulation vectorizes cleanly; the two pad
+// terms are always written as zero.
+constexpr int kStatsStride = 24;
 constexpr int kCoefficientsPerCell = 12;
+constexpr int kMaxSplatThreads = 8;
 
 struct Config {
     int width;
@@ -37,42 +51,82 @@ inline float scaled_coordinate(int position, int size, int grid_size) {
     return size == 1 ? 0.0f : static_cast<float>(position) * (grid_size - 1) / (size - 1);
 }
 
-inline void accumulate_rhs(float* stats, int base, float output,
-                           float r, float g, float b, float weight) {
-    const float value = weight * output;
-    stats[base] += value * r;
-    stats[base + 1] += value * g;
-    stats[base + 2] += value * b;
-    stats[base + 3] += value;
+// Adds weight * base into one cell's statistics row. The base products are
+// computed once per pixel by splat_pixel; only the scalar weight varies
+// between the eight trilinear cells, so this is a pure FMA loop.
+inline void accumulate_cell(float* stats, int cell, const float* base, float weight) {
+    float* row = stats + static_cast<size_t>(cell) * kStatsStride;
+#if BGU_NEON
+    const float32x4_t w = vdupq_n_f32(weight);
+    for (int j = 0; j < kStatsStride; j += 4)
+        vst1q_f32(row + j, vfmaq_f32(vld1q_f32(row + j), vld1q_f32(base + j), w));
+#else
+    for (int j = 0; j < kStatsStride; ++j) row[j] += weight * base[j];
+#endif
 }
 
-inline void accumulate(float* stats, int cell, float r, float g, float b,
-                       float out_r, float out_g, float out_b, float weight) {
-    if (weight == 0.0f) return;
-    const int base = cell * kTerms;
-    stats[base] += weight * r * r;
-    stats[base + 1] += weight * r * g;
-    stats[base + 2] += weight * r * b;
-    stats[base + 3] += weight * r;
-    stats[base + 4] += weight * g * g;
-    stats[base + 5] += weight * g * b;
-    stats[base + 6] += weight * g;
-    stats[base + 7] += weight * b * b;
-    stats[base + 8] += weight * b;
-    stats[base + 9] += weight;
-    accumulate_rhs(stats, base + kGramTerms, out_r, r, g, b, weight);
-    accumulate_rhs(stats, base + kGramTerms + 4, out_g, r, g, b, weight);
-    accumulate_rhs(stats, base + kGramTerms + 8, out_b, r, g, b, weight);
+inline void splat_pixel(float* statistics, const Config& config,
+                        float r, float g, float b,
+                        float out_r, float out_g, float out_b,
+                        float raw_guide, float gx, float gy) {
+    const float gz = std::max(0.0f, std::min(raw_guide, 1.0f)) * (config.depth - 1);
+    const int x0 = static_cast<int>(std::floor(gx));
+    const int x1 = std::min(x0 + 1, config.width - 1);
+    const int y0 = static_cast<int>(std::floor(gy));
+    const int y1 = std::min(y0 + 1, config.height - 1);
+    const int z0 = static_cast<int>(std::floor(gz));
+    const int z1 = std::min(z0 + 1, config.depth - 1);
+    const float fx = gx - x0;
+    const float fy = gy - y0;
+    const float fz = gz - z0;
+    alignas(16) float base[kStatsStride];
+    base[0] = r * r;
+    base[1] = r * g;
+    base[2] = r * b;
+    base[3] = r;
+    base[4] = g * g;
+    base[5] = g * b;
+    base[6] = g;
+    base[7] = b * b;
+    base[8] = b;
+    base[9] = 1.0f;
+    base[10] = out_r * r;
+    base[11] = out_r * g;
+    base[12] = out_r * b;
+    base[13] = out_r;
+    base[14] = out_g * r;
+    base[15] = out_g * g;
+    base[16] = out_g * b;
+    base[17] = out_g;
+    base[18] = out_b * r;
+    base[19] = out_b * g;
+    base[20] = out_b * b;
+    base[21] = out_b;
+    base[22] = 0.0f;
+    base[23] = 0.0f;
+    for (int dz = 0; dz < 2; ++dz) {
+        const int z = dz == 0 ? z0 : z1;
+        const float wz = dz == 0 ? 1.0f - fz : fz;
+        for (int dy = 0; dy < 2; ++dy) {
+            const int cy = dy == 0 ? y0 : y1;
+            const float wy = dy == 0 ? 1.0f - fy : fy;
+            for (int dx = 0; dx < 2; ++dx) {
+                const int cx = dx == 0 ? x0 : x1;
+                const float wx = dx == 0 ? 1.0f - fx : fx;
+                accumulate_cell(statistics, cell_index(cx, cy, z, config),
+                                base, wx * wy * wz);
+            }
+        }
+    }
 }
 
-bool splat(const float* input, const float* target, const float* supplied_guide,
-           int image_width, int image_height, const Config& config,
-           std::vector<float>& statistics) {
-    for (int y = 0; y < image_height; ++y) {
+// Splat one row band of the float path into a private statistics buffer.
+// Returns false when a non-finite sample is found; the caller abandons the estimate.
+bool splat_float_band(const float* input, const float* target, const float* supplied_guide,
+                      int image_width, int image_height, int y_begin, int y_end,
+                      const Config& config, float* statistics) {
+    for (int y = y_begin; y < y_end; ++y) {
         const float gy = scaled_coordinate(y, image_height, config.height);
-        const int y0 = static_cast<int>(std::floor(gy));
-        const int y1 = std::min(y0 + 1, config.height - 1);
-        const float fy = gy - y0;
         for (int x = 0; x < image_width; ++x) {
             const int pixel = y * image_width + x;
             const int rgb = pixel * 3;
@@ -88,78 +142,137 @@ bool splat(const float* input, const float* target, const float* supplied_guide,
             if (!std::isfinite(r) || !std::isfinite(g) || !std::isfinite(b)
                     || !std::isfinite(out_r) || !std::isfinite(out_g)
                     || !std::isfinite(out_b) || !std::isfinite(raw_guide)) return false;
-
             const float gx = scaled_coordinate(x, image_width, config.width);
-            const float gz = std::max(0.0f, std::min(raw_guide, 1.0f)) * (config.depth - 1);
-            const int x0 = static_cast<int>(std::floor(gx));
-            const int x1 = std::min(x0 + 1, config.width - 1);
-            const int z0 = static_cast<int>(std::floor(gz));
-            const int z1 = std::min(z0 + 1, config.depth - 1);
-            const float fx = gx - x0;
-            const float fz = gz - z0;
-            for (int dz = 0; dz < 2; ++dz) {
-                const int z = dz == 0 ? z0 : z1;
-                const float wz = dz == 0 ? 1.0f - fz : fz;
-                for (int dy = 0; dy < 2; ++dy) {
-                    const int cy = dy == 0 ? y0 : y1;
-                    const float wy = dy == 0 ? 1.0f - fy : fy;
-                    for (int dx = 0; dx < 2; ++dx) {
-                        const int cx = dx == 0 ? x0 : x1;
-                        const float wx = dx == 0 ? 1.0f - fx : fx;
-                        accumulate(statistics.data(), cell_index(cx, cy, z, config),
-                                   r, g, b, out_r, out_g, out_b, wx * wy * wz);
-                    }
-                }
-            }
+            splat_pixel(statistics, config, r, g, b, out_r, out_g, out_b,
+                        raw_guide, gx, gy);
         }
     }
     return true;
 }
 
-bool splat_rgba8(const unsigned char* input, const unsigned char* target,
-                 int image_width, int image_height, const Config& config,
-                 std::vector<float>& statistics) {
+void splat_rgba8_band(const unsigned char* input, const unsigned char* target,
+                      int image_width, int image_height, int y_begin, int y_end,
+                      const Config& config, float* statistics) {
     constexpr float scale = 1.0f / 255.0f;
-    for (int y = 0; y < image_height; ++y) {
+    for (int y = y_begin; y < y_end; ++y) {
         const float gy = scaled_coordinate(y, image_height, config.height);
-        const int y0 = static_cast<int>(std::floor(gy));
-        const int y1 = std::min(y0 + 1, config.height - 1);
-        const float fy = gy - y0;
         for (int x = 0; x < image_width; ++x) {
             const int rgba = (y * image_width + x) * 4;
             const float r = input[rgba] * scale;
             const float g = input[rgba + 1] * scale;
             const float b = input[rgba + 2] * scale;
-            const float out_r = target[rgba] * scale;
-            const float out_g = target[rgba + 1] * scale;
-            const float out_b = target[rgba + 2] * scale;
             const float guide = std::max(0.0f, std::min(
                     0.299f * r + 0.587f * g + 0.114f * b, 1.0f));
             const float gx = scaled_coordinate(x, image_width, config.width);
-            const float gz = guide * (config.depth - 1);
-            const int x0 = static_cast<int>(std::floor(gx));
-            const int x1 = std::min(x0 + 1, config.width - 1);
-            const int z0 = static_cast<int>(std::floor(gz));
-            const int z1 = std::min(z0 + 1, config.depth - 1);
-            const float fx = gx - x0;
-            const float fz = gz - z0;
-            for (int dz = 0; dz < 2; ++dz) {
-                const int z = dz == 0 ? z0 : z1;
-                const float wz = dz == 0 ? 1.0f - fz : fz;
-                for (int dy = 0; dy < 2; ++dy) {
-                    const int cy = dy == 0 ? y0 : y1;
-                    const float wy = dy == 0 ? 1.0f - fy : fy;
-                    for (int dx = 0; dx < 2; ++dx) {
-                        const int cx = dx == 0 ? x0 : x1;
-                        const float wx = dx == 0 ? 1.0f - fx : fx;
-                        accumulate(statistics.data(), cell_index(cx, cy, z, config),
-                                   r, g, b, out_r, out_g, out_b, wx * wy * wz);
-                    }
-                }
-            }
+            splat_pixel(statistics, config, r, g, b,
+                        target[rgba] * scale, target[rgba + 1] * scale,
+                        target[rgba + 2] * scale, guide, gx, gy);
         }
     }
+}
+
+// The scattered-add splat is latency-bound, so a worker scheduled on a
+// little core drags the whole frame to that core's speed. Pinning the
+// workers to the fastest cluster removes that imbalance. The mask is
+// resolved once from sysfs max frequencies; 0 means "detection failed",
+// in which case workers keep the default scheduling.
+const cpu_set_t& big_core_mask() {
+    static const cpu_set_t mask = [] {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        long best = -1;
+        int cpus[64];
+        long freqs[64];
+        int count = 0;
+        for (int cpu = 0; cpu < 64; ++cpu) {
+            char path[96];
+            std::snprintf(path, sizeof(path),
+                          "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", cpu);
+            if (FILE* file = std::fopen(path, "r")) {
+                long freq = -1;
+                if (std::fscanf(file, "%ld", &freq) == 1 && freq > 0 && count < 64) {
+                    cpus[count] = cpu;
+                    freqs[count] = freq;
+                    ++count;
+                    if (freq > best) best = freq;
+                }
+                std::fclose(file);
+            }
+        }
+        if (best <= 0) return set;  // leave empty: caller falls back
+        for (int i = 0; i < count; ++i)
+            if (freqs[i] >= best - best / 16) CPU_SET(cpus[i], &set);
+        return set;
+    }();
+    return mask;
+}
+
+int splat_thread_count(int image_height) {
+    const cpu_set_t& mask = big_core_mask();
+    int big = CPU_COUNT(&mask);
+    if (big <= 0) {
+        const unsigned hardware = std::thread::hardware_concurrency();
+        big = std::max(1, static_cast<int>(hardware == 0 ? 2 : hardware));
+    }
+    return std::max(1, std::min({kMaxSplatThreads, big, image_height}));
+}
+
+// Runs the band functor in parallel over row bands, each accumulating into a
+// private statistics buffer, then reduces the buffers into `statistics`.
+// The float path may abort early on non-finite input; `valid` reports that.
+template <typename Band>
+bool parallel_splat(int image_height, const Config& config, float* statistics, Band band) {
+    const int threads = splat_thread_count(image_height);
+    const int cells = config.width * config.height * config.depth;
+    const size_t terms = static_cast<size_t>(cells) * kStatsStride;
+    if (threads == 1) {
+        std::vector<float> local(terms, 0.0f);
+        if (!band(0, image_height, local.data())) return false;
+        std::copy(local.begin(), local.end(), statistics);
+        return true;
+    }
+    const cpu_set_t& mask = big_core_mask();
+    std::vector<std::vector<float>> locals(threads, std::vector<float>(terms, 0.0f));
+    std::atomic<bool> valid{true};
+    std::vector<std::thread> workers;
+    workers.reserve(threads);
+    for (int t = 0; t < threads; ++t) {
+        const int y_begin = static_cast<int>(
+                static_cast<int64_t>(image_height) * t / threads);
+        const int y_end = static_cast<int>(
+                static_cast<int64_t>(image_height) * (t + 1) / threads);
+        workers.emplace_back([&, y_begin, y_end, t]() {
+            if (CPU_COUNT(&mask) > 0)
+                sched_setaffinity(0, sizeof(mask), &mask);
+            if (!band(y_begin, y_end, locals[t].data())) valid = false;
+        });
+    }
+    for (std::thread& worker : workers) worker.join();
+    if (!valid) return false;
+    for (const std::vector<float>& local : locals)
+        for (size_t i = 0; i < terms; ++i) statistics[i] += local[i];
     return true;
+}
+
+bool splat(const float* input, const float* target, const float* supplied_guide,
+           int image_width, int image_height, const Config& config,
+           std::vector<float>& statistics) {
+    return parallel_splat(image_height, config, statistics.data(),
+            [&](int y_begin, int y_end, float* local) {
+                return splat_float_band(input, target, supplied_guide, image_width,
+                                        image_height, y_begin, y_end, config, local);
+            });
+}
+
+bool splat_rgba8(const unsigned char* input, const unsigned char* target,
+                 int image_width, int image_height, const Config& config,
+                 std::vector<float>& statistics) {
+    return parallel_splat(image_height, config, statistics.data(),
+            [&](int y_begin, int y_end, float* local) {
+                splat_rgba8_band(input, target, image_width, image_height,
+                                 y_begin, y_end, config, local);
+                return true;
+            });
 }
 
 void blur_axis(const std::vector<float>& source, std::vector<float>& destination,
@@ -171,10 +284,10 @@ void blur_axis(const std::vector<float>& source, std::vector<float>& destination
                 if (axis == 0) { px = std::max(0, x - 1); nx = std::min(config.width - 1, x + 1); }
                 else if (axis == 1) { py = std::max(0, y - 1); ny = std::min(config.height - 1, y + 1); }
                 else { pz = std::max(0, z - 1); nz = std::min(config.depth - 1, z + 1); }
-                const int previous = cell_index(px, py, pz, config) * kTerms;
-                const int center = cell_index(x, y, z, config) * kTerms;
-                const int next = cell_index(nx, ny, nz, config) * kTerms;
-                for (int term = 0; term < kTerms; ++term) {
+                const int previous = cell_index(px, py, pz, config) * kStatsStride;
+                const int center = cell_index(x, y, z, config) * kStatsStride;
+                const int next = cell_index(nx, ny, nz, config) * kStatsStride;
+                for (int term = 0; term < kStatsStride; ++term) {
                     destination[center + term] = (source[previous + term]
                             + 2.0f * source[center + term] + source[next + term]) * 0.25f;
                 }
@@ -213,7 +326,7 @@ void solve(const std::vector<float>& statistics, const Config& config,
            std::vector<float>& coefficients) {
     const int cells = config.width * config.height * config.depth;
     for (int cell = 0; cell < cells; ++cell) {
-        const int base = cell * kTerms;
+        const int base = cell * kStatsStride;
         double system[4][7] = {};
         int term = 0;
         for (int row = 0; row < 4; ++row) {
@@ -264,7 +377,7 @@ bool estimate(const float* input, const float* target, const float* guide,
               int image_width, int image_height, const Config& config) {
     const auto started = std::chrono::steady_clock::now();
     const int cells = config.width * config.height * config.depth;
-    workspace.statistics.assign(static_cast<size_t>(cells) * kTerms, 0.0f);
+    workspace.statistics.assign(static_cast<size_t>(cells) * kStatsStride, 0.0f);
     workspace.scratch.resize(workspace.statistics.size());
     if (!splat(input, target, guide, image_width, image_height, config,
                workspace.statistics)) return false;
@@ -279,7 +392,7 @@ bool estimate_rgba8(const unsigned char* input, const unsigned char* target,
                     int image_width, int image_height, const Config& config) {
     const auto started = std::chrono::steady_clock::now();
     const int cells = config.width * config.height * config.depth;
-    workspace.statistics.assign(static_cast<size_t>(cells) * kTerms, 0.0f);
+    workspace.statistics.assign(static_cast<size_t>(cells) * kStatsStride, 0.0f);
     workspace.scratch.resize(workspace.statistics.size());
     if (!splat_rgba8(input, target, image_width, image_height, config,
                      workspace.statistics)) return false;

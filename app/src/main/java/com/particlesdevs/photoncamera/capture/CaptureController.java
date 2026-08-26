@@ -375,7 +375,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                     Integer white = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_WHITE_LEVEL);
                     BlackLevelPattern black = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_BLACK_LEVEL_PATTERN);
                     RawPreviewFrame rawPreview = RawSuperPixel.process(img,
-                            cfa == null ? 0 : cfa, black, white == null ? 1023 : white, mPreviewTemp);
+                            cfa == null ? 0 : cfa, black, white == null ? 1023 : white, mPreviewTemp,
+                            buildPreviewParameters(img));
                     if (rawPreview != null) mTextureView.setRawPreviewFrame(rawPreview);
                 } catch (Exception e) {
                     Log.w(TAG, "RAW preview frame failed: " + e.getMessage());
@@ -408,6 +409,49 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         }
 
     };
+
+    /** Cached const part of the preview parameters; rebuilt when the stream size changes. */
+    private com.particlesdevs.photoncamera.processing.render.Parameters mPreviewParameters;
+
+    /**
+     * Builds the fully filled capture-style Parameters for the streamed
+     * preview pipeline: constant sensor data once per stream, dynamic values
+     * (white point, color transforms, noise model) refreshed from the latest
+     * preview capture result on every frame. The fill's debug logs
+     * (Converter/Parameters/NoiseModeler) are suppressed on this thread.
+     * Returns null when no usable result has arrived yet.
+     */
+    private com.particlesdevs.photoncamera.processing.render.Parameters buildPreviewParameters(Image img) {
+        try {
+            if (mPreviewParameters == null || mPreviewParameters.rawSize == null
+                    || mPreviewParameters.rawSize.x != img.getWidth()
+                    || mPreviewParameters.rawSize.y != img.getHeight()) {
+                mPreviewParameters = new com.particlesdevs.photoncamera.processing.render.Parameters();
+                com.particlesdevs.photoncamera.util.Log.runWithoutDebug(() -> {
+                    try {
+                        mPreviewParameters.FillConstParameters(mCameraCharacteristics,
+                                new android.graphics.Point(img.getWidth(), img.getHeight()));
+                    } catch (Exception e) {
+                        Log.w(TAG, "Preview const parameters failed: " + e.getMessage());
+                    }
+                });
+            }
+            if (mPreviewCaptureResult != null && mPreviewCaptureRequest != null) {
+                com.particlesdevs.photoncamera.util.Log.runWithoutDebug(() -> {
+                    try {
+                        mPreviewParameters.FillDynamicParameters(mPreviewCaptureResult,
+                                mPreviewCaptureRequest, mPreviewIso);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Preview dynamic parameters failed: " + e.getMessage());
+                    }
+                });
+                return mPreviewParameters;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Preview parameters build failed: " + e.getMessage());
+        }
+        return null;
+    }
 
     private void enqueueZslImage(Image image) {
         synchronized (mZslBufferLock) {
@@ -1789,6 +1833,53 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         mInitialMeteringAE = mPreviewRequestBuilder.get(CONTROL_AE_REGIONS);
         mPreviewMeteringAE = mInitialMeteringAE;
         mPreviewAEMode = mPreviewRequestBuilder.get(CONTROL_AE_MODE);
+        if (!mIsRecordingVideo) {
+            disablePreviewPostProcessing();
+        }
+    }
+
+    private static boolean supports(int[] available, int mode) {
+        if (available == null) return false;
+        for (int m : available) if (m == mode) return true;
+        return false;
+    }
+
+    /**
+     * Switches the ISP preview stream to minimal processing: noise reduction
+     * and edge (sharpening/denoise) off, tonemap linear (or gamma 1.0 on
+     * devices without the preset curve). RAW frames and still captures are
+     * unaffected - they use their own request builders.
+     */
+    private void disablePreviewPostProcessing() {
+        try {
+            if (supports(mCameraCharacteristics.get(
+                    CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES),
+                    CaptureRequest.NOISE_REDUCTION_MODE_OFF)) {
+                mPreviewRequestBuilder.set(CaptureRequest.NOISE_REDUCTION_MODE,
+                        CaptureRequest.NOISE_REDUCTION_MODE_OFF);
+            }
+            if (supports(mCameraCharacteristics.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES),
+                    CaptureRequest.EDGE_MODE_OFF)) {
+                mPreviewRequestBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_OFF);
+            }
+            int[] tonemaps = mCameraCharacteristics.get(
+                    CameraCharacteristics.TONEMAP_AVAILABLE_TONE_MAP_MODES);
+            if (supports(tonemaps, CaptureRequest.TONEMAP_MODE_GAMMA_VALUE)) {
+                mPreviewRequestBuilder.set(CaptureRequest.TONEMAP_MODE,
+                        CaptureRequest.TONEMAP_MODE_FAST);
+                mPreviewRequestBuilder.set(CaptureRequest.TONEMAP_GAMMA, 2.0f);
+            } else if (supports(tonemaps, CaptureRequest.TONEMAP_MODE_CONTRAST_CURVE)) {
+                // Identity contrast curve = linear tonemap.
+                mPreviewRequestBuilder.set(CaptureRequest.TONEMAP_MODE,
+                        CaptureRequest.TONEMAP_MODE_CONTRAST_CURVE);
+                float[] linear = new float[]{0.f, 0.f, 1.f, 1.f};
+                mPreviewRequestBuilder.set(CaptureRequest.TONEMAP_CURVE,
+                        new android.hardware.camera2.params.TonemapCurve(linear, linear, linear));
+            }
+            Log.d(TAG, "ISP preview post-processing disabled (NR/edge/tonemap)");
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to disable preview post-processing: " + e.getMessage());
+        }
     }
 
     private void showToast(String msg) {

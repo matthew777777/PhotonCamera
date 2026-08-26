@@ -25,6 +25,19 @@ public class Log {
     private static final int LOG_RETENTION_DAYS = 10;
     private static String currentLogFileName = null;
     private static boolean logEnabled = true;
+    // Per-thread debug suppression: runWithoutDebug() scopes it, so only the
+    // calling thread (e.g. the preview parameters fill) is silenced.
+    private static final ThreadLocal<Integer> debugSuppressed = ThreadLocal.withInitial(() -> 0);
+
+    /** Runs the action with debug-level (d) logs suppressed on this thread. */
+    public static void runWithoutDebug(Runnable action) {
+        debugSuppressed.set(debugSuppressed.get() + 1);
+        try {
+            action.run();
+        } finally {
+            debugSuppressed.set(debugSuppressed.get() - 1);
+        }
+    }
 
     // Thread-safe date formatters
     private static final ThreadLocal<SimpleDateFormat> dateFormatter =
@@ -235,7 +248,7 @@ public class Log {
     }
 
     public static void d(String tag, String message) {
-        if(!logEnabled) return;
+        if(!logEnabled || debugSuppressed.get() > 0) return;
         android.util.Log.d(tag, message);
         writeToFile("D", tag, message);
     }

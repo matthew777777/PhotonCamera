@@ -11,8 +11,10 @@ import java.nio.ByteOrder;
 
 /**
  * JNI RAW16 to RGBA8 path for the RAW viewfinder. The native side samples the
- * direct camera buffer in place (honouring row/pixel strides) and writes the
- * gamma-encoded result into the pre-allocated direct output buffer below.
+ * direct camera buffer in place (honouring row/pixel strides) and writes
+ * linear (black-level-subtracted, white-level-normalized) RGBA into the
+ * pre-allocated direct output buffer below. White-balance gains and gamma
+ * encoding are applied later by StreamedPostPipeline.
  */
 public final class RawSuperPixel {
     public static final int OUTPUT_WIDTH = 512;
@@ -35,7 +37,8 @@ public final class RawSuperPixel {
     private RawSuperPixel() {}
 
     public static RawPreviewFrame process(Image image, int cfa, BlackLevelPattern blackPattern,
-                                          int whiteLevel, Rational[] neutralColorPoint) {
+                                          int whiteLevel, Rational[] neutralColorPoint,
+                                          com.particlesdevs.photoncamera.processing.render.Parameters parameters) {
         int slot = acquire();
         if (slot < 0) return null;
         ByteBuffer output = OUTPUTS[slot];
@@ -63,10 +66,10 @@ public final class RawSuperPixel {
 
         try {
             process(raw, output, plane.getRowStride(), plane.getPixelStride(),
-                    cropLeft, cropTop, cropWidth, cropHeight, cfa, black, whiteLevel,
-                    gainR, gainG, gainB);
+                    cropLeft, cropTop, cropWidth, cropHeight, cfa, black, whiteLevel);
             return new RawPreviewFrame(OUTPUT_WIDTH, OUTPUT_HEIGHT, output,
-                    image.getTimestamp(), RELEASERS[slot]);
+                    image.getTimestamp(), RELEASERS[slot], new float[]{gainR, gainG, gainB},
+                    parameters);
         } catch (RuntimeException error) {
             release(slot);
             throw error;
@@ -90,8 +93,7 @@ public final class RawSuperPixel {
     private static native void process(ByteBuffer raw, ByteBuffer out,
                                        int rowStride, int pixelStride,
                                        int cropLeft, int cropTop, int cropWidth, int cropHeight,
-                                       int cfa, float[] black, int whiteLevel,
-                                       float gainR, float gainG, float gainB);
+                                       int cfa, float[] black, int whiteLevel);
 
     private static float neutralGain(Rational[] neutral, int channel) {
         if (neutral == null || neutral.length <= channel || neutral[channel] == null) return 1.0f;

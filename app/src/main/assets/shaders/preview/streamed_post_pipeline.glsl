@@ -6,7 +6,6 @@ uniform float saturation;
 uniform float contrast;
 uniform float shadows;
 uniform float compressor;
-in vec2 texCoord;
 out vec4 Output;
 
 float luminance(vec3 rgb) {
@@ -14,8 +13,10 @@ float luminance(vec3 rgb) {
 }
 
 void main() {
-    // SuperPixel is already gamma encoded, matching the point at which
-    // Initial applies its saturation and contrast operators.
+    vec2 texCoord = gl_FragCoord.xy / vec2(textureSize(InputBuffer, 0));
+    // Input is already white-balanced, matrix-corrected and gamma-encoded by
+    // the StreamedColor compute pass; only tone controls happen here,
+    // matching the point at which Initial applies saturation and contrast.
     vec3 rgb = clamp(texture(InputBuffer, texCoord).rgb, 0.0, 1.0);
     float luma = luminance(rgb);
     float shadowMix = min(abs(shadows) * 0.5, 1.0);

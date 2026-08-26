@@ -14,7 +14,7 @@ import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.capture.CaptureController;
 import com.particlesdevs.photoncamera.circularbarlib.api.ManualModeConsole;
 import com.particlesdevs.photoncamera.processing.live.RawSuperPixel;
-import com.particlesdevs.photoncamera.processing.opengl.StreamedPostPipeline;
+import com.particlesdevs.photoncamera.processing.live.StreamedPostPipeline;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -337,7 +337,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             }
             ByteBuffer output = target.pixels();
             streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
-                    surfaceWidth, surfaceHeight);
+                    surfaceWidth, surfaceHeight, target.getGains(), target.getParameters());
             ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight(), estimatorInput);
             if (DEBUG_ISP_PREVIEW) {
                 uploadIspPreview(output, target.getWidth(), target.getHeight());

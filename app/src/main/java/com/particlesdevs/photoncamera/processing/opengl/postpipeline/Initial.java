@@ -117,6 +117,7 @@ import static com.particlesdevs.photoncamera.util.Math2.mix;
     @Override
     public void Run() {
         if (!enable) {
+            OwnTexture = false;
             WorkingTexture = super.previousNode.WorkingTexture;
             return;
         }

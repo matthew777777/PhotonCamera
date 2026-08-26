@@ -209,6 +209,9 @@ public class GLBasePipeline implements AutoCloseable {
     }
 
     private void drawProgramTexture(Node node) {
+        // Pass-through node: no new texture was produced, the previous node's
+        // output is already the working image.
+        if (!node.OwnTexture) return;
         if(!glint.glProgram.closed) {
             glint.glProgram.drawBlocks(node.GetProgTex());
             glint.glProgram.closed = true;

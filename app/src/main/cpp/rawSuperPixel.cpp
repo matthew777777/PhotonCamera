@@ -2,8 +2,9 @@
 // RAW16 -> RGBA8 viewfinder downscaler.
 //
 // Samples the direct camera buffer in place (row/pixel strides honoured, no
-// de-stride copy), combines each 2x2 Bayer tile into one RGB pixel and writes
-// gamma-encoded RGBA into a pre-allocated direct output buffer.
+// de-stride copy) and combines each 2x2 Bayer tile into one RGB pixel. The
+// output is linear (black-level subtracted, white-level normalized); gamma
+// encoding and white-balance gains are applied later by StreamedPostPipeline.
 //
 
 #include <jni.h>
@@ -13,26 +14,11 @@
 
 #define OUTPUT_WIDTH 512
 #define OUTPUT_HEIGHT 384
-#define GAMMA_LUT_SIZE 4096
 
-static uint8_t gGammaLut[GAMMA_LUT_SIZE];
-// Benign race: every thread writes the same values.
-static bool gGammaInit = false;
-
-static void ensureGammaLut() {
-    if (gGammaInit) return;
-    for (int i = 0; i < GAMMA_LUT_SIZE; i++) {
-        gGammaLut[i] = (uint8_t) lroundf(
-                powf((float) i / (float) (GAMMA_LUT_SIZE - 1), 1.0f / 2.2f) * 255.0f);
-    }
-    gGammaInit = true;
-}
-
-static inline uint8_t gammaLut(float x) {
-    int i = (int) (x * (float) (GAMMA_LUT_SIZE - 1) + 0.5f);
-    if (i < 0) i = 0;
-    if (i >= GAMMA_LUT_SIZE) i = GAMMA_LUT_SIZE - 1;
-    return gGammaLut[i];
+static inline uint8_t toLinear8(float x) {
+    if (x < 0.0f) x = 0.0f;
+    if (x > 1.0f) x = 1.0f;
+    return (uint8_t) (x * 255.0f + 0.5f);
 }
 
 extern "C"
@@ -41,10 +27,7 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
         JNIEnv *env, jclass clazz, jobject rawBuffer, jobject outBuffer,
         jint rowStride, jint pixelStride,
         jint cropLeft, jint cropTop, jint cropWidth, jint cropHeight,
-        jint cfa, jfloatArray blackArr, jint whiteLevel,
-        jfloat gainR, jfloat gainG, jfloat gainB) {
-    ensureGammaLut();
-
+        jint cfa, jfloatArray blackArr, jint whiteLevel) {
     const uint8_t *base = static_cast<const uint8_t *>(env->GetDirectBufferAddress(rawBuffer));
     uint8_t *out = static_cast<uint8_t *>(env->GetDirectBufferAddress(outBuffer));
     jfloat black[4];
@@ -106,9 +89,9 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
             const float r = sums[ir] * inv_samples;
             const float g = (sums[ig[0]] + sums[ig[1]]) * (0.5f * inv_samples);
             const float b = sums[ib] * inv_samples;
-            dst[0] = gammaLut(r * gainR);
-            dst[1] = gammaLut(g * gainG);
-            dst[2] = gammaLut(b * gainB);
+            dst[0] = toLinear8(r);
+            dst[1] = toLinear8(g);
+            dst[2] = toLinear8(b);
             dst[3] = 255;
             dst += 4;
         }

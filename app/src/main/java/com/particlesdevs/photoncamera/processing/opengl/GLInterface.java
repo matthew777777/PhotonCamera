@@ -31,6 +31,14 @@ public class GLInterface {
         glContext = context;
         glProgram = glContext.mProgram;
     }
+
+    /**
+     * Wraps an externally owned program (e.g. a pipeline running on an
+     * already-current GL context such as the viewfinder stream).
+     */
+    public GLInterface(GLProg prog) {
+        glProgram = prog;
+    }
     public static String loadShader(String code){
         return loadShader(code,null);
     }

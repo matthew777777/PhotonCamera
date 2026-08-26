@@ -33,12 +33,15 @@ void main() {
         vec3 gridPosition = (vec3(uv, guide) * (bilateralGridSize - 1.0) + 0.5)
                 / bilateralGridSize;
         vec4 affineInput = vec4(sourceColor.rgb, 1.0);
-        vec4 rowR = mix(texture(bilateralGridRPrev, gridPosition),
-                        texture(bilateralGridR, gridPosition), bguBlend);
-        vec4 rowG = mix(texture(bilateralGridGPrev, gridPosition),
-                        texture(bilateralGridG, gridPosition), bguBlend);
-        vec4 rowB = mix(texture(bilateralGridBPrev, gridPosition),
-                        texture(bilateralGridB, gridPosition), bguBlend);
+        //vec4 rowR = mix(texture(bilateralGridRPrev, gridPosition),
+        //                texture(bilateralGridR, gridPosition), bguBlend);
+        //vec4 rowG = mix(texture(bilateralGridGPrev, gridPosition),
+        //                texture(bilateralGridG, gridPosition), bguBlend);
+        //vec4 rowB = mix(texture(bilateralGridBPrev, gridPosition),
+        //                texture(bilateralGridB, gridPosition), bguBlend);
+        vec4 rowR = texture(bilateralGridR, gridPosition);
+        vec4 rowG = texture(bilateralGridG, gridPosition);
+        vec4 rowB = texture(bilateralGridB, gridPosition);
         color.rgb = clamp(vec3(
                 dot(rowR, affineInput),
                 dot(rowG, affineInput),
