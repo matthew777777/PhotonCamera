@@ -84,9 +84,17 @@ static void buildToneParameters(const uint8_t* rgba, float* parameters,
     const uint32_t total = OUTPUT_WIDTH * OUTPUT_HEIGHT;
     const float black = sourceForBin(percentileBin(histogram, total, 0.005f));
     const float middle = sourceForBin(percentileBin(histogram, total, 0.50f));
+    const float meter = sourceForBin(percentileBin(histogram, total, 0.60f));
     const float white = sourceForBin(percentileBin(histogram, total, 0.995f));
-    float exposure = 0.18f / std::max(middle - black, 1.0e-4f);
-    exposure *= exp2f(std::max(-4.0f, std::min(exposureCompensation, 4.0f)));
+    // Camera AE has already selected the sensor exposure. Use the histogram
+    // only for a restrained display correction around that result; treating
+    // every frame's global median as a photographed 18% card badly lifts
+    // dark-heavy scenes and produces the characteristic hazy preview.
+    const float meteredSignal = std::max(meter - black, 1.0e-4f);
+    const float correctionEv = std::max(-0.75f, std::min(
+            log2f(0.18f / meteredSignal), 0.75f));
+    float exposure = exp2f(correctionEv
+            + std::max(-4.0f, std::min(exposureCompensation, 4.0f)));
     // Keep the 99.5th percentile inside AgX's upper log2 domain. Compressor
     // reserves progressively more highlight headroom without changing the
     // shape of the AgX contrast curve itself.

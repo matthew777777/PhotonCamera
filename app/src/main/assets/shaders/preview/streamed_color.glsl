@@ -75,12 +75,12 @@ void main() {
     // neutralPoint is 1.0 on this path and only used by the identity-matrix
     // fallback, where it carries the plain white-balance gains.
     rgb = intermediateToSRGB * sensorToIntermediate * (rgb * neutralPoint);
-    // The CPU histogram supplies scene adaptation only. Its median anchors
-    // middle gray, while black and white percentiles stabilize the estimate
-    // and reserve highlight headroom. The actual display transform is AgX.
+    // The CPU histogram supplies restrained scene adaptation around camera
+    // AE. Black/middle/white remain analysis statistics; do not subtract a
+    // scalar histogram black after the color matrix, since that changes hue
+    // and lifts the apparent shadow floor. The display transform itself is AgX.
     float exposure = texelFetch(ToneCurve, ivec2(0, 0), 0).r;
-    float black = texelFetch(ToneCurve, ivec2(1, 0), 0).r;
-    rgb = max(rgb - vec3(black), vec3(0.0)) * exposure;
+    rgb = max(rgb, vec3(0.0)) * exposure;
     rgb = linearToSrgb(clamp(agx(rgb), 0.0, 1.0));
     imageStore(OutputBuffer, gid, vec4(rgb, 1.0));
 }
