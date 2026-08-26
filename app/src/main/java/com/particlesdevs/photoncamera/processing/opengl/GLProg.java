@@ -265,7 +265,12 @@ public class GLProg implements AutoCloseable {
 
 
     public void draw() {
-        mSquare.draw(vPosition());
+        int position = vPosition();
+        // Compute programs have no vertex stage; drawing one would feed -1
+        // into the attribute calls and raise GL_INVALID_VALUE.
+        if (position != -1) {
+            mSquare.draw(position);
+        }
         glMemoryBarrier(GL_TEXTURE_UPDATE_BARRIER_BIT);
         glMemoryBarrier(GL_ALL_SHADER_BITS);
         glFlush();

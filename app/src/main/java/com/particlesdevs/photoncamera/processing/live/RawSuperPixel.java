@@ -14,8 +14,10 @@ import java.nio.ByteOrder;
  * JNI RAW16 to RGBA8 path for the RAW viewfinder. The native side samples the
  * direct camera buffer in place (honouring row/pixel strides) and writes
  * linear (black-level-subtracted, white-level-normalized) RGBA into the
- * pre-allocated direct output buffer below. White-balance gains and gamma
- * encoding are applied later by StreamedPostPipeline.
+ * pre-allocated direct output buffer below, neutral-anchored by scaling each
+ * channel by min(whitePoint)/whitePoint so shadows keep their uint8 range.
+ * White-balance gains, the white point ratios and gamma encoding are applied
+ * later by StreamedPostPipeline.
  */
 public final class RawSuperPixel {
     public static final int OUTPUT_WIDTH = 512;
@@ -69,10 +71,14 @@ public final class RawSuperPixel {
         gainG *= gainScale;
         gainB *= gainScale;
 
+        float[] whitePoint = parameters != null && parameters.whitePoint != null
+                && parameters.whitePoint.length == 3
+                ? parameters.whitePoint : new float[]{1.f, 1.f, 1.f};
         try {
             toneCurve.position(0);
             process(raw, output, toneCurve, plane.getRowStride(), plane.getPixelStride(),
                     cropLeft, cropTop, cropWidth, cropHeight, cfa, black, whiteLevel,
+                    whitePoint[0], whitePoint[1], whitePoint[2],
                     gainR, gainG, gainB,
                     (float) PhotonCamera.getSettings().exposureCompensation,
                     (float) PhotonCamera.getSettings().compressor);
@@ -104,6 +110,7 @@ public final class RawSuperPixel {
                                        int rowStride, int pixelStride,
                                        int cropLeft, int cropTop, int cropWidth, int cropHeight,
                                        int cfa, float[] black, int whiteLevel,
+                                       float whiteR, float whiteG, float whiteB,
                                        float gainR, float gainG, float gainB,
                                        float exposureCompensation, float compressor);
 

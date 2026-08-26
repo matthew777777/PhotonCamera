@@ -10,7 +10,6 @@ import com.particlesdevs.photoncamera.processing.opengl.GLBasePipeline;
 import com.particlesdevs.photoncamera.processing.opengl.GLProg;
 import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 import com.particlesdevs.photoncamera.processing.opengl.nodes.Node;
-import com.particlesdevs.photoncamera.processing.render.ColorCorrectionTransform;
 import com.particlesdevs.photoncamera.processing.render.Parameters;
 
 import java.nio.ByteBuffer;
@@ -21,8 +20,9 @@ import java.nio.ByteBuffer;
  * {@link com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline},
  * but it runs on the viewfinder's existing GL context and retains its
  * program/textures across frames instead of building a per-shot
- * GLCoreBlockProcessing context. Histogram analysis and the dynamic curve are
- * produced by native SuperPixel, leaving one fused image shader here.
+ * GLCoreBlockProcessing context. Histogram analysis and the dynamic GTM curve
+ * are produced by native SuperPixel; StreamedColor applies it together with
+ * the matrix color chain and StreamedInitial applies the tone controls.
  */
 public final class StreamedPostPipeline extends GLBasePipeline {
     private static final String TAG = "StreamedPostPipeline";
@@ -35,8 +35,9 @@ public final class StreamedPostPipeline extends GLBasePipeline {
     private Point gainMapSize;
     private int gainMapLogState;
     private GLTexture toneCurveTexture;
-    private static final float[] IDENTITY = new float[]{
-            1.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f};
+    /** Texture holding this frame's result; outputTexture after the final
+     * fragment draw, or a pass-through node's WorkingTexture otherwise. */
+    private GLTexture resultTexture;
     /** Per-frame white-balance gains (R, G, B), produced by RawSuperPixel. */
     public final float[] gains = {1.f, 1.f, 1.f};
 
@@ -50,13 +51,14 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         Nodes.clear();
         try {
             if (inputTexture != null) inputTexture.close();
+            if (main1 != null) main1.close();
             if (outputTexture != null) outputTexture.close();
             if (gainMapTexture != null) gainMapTexture.close();
             if (toneCurveTexture != null) toneCurveTexture.close();
         } catch (Exception ignored) {
         }
-        inputTexture = outputTexture = gainMapTexture = toneCurveTexture = null;
-        main1 = main2 = null;
+        inputTexture = main1 = outputTexture = gainMapTexture = toneCurveTexture = null;
+        resultTexture = null;
         gainMapSize = null;
         gainMapLogState = 0;
         program = null;
@@ -81,6 +83,8 @@ public final class StreamedPostPipeline extends GLBasePipeline {
      * gamma-encoded result back into that same buffer. {@code parameters} is
      * the fully filled capture-style Parameters used for matrix color
      * correction; may be null to fall back to plain white-balance gains.
+     * {@code toneCurve} is the 256-entry histogram GTM curve produced by the
+     * native SuperPixel pass for this frame.
      */
     public ByteBuffer process(ByteBuffer pixels, int frameWidth, int frameHeight,
                               int restoreWidth, int restoreHeight, float[] whiteBalanceGains,
@@ -106,9 +110,9 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         BuildDefaultPipeline();
         runStreamed();
 
-        // runStreamed left the last node's texture bound as the draw target.
+        // runStreamed left the result texture bound as the readback target.
         pixels.position(0);
-        outputTexture.textureBuffer(new GLFormat(GLFormat.DataType.SIMPLE_8, 4), pixels);
+        resultTexture.textureBuffer(new GLFormat(GLFormat.DataType.SIMPLE_8, 4), pixels);
         pixels.position(0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, restoreWidth, restoreHeight);
@@ -150,28 +154,19 @@ public final class StreamedPostPipeline extends GLBasePipeline {
     }
 
     private void BuildDefaultPipeline() {
-        add(new StreamedRender());
+        add(new StreamedColor());
+        add(new StreamedInitial());
     }
 
     GLTexture currentToneCurve() {
         return toneCurveTexture;
     }
 
-    void configureColorProgram(GLProg glProg, Parameters params) {
-        if (params != null && params.CCT != null) {
-            float[] cct = params.CCT.matrix;
-            if (params.CCT.correctionMode == ColorCorrectionTransform.CorrectionMode.MATRIXES) {
-                cct = params.CCT.combineMatrix(params.whitePoint);
-            }
-            glProg.setVar("sensorToIntermediate", params.sensorToProPhoto);
-            glProg.setVar("intermediateToSRGB", cct);
-            glProg.setVar("neutralPoint", 1.f, 1.f, 1.f);
-        } else {
-            glProg.setVar("sensorToIntermediate", IDENTITY);
-            glProg.setVar("intermediateToSRGB", IDENTITY);
-            glProg.setVar("neutralPoint", gains[0], gains[1], gains[2]);
-        }
-        glProg.setTexture("GainMap", ensureGainMap(params));
+    /**
+     * UV transform mapping the streamed output into the 4:3 crop the preview
+     * shows inside the full raw frame the lens shading map covers.
+     */
+    float[] gainMapTransform(Parameters params) {
         float cropScaleX = 1.0f;
         float cropScaleY = 1.0f;
         if (params != null && params.rawSize != null
@@ -181,8 +176,8 @@ public final class StreamedPostPipeline extends GLBasePipeline {
             cropScaleX = (float) cropWidth / params.rawSize.x;
             cropScaleY = (float) cropHeight / params.rawSize.y;
         }
-        glProg.setVar("gainMapTransform", cropScaleX, cropScaleY,
-                (1.0f - cropScaleX) * 0.5f, (1.0f - cropScaleY) * 0.5f);
+        return new float[]{cropScaleX, cropScaleY,
+                (1.0f - cropScaleX) * 0.5f, (1.0f - cropScaleY) * 0.5f};
     }
 
     private void ensureToneResources() {
@@ -208,7 +203,18 @@ public final class StreamedPostPipeline extends GLBasePipeline {
             }
             node.AfterRun();
         }
-        drawSinglePass(Nodes.get(Nodes.size() - 1).GetProgTex());
+        Node last = Nodes.get(Nodes.size() - 1);
+        if (last.OwnTexture) {
+            drawSinglePass(last.GetProgTex());
+            resultTexture = outputTexture;
+        } else {
+            // The pipeline ends on a pass-through node (e.g. a compute node
+            // writing via imageStore): its texture already holds the result,
+            // so bind it as the readback target instead of fragment-drawing
+            // with a vertex-less compute program.
+            last.WorkingTexture.BufferLoad();
+            resultTexture = last.WorkingTexture;
+        }
         Nodes.clear();
     }
 
@@ -228,6 +234,7 @@ public final class StreamedPostPipeline extends GLBasePipeline {
      */
     private void drawSinglePass(GLTexture texture) {
         texture.BufferLoad();
+        GLES20.glViewport(0, 0, texture.mSize.x, texture.mSize.y);
         glint.glProgram.draw();
     }
 
@@ -236,13 +243,14 @@ public final class StreamedPostPipeline extends GLBasePipeline {
             program = new GLProg();
             glint = new GLInterface(program);
         }
-        if (inputTexture != null && outputTexture != null
+        if (inputTexture != null && main1 != null
                 && width == frameWidth && height == frameHeight) {
             ensureToneResources();
             return;
         }
         try {
             if (inputTexture != null) inputTexture.close();
+            if (main1 != null) main1.close();
             if (outputTexture != null) outputTexture.close();
         } catch (Exception ignored) {
         }
@@ -250,6 +258,7 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         height = frameHeight;
         GLFormat format = new GLFormat(GLFormat.DataType.SIMPLE_8, 4);
         inputTexture = new GLTexture(new Point(frameWidth, frameHeight), format);
+        main1 = new GLTexture(new Point(frameWidth, frameHeight), format);
         outputTexture = new GLTexture(new Point(frameWidth, frameHeight), format);
         ensureToneResources();
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);

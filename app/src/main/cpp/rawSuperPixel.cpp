@@ -3,8 +3,12 @@
 //
 // Samples the direct camera buffer in place (row/pixel strides honoured, no
 // de-stride copy) and combines each 2x2 Bayer tile into one RGB pixel. The
-// output is linear (black-level subtracted, white-level normalized); gamma
-// encoding and white-balance gains are applied later by StreamedPostPipeline.
+// output is linear (black-level subtracted, white-level normalized), then
+// neutral-anchored: each channel is divided by its white point and scaled by
+// the smallest white point, so all channels share one scale below neutral
+// without clamping at the uint8 ceiling and shadows keep their code range.
+// StreamedColor multiplies the white point ratios back before the matrix
+// chain; gamma encoding and white-balance gains are also applied there.
 //
 
 #include <jni.h>
@@ -108,6 +112,7 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
         jint rowStride, jint pixelStride,
         jint cropLeft, jint cropTop, jint cropWidth, jint cropHeight,
         jint cfa, jfloatArray blackArr, jint whiteLevel,
+        jfloat whiteR, jfloat whiteG, jfloat whiteB,
         jfloat gainR, jfloat gainG, jfloat gainB,
         jfloat exposureCompensation, jfloat compressor) {
     const uint8_t *base = static_cast<const uint8_t *>(env->GetDirectBufferAddress(rawBuffer));
@@ -129,10 +134,23 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
     for (int i = 0; i < 4; i++)
         if (i != ir && i != ib) ig[n++] = i;
 
+    // Neutral-anchored encoding: divide by the channel's white point, scaled
+    // by the smallest one so the largest stored value stays <= 1.0 and
+    // toLinear8 never clamps. Invalid white points (unfilled Parameters)
+    // fall back to identity.
+    if (!(whiteR > 0.0f)) whiteR = 1.0f;
+    if (!(whiteG > 0.0f)) whiteG = 1.0f;
+    if (!(whiteB > 0.0f)) whiteB = 1.0f;
+    const float minWhite = std::min(whiteR, std::min(whiteG, whiteB));
+    float whiteBySlot[4];
+    for (int i = 0; i < 4; i++)
+        whiteBySlot[i] = i == ir ? whiteR : i == ib ? whiteB : whiteG;
+
     float invRange[4];
     for (int i = 0; i < 4; i++) {
         float range = (float) whiteLevel - black[i];
-        invRange[i] = 1.0f / (range > 1.0f ? range : 1.0f);
+        range = range > 1.0f ? range : 1.0f;
+        invRange[i] = (minWhite / whiteBySlot[i]) / range;
     }
 
     const int tiles_x = cropWidth / 2;
@@ -179,6 +197,12 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
             dst += 4;
         }
     }
-    buildToneCurve(out, toneCurve, gainR, gainG, gainB,
+    // The stored pixels carry the minWhite/whitePoint encoding, so undo it in
+    // the histogram gains to keep the curve anchored to the same luminances
+    // the shader sees after reconstructing brightness.
+    buildToneCurve(out, toneCurve,
+                   gainR * whiteR / minWhite,
+                   gainG * whiteG / minWhite,
+                   gainB * whiteB / minWhite,
                    exposureCompensation, compressor);
 }
