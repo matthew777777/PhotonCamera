@@ -15,6 +15,7 @@ public final class TunableRegistry {
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.PostPipeline.class,
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.ESD3D2.class,
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.AutoExposure.class,
+        com.particlesdevs.photoncamera.processing.opengl.postpipeline.LocalLaplacian.class,
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.Initial.class,
         com.particlesdevs.photoncamera.processing.opengl.postpipeline.Amaze.class,
         com.particlesdevs.photoncamera.processing.opengl.scripts.PyramidAlignment.class,

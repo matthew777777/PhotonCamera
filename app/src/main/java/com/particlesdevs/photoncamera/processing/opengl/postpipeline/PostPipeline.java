@@ -507,6 +507,7 @@ public class PostPipeline extends GLBasePipeline {
         add(new ABLC());
         add(new Initial());
         add(new AutoExposure());
+        add(new LocalLaplacian());
         add(new CaptureSharpening());
         add(new CorrectingFlow());
         add(new Sharpen2());
