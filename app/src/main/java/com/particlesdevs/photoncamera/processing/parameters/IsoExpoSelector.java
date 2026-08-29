@@ -19,6 +19,19 @@ import java.util.Locale;
 
 public class IsoExpoSelector {
     public static final int baseFrame = 1;
+    /**
+     * Capture profiles.  These values are persisted, so do not reorder them.
+     *
+     * Profiles are planned for the whole burst, rather than repeated every
+     * three frames. Base-exposure reference frames are captured first; the one
+     * or two longer shadow frames are captured last.
+     */
+    public static final int BRACKETING_OFF = 0;
+    public static final int BRACKETING_HDR = 1;
+    public static final int BRACKETING_DEEP_SHADOWS = 2;
+    public static final int BRACKETING_CLEAN_SHADOWS = 3;
+    private static final long FLICKER_SAFE_50HZ_WINDOW_NS = ExposureIndex.sec / 100;
+    private static final long FLICKER_SAFE_60HZ_WINDOW_NS = ExposureIndex.sec / 120;
     private static final String TAG = "IsoExpoSelector";
     public static boolean HDR = false;
     public static boolean useTripod = false;
@@ -26,6 +39,96 @@ public class IsoExpoSelector {
     public static ArrayList<ExpoPair> pairs = new ArrayList<>();
     public static ArrayList<ExpoPair> fullpairs = new ArrayList<>();
     public static long lastSelectedExposure = 0;
+    private static BracketingPlan activeBracketingPlan = BracketingPlan.constant(1);
+    private static volatile int detectedFlickerHz = 50;
+
+    private static final class BracketingPlan {
+        final float[] multipliers;
+        final boolean flickerSafe;
+
+        private BracketingPlan(float[] multipliers, boolean flickerSafe) {
+            this.multipliers = multipliers;
+            this.flickerSafe = flickerSafe;
+        }
+
+        static BracketingPlan constant(int frameCount) {
+            return new BracketingPlan(new float[Math.max(frameCount, 1)], false);
+        }
+
+        float multiplierAt(int step) {
+            if (step < 0 || step >= multipliers.length) return 1.f;
+            return multipliers[step] > 0.f ? multipliers[step] : 1.f;
+        }
+    }
+
+    /**
+     * Creates one exposure plan per capture.  The final frame(s), not every
+     * third frame, receive the long exposure. This keeps a run of base RAW
+     * frames available as the sharp alignment reference.
+     */
+    public static void prepareBracketingPlan(int frameCount) {
+        int count = Math.max(frameCount, 1);
+        float[] multipliers = new float[count];
+        int profile = HDR ? PreferenceKeys.getBracketingMode() : BRACKETING_OFF;
+        int shadowFrames = 0;
+        float shadowMultiplier = 1.f;
+        // Every active bracketing profile uses the preview-detected mains
+        // cadence. Off deliberately leaves normal single-exposure capture alone.
+        boolean flickerSafe = profile != BRACKETING_OFF;
+
+        switch (profile) {
+            case BRACKETING_HDR:
+                shadowFrames = 1;
+                shadowMultiplier = 4.f;
+                break;
+            case BRACKETING_DEEP_SHADOWS:
+                shadowFrames = 1;
+                shadowMultiplier = 8.f;
+                break;
+            case BRACKETING_CLEAN_SHADOWS:
+                shadowFrames = 2;
+                shadowMultiplier = 4.f;
+                break;
+            case BRACKETING_OFF:
+            default:
+                break;
+        }
+
+        // Always retain one short frame. A two-long-frame plan also needs at
+        // least two short frames for robust alignment and deghosting.
+        int minReferences = shadowFrames > 1 ? 2 : 1;
+        shadowFrames = Math.min(shadowFrames, Math.max(0, count - minReferences));
+        for (int i = count - shadowFrames; i < count; i++) {
+            multipliers[i] = shadowMultiplier;
+        }
+        activeBracketingPlan = new BracketingPlan(multipliers, flickerSafe);
+        Log.d(TAG, "Bracketing plan: frames=" + count + " profile=" + profile
+                + " shadowFrames=" + shadowFrames + " multiplier=" + shadowMultiplier
+                + " flickerSafe=" + flickerSafe);
+    }
+
+    /**
+     * Receives the camera HAL's scene-flicker classification from the live
+     * preview. Unknown and no-flicker results retain the last stable value;
+     * this keeps the capture cadence from changing when a momentary preview
+     * result omits the optional statistic.
+     */
+    public static void updatePreviewFlicker(CaptureResult result) {
+        Integer flicker = result.get(CaptureResult.STATISTICS_SCENE_FLICKER);
+        if (flicker == null) return;
+        int frequency;
+        if (flicker == CaptureResult.STATISTICS_SCENE_FLICKER_50HZ) {
+            frequency = 50;
+        } else if (flicker == CaptureResult.STATISTICS_SCENE_FLICKER_60HZ) {
+            frequency = 60;
+        } else {
+            return;
+        }
+        if (detectedFlickerHz != frequency) {
+            detectedFlickerHz = frequency;
+            Log.d(TAG, "Preview flicker detected: " + detectedFlickerHz + " Hz");
+        }
+    }
 
     // ---- Shutter-Priority / Dynamic Low-Light AE Curve ----
     // Instead of letting stock 3A pick a fast shutter + high ISO, we keep the SAME
@@ -201,37 +304,11 @@ public class IsoExpoSelector {
             pair.ExpoCompensateLowerExpo(2.f);
             pair.ExpoCompensateLower(1.f/2.f);
         }*/
-        if (step%patternSize == 0 && HDR) {
-            // Set multiplier based on bracketing mode (0=Off, 1=Normal, 2=High)
-            int bracketingMode = PreferenceKeys.getBracketingMode();
-            pair.layerMpy = 1.f;
-            if (bracketingMode == 1) {
-                // Normal bracketing (1x, 4x)
-                pair.layerMpy = 4.f;
-            } else if (bracketingMode == 2) {
-                // High bracketing (1x, 8x)
-                pair.layerMpy = 8.f;
+        if (HDR && step >= 0) {
+            applyBracketingMultiplier(pair, activeBracketingPlan.multiplierAt(step));
+            if (activeBracketingPlan.flickerSafe) {
+                applyFlickerSafeExposure(pair);
             }
-
-            if (pair.layerMpy > 1.f) {
-                pair.curlayer = ExpoPair.exposureLayer.High;
-                if (pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy)) {
-                    pair.layerMpy = 1.f;
-                    pair.curlayer = ExpoPair.exposureLayer.Normal;
-                }
-            } else {
-                pair.curlayer = ExpoPair.exposureLayer.Normal;
-            }
-        }
-        if ((step%patternSize == 1) && HDR) {
-            pair.layerMpy = 1.f;
-            pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
-            pair.curlayer = ExpoPair.exposureLayer.Normal;
-        }
-        if (step%patternSize == 2 && HDR) {
-            pair.layerMpy = 1.f;
-            pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
-            pair.curlayer = ExpoPair.exposureLayer.Normal;
         }
 
         if (pair.exposure < ExposureIndex.sec / 90 && PhotonCamera.getSettings().eisPhoto) {
@@ -247,6 +324,56 @@ public class IsoExpoSelector {
         }
         pair.denormalizeSystem();
         return pair;
+    }
+
+    private static void applyBracketingMultiplier(ExpoPair pair, float multiplier) {
+        pair.layerMpy = multiplier;
+        if (multiplier <= 1.f) {
+            pair.curlayer = ExpoPair.exposureLayer.Normal;
+            return;
+        }
+
+        pair.curlayer = ExpoPair.exposureLayer.High;
+        if (pair.ExpoCompensateLowerExpo2(1.0 / multiplier)) {
+            // A device limit prevented the requested bracket; make its metadata
+            // truthful so the merger never exposure-scales the frame incorrectly.
+            pair.layerMpy = 1.f;
+            pair.curlayer = ExpoPair.exposureLayer.Normal;
+        }
+    }
+
+    /**
+     * Keeps an HDR burst phase-neutral under the mains frequency classified by
+     * the preview HAL. 50 Hz lighting uses 10 ms, 20 ms, 30 ms (1/100 s,
+     * 1/50 s, 1/33.333 s), etc.; 60 Hz lighting uses 1/120 s windows.
+     * ISO is changed to keep the metered exposure energy unchanged. If no such
+     * shutter is possible within the sensor's shutter and ISO ranges, leave the
+     * metered pair untouched rather than clipping it.
+     */
+    private static void applyFlickerSafeExposure(ExpoPair pair) {
+        long flickerWindowNs = detectedFlickerHz == 60
+                ? FLICKER_SAFE_60HZ_WINDOW_NS : FLICKER_SAFE_50HZ_WINDOW_NS;
+        long targetEnergy = pair.exposure * (long) pair.iso;
+        long maxNormalizedIso = Math.round(pair.isohigh * (100.0 / pair.isolow));
+        long minExposure = Math.max(pair.exposurelow, ceilDivide(targetEnergy, maxNormalizedIso));
+        long maxExposure = Math.min(pair.exposurehigh, targetEnergy / MIN_ISO_NORMALIZED);
+        long minWindows = ceilDivide(minExposure, flickerWindowNs);
+        long maxWindows = maxExposure / flickerWindowNs;
+        if (minWindows > maxWindows || maxWindows < 1) {
+            Log.d(TAG, "Flicker-safe shutter unavailable; preserving " + pair.ExposureString());
+            return;
+        }
+
+        long requestedWindows = Math.round((double) pair.exposure / flickerWindowNs);
+        long windows = Math.max(minWindows, Math.min(Math.max(requestedWindows, 1), maxWindows));
+        pair.exposure = windows * flickerWindowNs;
+        pair.iso = (int) Math.round((double) targetEnergy / pair.exposure);
+        Log.d(TAG, "Flicker-safe " + detectedFlickerHz + " Hz exposure: "
+                + pair.ExposureString() + " ISO " + pair.iso);
+    }
+
+    private static long ceilDivide(long dividend, long divisor) {
+        return dividend / divisor + (dividend % divisor == 0 ? 0 : 1);
     }
 
     public static double getMPY() {

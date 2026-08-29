@@ -574,6 +574,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             mColorSpaceTransform = result.get(CaptureResult.COLOR_CORRECTION_TRANSFORM);
             Integer state = result.get(CaptureResult.FLASH_STATE);
             mFlashed = state != null && state == CaptureResult.FLASH_STATE_PARTIAL || state == CaptureResult.FLASH_STATE_FIRED;
+            IsoExpoSelector.updatePreviewFlicker(result);
             mPreviewCaptureResult = result;
             mPreviewCaptureRequest = request;
             process(result);
@@ -1785,6 +1786,17 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         }
 
         mPreviewRequestBuilder.addTarget(surface);
+        int[] antibandingModes = mCameraCharacteristics.get(
+                CameraCharacteristics.CONTROL_AE_AVAILABLE_ANTIBANDING_MODES);
+        if (antibandingModes != null) {
+            for (int mode : antibandingModes) {
+                if (mode == CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_AUTO) {
+                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_ANTIBANDING_MODE,
+                            CaptureRequest.CONTROL_AE_ANTIBANDING_MODE_AUTO);
+                    break;
+                }
+            }
+        }
         synchronized (mZslBufferLock) {
             while (!mZslRingBuffer.isEmpty()) {
                 Image img = mZslRingBuffer.pollFirst();
@@ -2278,6 +2290,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             rebuildPreviewBuilder();*/
 
             IsoExpoSelector.useTripod = PhotonCamera.getGyro().getTripod();
+            IsoExpoSelector.prepareBracketingPlan(frameCount);
             if (frameCount == -1) {
                 for (int i = 0; i < 1; i++) {
                     if(!PhotonCamera.getSettings().selectedMode.equals(CameraMode.RAWVIDEO))

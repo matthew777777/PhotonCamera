@@ -129,6 +129,7 @@ public class HdrxProcessor extends ProcessorBase {
         ArrayList<ImageFrame> images = new ArrayList<>();
         int ISO = 0;
         int normalFrames = 0;
+        int shadowFrames = 0;
         if(BurstShakiness.size() < mImageFramesToProcess.size()){
             Log.d(TAG,"Warning: Gyro data size:"+BurstShakiness.size()+" is less than image size:"+mImageFramesToProcess.size());
         }
@@ -143,6 +144,7 @@ public class HdrxProcessor extends ProcessorBase {
             frame.pair.layerMpy = (float) (exposures.get(mImageFramesToProcess.get(i).getTimestamp()) / minExpo);
             if (frame.pair.layerMpy > 1.0) {
                 frame.pair.curlayer = IsoExpoSelector.ExpoPair.exposureLayer.High;
+                shadowFrames++;
             } else {
                 frame.pair.curlayer = IsoExpoSelector.ExpoPair.exposureLayer.Normal;
                 normalFrames++;
@@ -206,8 +208,13 @@ public class HdrxProcessor extends ProcessorBase {
                     if(normalFrames == 1 && cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.Normal) {
                         continue;
                     }
+                    if(shadowFrames == 1 && cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.High) {
+                        continue;
+                    }
                     if(cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.Normal){
                         normalFrames--;
+                    } else if (cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.High) {
+                        shadowFrames--;
                     }
                     Log.d(TAG, "Removing unlucky:" + curunlucky + " number:" + images.get(images.size() - 1).number);
                     images.get(images.size() - 1).close();

@@ -44,6 +44,7 @@
     <item name="bracketing_off_button" type="id"/>
     <item name="bracketing_normal_button" type="id"/>
     <item name="bracketing_high_button" type="id"/>
+    <item name="bracketing_clean_shadows_button" type="id"/>
     <item name="ae_metering_std_entry_layout" type="id"/>
     <item name="ae_metering_std_off_button" type="id"/>
     <item name="ae_metering_std_center_button" type="id"/>
