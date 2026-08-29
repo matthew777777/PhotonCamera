@@ -19,6 +19,18 @@ import java.util.Locale;
 
 public class IsoExpoSelector {
     public static final int baseFrame = 1;
+    /**
+     * Capture profiles.  These values are persisted, so do not reorder them.
+     *
+     * Profiles are planned for the whole burst, rather than repeated every
+     * three frames. Static-scene profiles end with shadow frames; the
+     * flicker-safe profile deliberately interleaves short and long frames.
+     */
+    public static final int BRACKETING_OFF = 0;
+    public static final int BRACKETING_HDR = 1;
+    public static final int BRACKETING_DEEP_SHADOWS = 2;
+    public static final int BRACKETING_CLEAN_SHADOWS = 3;
+    public static final int BRACKETING_FLICKER_SAFE_MOTION = 4;
     private static final String TAG = "IsoExpoSelector";
     public static boolean HDR = false;
     public static boolean useTripod = false;
@@ -26,6 +38,103 @@ public class IsoExpoSelector {
     public static ArrayList<ExpoPair> pairs = new ArrayList<>();
     public static ArrayList<ExpoPair> fullpairs = new ArrayList<>();
     public static long lastSelectedExposure = 0;
+    private static BracketingPlan activeBracketingPlan = BracketingPlan.constant(1);
+
+    private static final class BracketingPlan {
+        final FramePlan[] frames;
+
+        private BracketingPlan(FramePlan[] frames) {
+            this.frames = frames;
+        }
+
+        static BracketingPlan constant(int frameCount) {
+            FramePlan[] frames = new FramePlan[Math.max(frameCount, 1)];
+            for (int i = 0; i < frames.length; i++) frames[i] = FramePlan.base();
+            return new BracketingPlan(frames);
+        }
+
+        FramePlan frameAt(int step) {
+            if (step < 0 || step >= frames.length) return FramePlan.base();
+            return frames[step];
+        }
+    }
+
+    private static final class FramePlan {
+        final float multiplier;
+        final boolean flickerSafe;
+
+        private FramePlan(float multiplier, boolean flickerSafe) {
+            this.multiplier = multiplier;
+            this.flickerSafe = flickerSafe;
+        }
+
+        static FramePlan base() {
+            return new FramePlan(1.f, false);
+        }
+
+        static FramePlan shadow(float multiplier) {
+            return new FramePlan(multiplier, false);
+        }
+
+        static FramePlan flickerSafe(boolean longExposure) {
+            // 1/25 s × 16 gain is 64× (six stops) brighter than 1/100 s at
+            // base gain. The actual ratio is recomputed from capture metadata.
+            return new FramePlan(longExposure ? 64.f : 1.f, true);
+        }
+    }
+
+    /**
+     * Creates one exposure plan per capture. Static-scene profiles reserve the
+     * final frame(s) for shadow signal. Flicker-safe Motion HDR alternates
+     * 1/100 s and 1/25 s frames to keep both exposures near the same moment.
+     */
+    public static void prepareBracketingPlan(int frameCount) {
+        int count = Math.max(frameCount, 1);
+        FramePlan[] frames = new FramePlan[count];
+        for (int i = 0; i < count; i++) frames[i] = FramePlan.base();
+        int profile = HDR ? PreferenceKeys.getBracketingMode() : BRACKETING_OFF;
+        int shadowFrames = 0;
+        float shadowMultiplier = 1.f;
+
+        switch (profile) {
+            case BRACKETING_HDR:
+                shadowFrames = 1;
+                shadowMultiplier = 4.f;
+                break;
+            case BRACKETING_DEEP_SHADOWS:
+                shadowFrames = 1;
+                shadowMultiplier = 8.f;
+                break;
+            case BRACKETING_CLEAN_SHADOWS:
+                shadowFrames = 2;
+                shadowMultiplier = 4.f;
+                break;
+            case BRACKETING_FLICKER_SAFE_MOTION:
+                // S + L + S (+ L...) places a short reference immediately on
+                // either side of every long frame when possible.
+                for (int i = 0; i < count; i++) {
+                    frames[i] = FramePlan.flickerSafe((i & 1) == 1);
+                }
+                activeBracketingPlan = new BracketingPlan(frames);
+                Log.d(TAG, "Bracketing plan: frames=" + count + " profile=" + profile
+                        + " sequence=S+L interleaved (1/100 s, 1/25 s ×16)");
+                return;
+            case BRACKETING_OFF:
+            default:
+                break;
+        }
+
+        // Always retain one short frame. A two-long-frame plan also needs at
+        // least two short frames for robust alignment and deghosting.
+        int minReferences = shadowFrames > 1 ? 2 : 1;
+        shadowFrames = Math.min(shadowFrames, Math.max(0, count - minReferences));
+        for (int i = count - shadowFrames; i < count; i++) {
+            frames[i] = FramePlan.shadow(shadowMultiplier);
+        }
+        activeBracketingPlan = new BracketingPlan(frames);
+        Log.d(TAG, "Bracketing plan: frames=" + count + " profile=" + profile
+                + " shadowFrames=" + shadowFrames + " multiplier=" + shadowMultiplier);
+    }
 
     // ---- Shutter-Priority / Dynamic Low-Light AE Curve ----
     // Instead of letting stock 3A pick a fast shutter + high ISO, we keep the SAME
@@ -201,37 +310,8 @@ public class IsoExpoSelector {
             pair.ExpoCompensateLowerExpo(2.f);
             pair.ExpoCompensateLower(1.f/2.f);
         }*/
-        if (step%patternSize == 0 && HDR) {
-            // Set multiplier based on bracketing mode (0=Off, 1=Normal, 2=High)
-            int bracketingMode = PreferenceKeys.getBracketingMode();
-            pair.layerMpy = 1.f;
-            if (bracketingMode == 1) {
-                // Normal bracketing (1x, 4x)
-                pair.layerMpy = 4.f;
-            } else if (bracketingMode == 2) {
-                // High bracketing (1x, 8x)
-                pair.layerMpy = 8.f;
-            }
-
-            if (pair.layerMpy > 1.f) {
-                pair.curlayer = ExpoPair.exposureLayer.High;
-                if (pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy)) {
-                    pair.layerMpy = 1.f;
-                    pair.curlayer = ExpoPair.exposureLayer.Normal;
-                }
-            } else {
-                pair.curlayer = ExpoPair.exposureLayer.Normal;
-            }
-        }
-        if ((step%patternSize == 1) && HDR) {
-            pair.layerMpy = 1.f;
-            pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
-            pair.curlayer = ExpoPair.exposureLayer.Normal;
-        }
-        if (step%patternSize == 2 && HDR) {
-            pair.layerMpy = 1.f;
-            pair.ExpoCompensateLowerExpo2(1.0 / pair.layerMpy);
-            pair.curlayer = ExpoPair.exposureLayer.Normal;
+        if (HDR && step >= 0) {
+            applyBracketingFrame(pair, activeBracketingPlan.frameAt(step));
         }
 
         if (pair.exposure < ExposureIndex.sec / 90 && PhotonCamera.getSettings().eisPhoto) {
@@ -247,6 +327,51 @@ public class IsoExpoSelector {
         }
         pair.denormalizeSystem();
         return pair;
+    }
+
+    private static void applyBracketingFrame(ExpoPair pair, FramePlan frame) {
+        if (frame.flickerSafe) {
+            applyFlickerSafeExposure(pair, frame.multiplier > 1.f);
+            return;
+        }
+
+        float multiplier = frame.multiplier;
+        pair.layerMpy = multiplier;
+        if (multiplier <= 1.f) {
+            pair.curlayer = ExpoPair.exposureLayer.Normal;
+            return;
+        }
+
+        pair.curlayer = ExpoPair.exposureLayer.High;
+        if (pair.ExpoCompensateLowerExpo2(1.0 / multiplier)) {
+            // A device limit prevented the requested bracket; make its metadata
+            // truthful so the merger never exposure-scales the frame incorrectly.
+            pair.layerMpy = 1.f;
+            pair.curlayer = ExpoPair.exposureLayer.Normal;
+        }
+    }
+
+    private static void applyFlickerSafeExposure(ExpoPair pair, boolean longExposure) {
+        long shortExposure = clampExposure(pair, ExposureIndex.sec / 100);
+        int shortIso = clampNormalizedIso(pair, 100);
+        long targetExposure = longExposure ? ExposureIndex.sec / 25 : ExposureIndex.sec / 100;
+        int targetIso = longExposure ? shortIso * 16 : shortIso;
+
+        pair.exposure = clampExposure(pair, targetExposure);
+        pair.iso = clampNormalizedIso(pair, targetIso);
+        pair.layerMpy = (float) (((double) pair.exposure * pair.iso)
+                / ((double) shortExposure * shortIso));
+        pair.curlayer = pair.layerMpy > 1.f
+                ? ExpoPair.exposureLayer.High : ExpoPair.exposureLayer.Normal;
+    }
+
+    private static long clampExposure(ExpoPair pair, long exposure) {
+        return Math.max(pair.exposurelow, Math.min(exposure, pair.exposurehigh));
+    }
+
+    private static int clampNormalizedIso(ExpoPair pair, int iso) {
+        int normalizedMaxIso = (int) (pair.isohigh * 100.0 / pair.isolow);
+        return Math.max(100, Math.min(iso, normalizedMaxIso));
     }
 
     public static double getMPY() {

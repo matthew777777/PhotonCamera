@@ -2278,6 +2278,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             rebuildPreviewBuilder();*/
 
             IsoExpoSelector.useTripod = PhotonCamera.getGyro().getTripod();
+            IsoExpoSelector.prepareBracketingPlan(frameCount);
             if (frameCount == -1) {
                 for (int i = 0; i < 1; i++) {
                     if(!PhotonCamera.getSettings().selectedMode.equals(CameraMode.RAWVIDEO))

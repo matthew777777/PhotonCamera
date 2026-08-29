@@ -3,7 +3,7 @@
     <string name="iso" translatable="false">"ISO "</string>
     <string name="icon_string" translatable="false">Icon</string>
     <string name="backup_file_name" translatable="false">PCAM_BKP_%1$s</string>
-    <string name="app_name" translatable="false">PhotonCamera</string>
+    <string name="app_name" translatable="false">PhotonCamera Bracketing</string>
     <string name="gallery_name" translatable="false">PGallery</string>
     <string name="device_support" translatable="false">PhotonCamera Pro</string>
     <string name="request_permission">This app needs camera permission.</string>
@@ -162,10 +162,12 @@
     <string name="pref_ae_metering_std_key" translatable="false">pref_ae_metering_std_mode_key</string>
 
     <!-- Bracketing mode strings -->
-    <string name="exposure_bracketing">Exposure Bracketing</string>
+    <string name="exposure_bracketing">Bracketing</string>
     <string name="bracketing_off">Off (1x)</string>
-    <string name="bracketing_normal">Normal (1x, 4x)</string>
-    <string name="bracketing_high">High (1x, 8x)</string>
+    <string name="bracketing_normal">HDR (1x, 4x)</string>
+    <string name="bracketing_high">Deep shadows (1x, 8x)</string>
+    <string name="bracketing_clean_shadows">Motion-safe shadows (1x, 4x, 4x)</string>
+    <string name="bracketing_flicker_safe">Flicker-safe Motion HDR (1/100s, 1/25s ×16)</string>
     <string name="pref_bracketing_key" translatable="false">pref_bracketing_mode_key</string>
 
     <!-- Video Settings -->

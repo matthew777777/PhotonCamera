@@ -144,7 +144,9 @@ public class SettingsBarEntryProvider extends ViewModel {
         bracketingEntry.addSettingsBarButtonModels(
                 SettingsBarButtonModel.newButtonModel(R.id.bracketing_off_button, R.drawable.ic_exposure, R.string.bracketing_off, 0, bracketingEntry),
                 SettingsBarButtonModel.newButtonModel(R.id.bracketing_normal_button, R.drawable.ic_exposure, R.string.bracketing_normal, 1, bracketingEntry),
-                SettingsBarButtonModel.newButtonModel(R.id.bracketing_high_button, R.drawable.ic_exposure, R.string.bracketing_high, 2, bracketingEntry)
+                SettingsBarButtonModel.newButtonModel(R.id.bracketing_high_button, R.drawable.ic_exposure, R.string.bracketing_high, 2, bracketingEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.bracketing_clean_shadows_button, R.drawable.ic_exposure, R.string.bracketing_clean_shadows, 3, bracketingEntry),
+                SettingsBarButtonModel.newButtonModel(R.id.bracketing_flicker_safe_button, R.drawable.ic_exposure, R.string.bracketing_flicker_safe, 4, bracketingEntry)
         );
     }
 
