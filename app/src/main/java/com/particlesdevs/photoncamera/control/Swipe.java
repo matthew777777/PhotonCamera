@@ -110,8 +110,13 @@ public class Swipe {
         );
         // Interface.getCameraFragment().showToast(previewRect.toString()+"\nCurX"+event.getX()+"CurY"+event.getY());
         if (viewfinderRect.contains(event.getX(), event.getY())) {
-            float translateX = event.getX() - camera_container.getLeft();
-            float translateY = event.getY() - camera_container.getTop();
+            View texture = cameraFragment.findViewById(R.id.texture);
+            int[] holderLocation = new int[2];
+            int[] textureLocation = new int[2];
+            cameraFragment.findViewById(R.id.textureHolder).getLocationOnScreen(holderLocation);
+            texture.getLocationOnScreen(textureLocation);
+            float translateX = event.getX() + holderLocation[0] - textureLocation[0];
+            float translateY = event.getY() + holderLocation[1] - textureLocation[1];
             if (manualModeConsole.getManualParamModel().getCurrentFocusValue() == ManualParamModel.FOCUS_AUTO)
                 cameraFragment.getTouchFocus().processTouchToFocus(translateX, translateY);
         }

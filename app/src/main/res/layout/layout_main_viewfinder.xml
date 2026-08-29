@@ -54,6 +54,20 @@
                     app:layout_constraintTop_toTopOf="@id/texture"
                     tools:visibility="visible"/>
 
+            <com.particlesdevs.photoncamera.ui.camera.views.FocusCircleView
+                    android:id="@+id/touchExposure"
+                    android:layout_width="@dimen/focus_circle_size"
+                    android:layout_height="0dp"
+                    app:layout_constraintDimensionRatio="1:1"
+                    android:visibility="invisible"
+                    android:color="#FFFFB300"
+                    android:thickness="1.5dp"
+                    app:layout_constraintBottom_toBottomOf="@id/texture"
+                    app:layout_constraintEnd_toEndOf="@id/texture"
+                    app:layout_constraintStart_toStartOf="@id/texture"
+                    app:layout_constraintTop_toTopOf="@id/texture"
+                    tools:visibility="visible"/>
+
             <com.particlesdevs.photoncamera.ui.camera.views.viewfinder.SurfaceViewOverViewfinder
                     android:layout_width="0dp"
                     android:layout_height="0dp"

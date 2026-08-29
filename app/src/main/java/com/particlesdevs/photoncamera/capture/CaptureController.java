@@ -578,10 +578,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             mPreviewCaptureRequest = request;
             process(result);
             cameraEventsListener.onPreviewCaptureCompleted(result);
-            if(PreferenceKeys.getAfMode() == CaptureRequest.CONTROL_AF_MODE_AUTO && !burst && !mTouchFocus.isTouchFocus) {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
-                rebuildPreviewBuilderOneShot();
-            }
+            // AF START is edge-triggered; repeating it here restarted AF every frame on some HALs.
         }
 
     };
@@ -1371,6 +1368,22 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             Log.w(TAG, "lockFocus(): camera not ready (builder=" + mPreviewRequestBuilder + " session=" + mCaptureSession + ")");
             return;
         }
+        // Tap-to-focus already produced a lock. Starting AF again here can visibly shift the lens.
+        if (mPreviewCaptureResult != null) {
+            Integer afState = mPreviewCaptureResult.get(CaptureResult.CONTROL_AF_STATE);
+            if (afState != null && (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
+                    || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED)) {
+                Integer aeState = mPreviewCaptureResult.get(CaptureResult.CONTROL_AE_STATE);
+                if (aeState == null || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
+                        || aeState == CaptureResult.CONTROL_AE_STATE_LOCKED) {
+                    mState = STATE_PICTURE_TAKEN;
+                    captureStillPicture();
+                } else {
+                    runPreCaptureSequence();
+                }
+                return;
+            }
+        }
         startTimerLocked();
         // This is how to tell the camera to lock focus.
         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
@@ -1378,6 +1391,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         // Tell #mCaptureCallback to wait for the lock.
         mState = STATE_WAITING_LOCK;
         try {
+            // START is an event, not repeating state. Submit it once, then keep preview IDLE.
+            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, mBackgroundHandler);
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                    CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
             mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
                     mBackgroundHandler);
         } catch (CameraAccessException e) {
@@ -1859,31 +1876,11 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             return;
         }
         try {
-            // Reset the auto-focus trigger
-            //mCaptureSession.stopRepeating();
-            //mCaptureSession.abortCaptures();
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-            rebuildPreviewBuilderOneShot();
-            //mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-            //        CameraMetadata.CONTROL_AF_TRIGGER_START);
-            //rebuildPreviewBuilderOneShot();
             reset3Aparams();
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_START);
-            rebuildPreviewBuilderOneShot();
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-            rebuildPreviewBuilderOneShot();
             paramController.setupPreview();
-            /*mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
+            // Final PR #176 behavior: repeating preview requests must remain IDLE.
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_START);
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);*/
+                    CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
             // After this, the camera will go back to the normal state of preview.
             mState = STATE_PREVIEW;
             rebuildPreviewBuilder();
@@ -2215,9 +2212,15 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             //setAutoFlash(captureBuilder);
             //int rotation = Interface.getGravity().getCameraRotation();//activity.getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, PhotonCamera.getGravity().getCameraRotation(mSensorOrientation));
-            if (mTouchFocus != null && mTouchFocus.isTouchFocus) {
-                captureBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AE_REGIONS));
-                captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AF_REGIONS));
+            MeteringRectangle[] previewAfRegions = mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AF_REGIONS);
+            Integer maxAfRegions = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF);
+            if (maxAfRegions != null && maxAfRegions > 0 && previewAfRegions != null) {
+                captureBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, previewAfRegions);
+            }
+            MeteringRectangle[] previewAeRegions = mPreviewRequestBuilder.get(CaptureRequest.CONTROL_AE_REGIONS);
+            Integer maxAeRegions = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+            if (maxAeRegions != null && maxAeRegions > 0 && previewAeRegions != null) {
+                captureBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, previewAeRegions);
             } else {
                 applyAeMeteringRegions(captureBuilder);
             }
@@ -2240,10 +2243,14 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             //IsoExpoSelector.HDR = (!manualParamModel.isManualMode()) && (PhotonCamera.getSettings().alignAlgorithm == 0);
             //IsoExpoSelector.HDR = (PhotonCamera.getSettings().alignAlgorithm == 1);
             Log.d(TAG, "HDR:" + IsoExpoSelector.HDR);
-            Object mode = mPreviewRequestBuilder.get(CONTROL_AF_MODE);
-            if(mode != null && (int) mode != CaptureRequest.CONTROL_AF_MODE_AUTO || PreferenceKeys.getAfMode() == CaptureRequest.CONTROL_AF_MODE_AUTO && !PhotonCamera.getSettings().selectedMode.equals(CameraMode.RAWVIDEO)) {
-                captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
-                captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+            Integer previewAfMode = mPreviewRequestBuilder.get(CONTROL_AF_MODE);
+            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                    previewAfMode != null ? previewAfMode : PreferenceKeys.getAfMode());
+            captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+            if (paramController.FOCUS != -1.0f) {
+                captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+                captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, paramController.FOCUS);
+                Log.d(TAG, "Applying manual focus distance: " + paramController.FOCUS);
             }
             //captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_EDOF);
             //if ((!(focus == 0.0 && Build.BRAND.equalsIgnoreCase("samsung")))) {
@@ -2497,8 +2504,14 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
     }
 
     public void reset3Aparams() {
-        setAEMode(mPreviewRequestBuilder, PreferenceKeys.getAeMode());
-        setAFMode(mPreviewRequestBuilder, PreferenceKeys.getAfMode());
+        if (mPreviewRequestBuilder != null) {
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                    CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                    CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+            setAEMode(mPreviewRequestBuilder, PreferenceKeys.getAeMode());
+            setAFMode(mPreviewRequestBuilder, PreferenceKeys.getAfMode());
+        }
         rebuildPreviewBuilder();
     }
 
@@ -2859,8 +2872,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
     public static class CameraProperties {
         private final Float minFocal = mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE);
-        private final Float maxFocal = mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE);
-        public Range<Float> focusRange = (!(minFocal == null || maxFocal == null || minFocal == 0.0f)) ? new Range<>(Math.min(minFocal, maxFocal), Math.max(minFocal, maxFocal)) : null;
+        private final Float hyperfocal = mCameraCharacteristics.get(CameraCharacteristics.LENS_INFO_HYPERFOCAL_DISTANCE);
+        private final Float maxFocal = hyperfocal != null ? hyperfocal : 0.0f;
+        public Range<Float> focusRange = (minFocal != null && minFocal > 0.0f)
+                ? new Range<>(Math.min(minFocal, maxFocal), Math.max(minFocal, maxFocal)) : null;
         public Range<Integer> isoRange = new Range<>(IsoExpoSelector.getISOLOWExt(), IsoExpoSelector.getISOHIGHExt());
         public Range<Long> expRange = new Range<>(IsoExpoSelector.getEXPLOW(), IsoExpoSelector.getEXPHIGH());
         private final float evStep = mCameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP).floatValue();

@@ -88,6 +88,7 @@ import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.settings.SettingsManager;
 import com.particlesdevs.photoncamera.ui.camera.binding.CustomBinding;
 import com.particlesdevs.photoncamera.ui.camera.data.CameraLensData;
+import com.particlesdevs.photoncamera.ui.camera.views.FocusCircleView;
 import com.particlesdevs.photoncamera.ui.camera.viewmodel.*;
 import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.GLPreview;
 import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.SurfaceViewOverViewfinder;
@@ -369,9 +370,10 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
     private void initTouchFocus() {
         if (cameraFragmentBinding != null && captureController != null) {
-            View focusCircle = cameraFragmentBinding.layoutViewfinder.touchFocus;
+            FocusCircleView focusCircle = cameraFragmentBinding.layoutViewfinder.touchFocus;
+            FocusCircleView exposureCircle = cameraFragmentBinding.layoutViewfinder.touchExposure;
             textureView.post(() -> {
-                mTouchFocus = new TouchFocus(captureController,focusCircle,textureView);
+                mTouchFocus = new TouchFocus(captureController, focusCircle, exposureCircle, textureView);
                 captureController.mTouchFocus = mTouchFocus;
             });
         }
@@ -660,7 +662,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
                         focusStr = modePrefix + " · FAIL";
                         break;
                     case CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED:
-                        focusStr = modePrefix + " · LOST";
+                        focusStr = modePrefix + " · RETRY";
                         break;
                     default:
                         focusStr = modePrefix;
@@ -807,10 +809,12 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
     private RectF getScreenRectFromMeteringRect(MeteringRectangle meteringRectangle) {
         if (captureController.mImageReaderPreview == null) return new RectF();
-        Size size = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
-        if (size == null) {
-            size = new Size(captureController.mImageReaderPreview.getWidth(), captureController.mImageReaderPreview.getHeight());
-        }
+        Rect activeArray = CaptureController.mCameraCharacteristics.get(
+                CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        Size size = activeArray != null ? new Size(activeArray.width(), activeArray.height())
+                : CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+        if (size == null) size = new Size(captureController.mImageReaderPreview.getWidth(),
+                captureController.mImageReaderPreview.getHeight());
         float left = (((float) meteringRectangle.getY() / size.getHeight()) * (textureView.getWidth()));
         float top = (((float) meteringRectangle.getX() / size.getWidth()) * (textureView.getHeight()));
         float width = (((float) meteringRectangle.getHeight() / size.getHeight()) * (textureView.getWidth()));

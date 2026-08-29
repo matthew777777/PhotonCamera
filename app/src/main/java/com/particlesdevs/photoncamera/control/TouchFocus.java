@@ -5,10 +5,10 @@ import android.graphics.Rect;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.MeteringRectangle;
-import com.particlesdevs.photoncamera.util.Log;
+import android.os.SystemClock;
 import android.util.Size;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.View.OnTouchListener;
 
 import androidx.annotation.Nullable;
 
@@ -17,203 +17,310 @@ import com.particlesdevs.photoncamera.settings.PreferenceKeys;
 import com.particlesdevs.photoncamera.ui.camera.views.FocusCircleView;
 import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.GLPreview;
 
+/** Coordinates independently movable Camera2 AF and AE metering points. */
 public class TouchFocus {
-    private static final String TAG = "TouchFocus";
-    private static final int AUTO_HIDE_DELAY_MS = 3000;
+    private static final int AUTO_HIDE_DELAY_MS = 5000;
+    private static final int DRAG_AF_TRIGGER_INTERVAL_MS = 120;
+    private enum MeteringType { AF, AE }
+
     private final CaptureController captureController;
     private final GLPreview textureView;
-    private final View focusCircleView;
-    private final Runnable hideFocusCircleRunnable = this::hideFocusCircleView;
+    private final FocusCircleView focusCircleView;
+    private final FocusCircleView exposureCircleView;
+    private final Runnable hideIndicatorsRunnable = this::hideIndicators;
+    private MeteringRectangle afRegion;
+    private MeteringRectangle aeRegion;
     public boolean isTouchFocus = false;
-    private final OnTouchListener focusListener = (v, event) -> {
-        v.performClick();
-        resetFocusCircle();
-        setInitialAFAE();
-        return true;
-    };
 
-
-    public TouchFocus(CaptureController captureController, View focusCircle, GLPreview textureView) {
+    public TouchFocus(CaptureController captureController, FocusCircleView focusCircle,
+                      FocusCircleView exposureCircle, GLPreview textureView) {
         this.captureController = captureController;
         this.focusCircleView = focusCircle;
+        this.exposureCircleView = exposureCircle;
         this.textureView = textureView;
-        focusCircleView.setOnTouchListener(focusListener);
-        resetFocusCircle();
+        exposureCircleView.setExposureIndicator(true);
+        focusCircleView.setOnTouchListener(createDragListener(MeteringType.AF));
+        exposureCircleView.setOnTouchListener(createDragListener(MeteringType.AE));
+        hideIndicatorsImmediately();
     }
 
-    public void processTouchToFocus(float fx, float fy) {
-        focusCircleView.removeCallbacks(hideFocusCircleRunnable);
-        focusCircleView.post(() -> showFocusCircle(fx, fy));
-        setFocus((int) fy, (int) fx);
-        focusCircleView.postDelayed(hideFocusCircleRunnable, AUTO_HIDE_DELAY_MS);
+    /** Both meters and controls start at the exact tapped point. */
+    public void processTouchToFocus(float x, float y) {
+        cancelAutoHide();
+        float afX = clamp(x, 0, textureView.getWidth());
+        showIndicator(focusCircleView, afX, y, true);
+        showIndicator(exposureCircleView, afX, y, true);
+        afRegion = createMeteringRectangle(afX, y);
+        aeRegion = createMeteringRectangle(afX, y);
+        applyMetering(true, true);
+        scheduleAutoHide();
     }
 
-    private void showFocusCircle(float fx, float fy) {
-        focusCircleView.setX(fx - focusCircleView.getMeasuredWidth() / 2.0f);
-        focusCircleView.setY(fy - focusCircleView.getMeasuredHeight() / 2.0f);
-        focusCircleView.setVisibility(View.VISIBLE);
-        focusCircleView.animate().scaleY(1.2f).scaleX(1.2f).setDuration(250)
-                .withEndAction(() -> focusCircleView.animate().scaleY(1f).scaleX(1f).setDuration(250).start())
-                .start();
-    }
-
-    /**
-     * Sets state of focus circle view based on AF State
-     */
-    public void setState(@Nullable Integer afstate) {
-        if (afstate != null) {
-            ((FocusCircleView) focusCircleView).setAfState(afstate);
+    public void setState(@Nullable Integer afState) {
+        if (afState != null && focusCircleView.getVisibility() == View.VISIBLE) {
+            focusCircleView.setAfState(afState);
         }
     }
 
-    private void setInitialAFAE() {
-        captureController.reset3Aparams();
+    private View.OnTouchListener createDragListener(MeteringType type) {
+        return new View.OnTouchListener() {
+            private float pointerOffsetX;
+            private float pointerOffsetY;
+            private long lastAfTriggerTime;
+
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN
+                        && type == MeteringType.AE) {
+                    float dx = event.getX() - view.getWidth() / 2f;
+                    float dy = event.getY() - view.getHeight() / 2f;
+                    // The inner yellow sun owns AE; the outer ring falls through to AF.
+                    if (Math.hypot(dx, dy) > view.getWidth() * 0.34f) return false;
+                }
+                float[] point = toTextureCoordinates(event);
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        view.getParent().requestDisallowInterceptTouchEvent(true);
+                        cancelAutoHide();
+                        pointerOffsetX = point[0] - indicatorCenterX(view);
+                        pointerOffsetY = point[1] - indicatorCenterY(view);
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        long now = SystemClock.uptimeMillis();
+                        boolean triggerWhileDragging = type == MeteringType.AF
+                                && now - lastAfTriggerTime >= DRAG_AF_TRIGGER_INTERVAL_MS;
+                        moveMeter(type, point[0] - pointerOffsetX, point[1] - pointerOffsetY,
+                                triggerWhileDragging);
+                        if (triggerWhileDragging) lastAfTriggerTime = now;
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        moveMeter(type, point[0] - pointerOffsetX, point[1] - pointerOffsetY, true);
+                        view.performClick();
+                        view.getParent().requestDisallowInterceptTouchEvent(false);
+                        scheduleAutoHide();
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        view.getParent().requestDisallowInterceptTouchEvent(false);
+                        scheduleAutoHide();
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        };
     }
 
-    private void setFocus(int x, int y) {
-        if (captureController.mImageReaderPreview == null) {
-            Log.w(TAG, "setFocus(): mImageReaderPreview is null, camera not ready yet");
-            return;
-        }
-        Point size = new Point(captureController.mImageReaderPreview.getWidth(), captureController.mImageReaderPreview.getHeight());
-        Point CurUi = new Point(textureView.getWidth(),textureView.getHeight());
-        Rect activeArray = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-        Size sizee;
-        if (activeArray != null) {
-            sizee = new Size(activeArray.width(), activeArray.height());
+    private float[] toTextureCoordinates(MotionEvent event) {
+        int[] location = new int[2];
+        textureView.getLocationOnScreen(location);
+        return new float[]{event.getRawX() - location[0], event.getRawY() - location[1]};
+    }
+
+    private void moveMeter(MeteringType type, float x, float y, boolean trigger) {
+        x = clamp(x, 0, textureView.getWidth());
+        y = clamp(y, 0, textureView.getHeight());
+        if (type == MeteringType.AF) {
+            showIndicator(focusCircleView, x, y, false);
+            afRegion = createMeteringRectangle(x, y);
+            applyMetering(trigger, false);
         } else {
-            sizee = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+            showIndicator(exposureCircleView, x, y, false);
+            aeRegion = createMeteringRectangle(x, y);
+            applyMetering(false, trigger);
         }
-        if (sizee == null) {
-            sizee = new Size(size.x, size.y);
-        }
-        if (x < 0)
-            x = 0;
-        if (y < 0)
-            y = 0;
-        Log.v(TAG,"y:"+y);
-        /*if (y > CurUi.y)
-            y = CurUi.y;
-        if (x > CurUi.x)
-            x  =CurUi.x;*/
-        //use 1/6 from the the sensor size for the focus rect
-        int width_to_set = sizee.getWidth() / 8;
-        float kProp = (float) CurUi.x / (float) (CurUi.y);
-        int height_to_set = (int) (width_to_set * kProp);
-        float x_scale = (float) sizee.getWidth() / (float) CurUi.y;
-        float y_scale = (float) sizee.getHeight() / (float) CurUi.x;
-        int x_to_set = (int) (x * x_scale) - width_to_set / 2;
-        int y_to_set = (int) (y * y_scale) - height_to_set / 2;
-        Log.v(TAG,"y_to_set:"+y_to_set);
-        y_to_set = sizee.getHeight()-y_to_set-height_to_set;
-        if (x_to_set < 0)
-            x_to_set = 0;
-        if (y_to_set < 0)
-            y_to_set = 0;
-        if (y_to_set - height_to_set > sizee.getHeight())
-            y_to_set = sizee.getHeight() - height_to_set;
-        if (x_to_set - width_to_set > sizee.getWidth())
-            y_to_set = sizee.getWidth() - width_to_set;
-
-        MeteringRectangle rect_to_set = new MeteringRectangle(x_to_set, y_to_set, width_to_set, height_to_set, MeteringRectangle.METERING_WEIGHT_MAX - 1);
-        MeteringRectangle[] rectaf = new MeteringRectangle[1];
-        Log.v(TAG, "\nInput x/y:" + x + "/" + y + "\n" +
-                "sensor size width/height to set:" + width_to_set + "/" + height_to_set + "\n" +
-                "preview/sensorsize: " + CurUi.toString() + " / " + sizee.toString() + "\n" +
-                "scale x/y:" + x_scale + "/" + y_scale + "\n" +
-                "final rect :" + rect_to_set.toString());
-        rectaf[0] = rect_to_set;
-        triggerAutoFocus(rectaf);
     }
 
-    private void triggerAutoFocus(MeteringRectangle[] rectaf) {
-        if(CaptureController.burst) return;
-        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
-        if (builder == null) {
-            Log.w(TAG, "triggerAutoFocus(): mPreviewRequestBuilder is null");
-            return;
+    private void showIndicator(View view, float x, float y, boolean animate) {
+        view.animate().cancel();
+        // Indicators stay INVISIBLE (not GONE), so ConstraintLayout measures both during
+        // initial layout. Their identical measured centers make the very first AF/AE tap
+        // use the same coordinate without waiting for a second layout pass.
+        positionIndicator(view, x, y);
+        view.setAlpha(1f);
+        view.setVisibility(View.VISIBLE);
+        if (animate) {
+            view.setScaleX(1.2f);
+            view.setScaleY(1.2f);
+            view.animate().scaleX(1f).scaleY(1f).setDuration(250).start();
         }
-        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-        //builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-        captureController.rebuildPreviewBuilderOneShot();
-        builder.set(CaptureRequest.CONTROL_AF_REGIONS, rectaf);
-        builder.set(CaptureRequest.CONTROL_AE_REGIONS, rectaf);
-        builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
-        builder.set(CaptureRequest.CONTROL_AF_MODE, PreferenceKeys.getAfMode());
-        builder.set(CaptureRequest.CONTROL_AE_MODE, Math.max(PreferenceKeys.getAeMode(), 1));
-        //set focus area repeating,else cam forget after one frame where it should focus
-        //trigger af start only once. cam starts focusing till its focused or failed
-        if(PreferenceKeys.getAfMode() == CaptureRequest.CONTROL_AF_MODE_AUTO) {
-            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+    }
+
+    private void positionIndicator(View view, float x, float y) {
+        float targetCenterX = textureView.getX() + x;
+        float targetCenterY = textureView.getY() + y;
+        float layoutCenterX = view.getLeft() + view.getWidth() / 2f;
+        float layoutCenterY = view.getTop() + view.getHeight() / 2f;
+        view.setTranslationX(targetCenterX - layoutCenterX);
+        view.setTranslationY(targetCenterY - layoutCenterY);
+    }
+
+    private float indicatorCenterX(View view) {
+        return view.getX() - textureView.getX() + view.getWidth() / 2f;
+    }
+
+    private float indicatorCenterY(View view) {
+        return view.getY() - textureView.getY() + view.getHeight() / 2f;
+    }
+
+    /** Maps portrait viewfinder coordinates to the app's rotated sensor preview. */
+    private MeteringRectangle createMeteringRectangle(float viewX, float viewY) {
+        if (captureController.mImageReaderPreview == null || CaptureController.mCameraCharacteristics == null
+                || textureView.getWidth() <= 0 || textureView.getHeight() <= 0) return null;
+
+        Point previewSize = new Point(captureController.mImageReaderPreview.getWidth(),
+                captureController.mImageReaderPreview.getHeight());
+        Point uiSize = new Point(textureView.getWidth(), textureView.getHeight());
+        Rect activeArray = CaptureController.mCameraCharacteristics.get(
+                CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        Size sensorSize = activeArray != null
+                ? new Size(activeArray.width(), activeArray.height())
+                : CaptureController.mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PIXEL_ARRAY_SIZE);
+        if (sensorSize == null) sensorSize = new Size(previewSize.x, previewSize.y);
+
+        // PR #176 mapping: the rotated portrait preview passes (screenY, screenX).
+        int x = Math.max(0, Math.round(viewY));
+        int y = Math.max(0, Math.round(viewX));
+        int regionWidth = sensorSize.getWidth() / 8;
+        float uiAspect = (float) uiSize.x / uiSize.y;
+        int regionHeight = Math.max(1, (int) (regionWidth * uiAspect));
+        float xScale = (float) sensorSize.getWidth() / uiSize.y;
+        float yScale = (float) sensorSize.getHeight() / uiSize.x;
+        int left = (int) (x * xScale) - regionWidth / 2;
+        int top = (int) (y * yScale) - regionHeight / 2;
+        top = sensorSize.getHeight() - top - regionHeight;
+        left = Math.max(0, Math.min(left, sensorSize.getWidth() - regionWidth));
+        top = Math.max(0, Math.min(top, sensorSize.getHeight() - regionHeight));
+        return new MeteringRectangle(left, top, regionWidth, regionHeight,
+                MeteringRectangle.METERING_WEIGHT_MAX - 1);
+    }
+
+    private void applyMetering(boolean triggerAf, boolean triggerAe) {
+        if (CaptureController.burst) return;
+        CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
+        if (builder == null || CaptureController.mCameraCharacteristics == null) return;
+
+        Integer maxAf = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF);
+        Integer maxAe = CaptureController.mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+        boolean supportsAfRegion = maxAf != null && maxAf > 0 && afRegion != null;
+        boolean supportsAeRegion = maxAe != null && maxAe > 0 && aeRegion != null;
+
+        if (triggerAf && supportsAfRegion) {
+            // Match PR #176's AF state transition exactly:
+            // CAF/passive -> CANCEL -> AUTO + START -> ACTIVE_SCAN -> *_LOCKED.
+            // In particular, do not submit an AUTO + IDLE request between CANCEL and START;
+            // some HALs consume that request by returning to INACTIVE without scanning.
+            builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                    CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_CANCEL);
+            captureController.rebuildPreviewBuilderOneShot();
+
+            builder.set(CaptureRequest.CONTROL_AF_REGIONS, new MeteringRectangle[]{afRegion});
+            if (supportsAeRegion) {
+                builder.set(CaptureRequest.CONTROL_AE_REGIONS, new MeteringRectangle[]{aeRegion});
+            }
+            builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+            builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+            builder.set(CaptureRequest.CONTROL_AE_MODE, Math.max(PreferenceKeys.getAeMode(), 1));
             builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+            if (triggerAe && supportsAeRegion) {
+                builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                        CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+            } else {
+                builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                        CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+            }
+            isTouchFocus = true;
             captureController.rebuildPreviewBuilderOneShot();
-            //set focus trigger back to idle to signal cam after focusing is done to do nothing
-            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+
+            // START is edge-triggered. Keep AUTO and the tap regions in the repeating
+            // request, but return both trigger fields to IDLE exactly as PR #176 does.
             builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                    CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+        } else if (triggerAe && supportsAeRegion) {
+            builder.set(CaptureRequest.CONTROL_AE_REGIONS, new MeteringRectangle[]{aeRegion});
+            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                    CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+            isTouchFocus = true;
             captureController.rebuildPreviewBuilderOneShot();
+            builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                    CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+        } else {
+            // Region-only updates are used between throttled drag triggers.
+            if (supportsAfRegion) {
+                builder.set(CaptureRequest.CONTROL_AF_REGIONS, new MeteringRectangle[]{afRegion});
+            }
+            if (supportsAeRegion) {
+                builder.set(CaptureRequest.CONTROL_AE_REGIONS, new MeteringRectangle[]{aeRegion});
+            }
         }
         captureController.rebuildPreviewBuilder();
-        isTouchFocus = true;
+        isTouchFocus = isTouchFocus || supportsAfRegion || supportsAeRegion;
     }
+
     private void resetAutoFocus() {
-        if(CaptureController.burst) return;
+        if (CaptureController.burst) return;
         CaptureRequest.Builder builder = captureController.mPreviewRequestBuilder;
-        if (builder == null) {
-            Log.w(TAG, "triggerAutoFocus(): mPreviewRequestBuilder is null");
-            return;
-        }
-        Log.d(TAG, "resetAutoFocus");
-        /*builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-        builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-        captureController.rebuildPreviewBuilderOneShot();
-        builder.set(CaptureRequest.CONTROL_AF_REGIONS, captureController.mPreviewMeteringAF);
-        builder.set(CaptureRequest.CONTROL_AE_REGIONS, captureController.mPreviewMeteringAE);
-        builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
-        builder.set(CaptureRequest.CONTROL_AF_MODE, captureController.mPreviewAFMode);
-        builder.set(CaptureRequest.CONTROL_AE_MODE, captureController.mPreviewAEMode);
-        //set focus area repeating,else cam forget after one frame where it should focus
-        //trigger af start only once. cam starts focusing till its focused or failed
-        //builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
-        //builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
-        //captureController.rebuildPreviewBuilderOneShot();
-        //set focus trigger back to idle to signal cam after focusing is done to do nothing
-        builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
-        captureController.rebuildPreviewBuilderOneShot();
-        captureController.rebuildPreviewBuilder();*/
+        if (builder == null) return;
         builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-        //builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-        builder.set(CaptureRequest.CONTROL_AF_REGIONS, captureController.mPreviewMeteringAF);
-        builder.set(CaptureRequest.CONTROL_AE_REGIONS, captureController.mPreviewMeteringAE);
+        captureController.rebuildPreviewBuilderOneShot();
+        builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
+        builder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_IDLE);
+        Integer maxAf = CaptureController.mCameraCharacteristics == null ? null
+                : CaptureController.mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF);
+        Integer maxAe = CaptureController.mCameraCharacteristics == null ? null
+                : CaptureController.mCameraCharacteristics.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE);
+        if (maxAf != null && maxAf > 0) {
+            builder.set(CaptureRequest.CONTROL_AF_REGIONS, captureController.mPreviewMeteringAF);
+        }
+        if (maxAe != null && maxAe > 0) {
+            builder.set(CaptureRequest.CONTROL_AE_REGIONS, captureController.mPreviewMeteringAE);
+        }
         builder.set(CaptureRequest.CONTROL_AF_MODE, captureController.mPreviewAFMode);
         builder.set(CaptureRequest.CONTROL_AE_MODE, captureController.mPreviewAEMode);
-        captureController.rebuildPreviewBuilderOneShot();
         captureController.rebuildPreviewBuilder();
+        afRegion = null;
+        aeRegion = null;
         isTouchFocus = false;
     }
 
-
-    //Thread safe
-    //call when focus circle needs to be hidden immediately
     public void resetFocusCircle() {
-        focusCircleView.removeCallbacks(hideFocusCircleRunnable);
-        focusCircleView.post(hideFocusCircleRunnable);
+        cancelAutoHide();
+        focusCircleView.post(this::hideIndicatorsImmediately);
         resetAutoFocus();
     }
 
-    //Must be run on UI Thread
-    private void hideFocusCircleView() {
-        if (focusCircleView.getVisibility() == View.VISIBLE) {
-            focusCircleView.animate().alpha(0f).scaleY(1.8f).scaleX(1.8f).setDuration(100)
-                    .withEndAction(() -> {
-                        focusCircleView.setVisibility(View.GONE);
-                        focusCircleView.setX((float) textureView.getWidth() / 2.f);
-                        focusCircleView.setY((float) textureView.getHeight() / 2.f);
-                        focusCircleView.setScaleY(1f);
-                        focusCircleView.setScaleX(1f);
-                        focusCircleView.setAlpha(1f);
-                    })
-                    .start();
-        }
+    private void scheduleAutoHide() { focusCircleView.postDelayed(hideIndicatorsRunnable, AUTO_HIDE_DELAY_MS); }
+    private void cancelAutoHide() { focusCircleView.removeCallbacks(hideIndicatorsRunnable); }
+
+    private void hideIndicators() {
+        hideIndicator(focusCircleView);
+        hideIndicator(exposureCircleView);
+        if (isTouchFocus) resetAutoFocus();
+    }
+
+    private void hideIndicator(View view) {
+        if (view.getVisibility() != View.VISIBLE) return;
+        view.animate().alpha(0f).scaleX(1.4f).scaleY(1.4f).setDuration(120)
+                .withEndAction(() -> {
+                    // INVISIBLE preserves the measured size/position for the first tap after
+                    // launch, camera resume, or an auto-hide.
+                    view.setVisibility(View.INVISIBLE);
+                    view.setAlpha(1f);
+                    view.setScaleX(1f);
+                    view.setScaleY(1f);
+                }).start();
+    }
+
+    private void hideIndicatorsImmediately() {
+        focusCircleView.animate().cancel();
+        exposureCircleView.animate().cancel();
+        focusCircleView.setVisibility(View.INVISIBLE);
+        exposureCircleView.setVisibility(View.INVISIBLE);
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(value, max));
     }
 }
