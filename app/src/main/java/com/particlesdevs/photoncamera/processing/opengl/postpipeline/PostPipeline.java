@@ -38,6 +38,10 @@ public class PostPipeline extends GLBasePipeline {
     public ByteBuffer highFrame;
     public GLTexture FusionMap;
     public GLTexture GainMap;
+    /** Raw CFA texture retained through capture sharpening for RT's clip mask. */
+    public GLTexture captureSharpeningRaw;
+    /** 95% clipping levels for the sensor's native 2x2 black-level pattern. */
+    public final float[] captureSharpeningClip = new float[4];
     public ArrayList<Bitmap> debugData = new ArrayList<>();
     public ArrayList<ImageFrame> SAGAIN;
     public Point cropSize;
@@ -505,9 +509,11 @@ public class PostPipeline extends GLBasePipeline {
             }
         }
         add(new ABLC());
+        // RawTherapee capture sharpening runs on linear post-demosaic RGB,
+        // before camera colour conversion, tone mapping and auto exposure.
+        add(new ExperimentalCaptureSharpening());
         add(new Initial());
         add(new AutoExposure());
-        add(new CaptureSharpening());
         add(new CorrectingFlow());
         add(new Sharpen2());
         add(new RotateWatermark(getRotation()));

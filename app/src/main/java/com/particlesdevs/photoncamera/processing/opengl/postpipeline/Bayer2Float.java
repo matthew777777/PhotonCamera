@@ -91,6 +91,11 @@ public class Bayer2Float extends Node {
         }
 
         for (int i = 0; i < 4; i++) {
+            // Equivalent to RT's (white - black) * scale * 0.95 threshold,
+            // expressed in the original sensor-DN domain (scale cancels).
+            postPipeline.captureSharpeningClip[i] = basePipeline.mParameters.blackLevel[i]
+                    + 0.95f * (basePipeline.mParameters.whiteLevel
+                    - basePipeline.mParameters.blackLevel[i]);
             basePipeline.mParameters.blackLevel[i] /= basePipeline.mParameters.whiteLevel * postPipeline.regenerationSense;
         }
         glProg.setVar("blackLevel", basePipeline.mParameters.blackLevel);
@@ -118,8 +123,8 @@ public class Bayer2Float extends Node {
         basePipeline.main1 = new GLTexture(wsize, new GLFormat(GLFormat.DataType.FLOAT_16, GLDrawParams.WorkDim), null, GL_LINEAR, GL_CLAMP_TO_EDGE);
         basePipeline.main3 = new GLTexture(wsize, new GLFormat(GLFormat.DataType.FLOAT_16, GLDrawParams.WorkDim), null, GL_LINEAR, GL_CLAMP_TO_EDGE);
         ((PostPipeline) basePipeline).GainMap = GainMapTex;
+        postPipeline.captureSharpeningRaw = in;
         glProg.closed = true;
-        in.close();
         //GainMapTex.close();
     }
 }
