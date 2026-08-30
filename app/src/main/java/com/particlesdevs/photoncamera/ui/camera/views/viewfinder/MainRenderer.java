@@ -74,6 +74,8 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private final BilateralGridEstimator bilateralGridEstimator = new BilateralGridEstimator(
             BilateralGridEstimator.Options.previewDefaults());
     private final StreamedPostPipeline streamedPostPipeline = new StreamedPostPipeline();
+    private volatile boolean useCpuPreviewNodes = true;
+    private volatile float lastPreviewNodesMs;
     private long bguTimingWindowStartedNs;
     private long bguSplatUs;
     private long bguBlurUs;
@@ -336,9 +338,14 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 estimatorInput = ByteBuffer.allocateDirect(bytes);
             }
             ByteBuffer output = target.pixels();
-            streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
-                    surfaceWidth, surfaceHeight, target.getGains(), target.getToneCurve(),
-                    target.getParameters());
+            final boolean cpuNodes = useCpuPreviewNodes;
+            long gpuNodesStarted = System.nanoTime();
+            if (!cpuNodes) {
+                streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
+                        surfaceWidth, surfaceHeight, target.getGains(), target.getToneCurve(),
+                        target.getParameters());
+                lastPreviewNodesMs = (System.nanoTime() - gpuNodesStarted) / 1_000_000f;
+            }
             ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight(), estimatorInput);
             if (DEBUG_ISP_PREVIEW) {
                 uploadIspPreview(output, target.getWidth(), target.getHeight());
@@ -351,6 +358,12 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             final int fitHeight = target.getHeight();
             estimatorExecutor.execute(() -> {
                 try {
+                    if (cpuNodes) {
+                        long nodesStarted = System.nanoTime();
+                        RawSuperPixel.postProcessCpu(fitTarget, fitWidth, fitHeight,
+                                target.getGains(), target.getToneCurve(), target.getParameters());
+                        lastPreviewNodesMs = (System.nanoTime() - nodesStarted) / 1_000_000f;
+                    }
                     BilateralGrid grid = bilateralGridEstimator.estimateRgba8(
                             fitInput, fitTarget, fitWidth, fitHeight);
                     recordBguTiming(bilateralGridEstimator.getLastTiming());
@@ -370,6 +383,18 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             estimatorBusy.set(false);
             Log.w("MainRenderer", "BGU preview estimate failed: " + error.getMessage());
         }
+    }
+
+    void setUseCpuPreviewNodes(boolean enabled) {
+        useCpuPreviewNodes = enabled;
+    }
+
+    boolean usesCpuPreviewNodes() {
+        return useCpuPreviewNodes;
+    }
+
+    float getLastPreviewNodesMs() {
+        return lastPreviewNodesMs;
     }
 
     private void recordBguTiming(BilateralGridEstimator.Timing timing) {

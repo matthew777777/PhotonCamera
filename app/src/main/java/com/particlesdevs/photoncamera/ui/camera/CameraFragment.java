@@ -39,8 +39,13 @@ import android.hardware.camera2.params.MeteringRectangle;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
+import android.content.IntentFilter;
 import android.util.DisplayMetrics;
 
 import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.HorizonIndicatorView;
@@ -116,6 +121,13 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     private static final String ACTIVE_BACKCAM_ID = "ACTIVE_BACKCAM_ID"; //key for savedInstanceState
     private static final String ACTIVE_FRONTCAM_ID = "ACTIVE_FRONTCAM_ID"; //key for savedInstanceState
     private static final String NOTIFICATION_CHANNEL_ID = "NOTIFICATION_CHANNEL_ID";
+    private final Handler thermalHudHandler = new Handler(Looper.getMainLooper());
+    private final Runnable thermalHudUpdater = new Runnable() {
+        @Override public void run() {
+            updateThermalHud();
+            thermalHudHandler.postDelayed(this, 1000L);
+        }
+    };
     /**
      * sActiveBackCamId is either
      * = 0 or camera_id stored in SharedPreferences in case of fresh application Start; or
@@ -281,6 +293,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
         this.captureController = new CaptureController(activity, processExecutorService, new CameraEventsListenerImpl());
         this.manualModeConsole.addParamObserver(captureController.getParamController());
         this.textureView.setManualModeConsole(manualModeConsole);
+        initBguThermalHud();
         PhotonCamera.setCaptureController(captureController);
         captureController.isDualSession = supportedDevice.specific.specificSetting.isDualSessionSupported;
         mHorizonIndicatorView = cameraFragmentBinding.layoutViewfinder.horizonIndicatorView;
@@ -294,6 +307,51 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
             mHorizonIndicatorView.setVisible(PreferenceKeys.isHorizonOn());
         }
         initSettingsBar();
+    }
+
+    private void initBguThermalHud() {
+        cameraFragmentBinding.layoutViewfinder.bguProcessorSwitch.setOnClickListener(view -> {
+            boolean cpu = !textureView.usesCpuPreviewNodes();
+            textureView.setUseCpuPreviewNodes(cpu);
+            updateThermalHud();
+        });
+        thermalHudHandler.removeCallbacks(thermalHudUpdater);
+        thermalHudHandler.post(thermalHudUpdater);
+    }
+
+    private void updateThermalHud() {
+        if (cameraFragmentBinding == null || textureView == null || activity == null) return;
+        boolean cpu = textureView.usesCpuPreviewNodes();
+        int status = -1;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            PowerManager power = (PowerManager) activity.getSystemService(android.content.Context.POWER_SERVICE);
+            if (power != null) status = power.getCurrentThermalStatus();
+        }
+        float batteryC = Float.NaN;
+        Intent battery = activity.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (battery != null) {
+            int raw = battery.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Integer.MIN_VALUE);
+            if (raw != Integer.MIN_VALUE) batteryC = raw / 10f;
+        }
+        String temperature = Float.isNaN(batteryC) ? "--.-" : String.format(Locale.ROOT, "%.1f", batteryC);
+        cameraFragmentBinding.layoutViewfinder.bguThermalHud.setText(String.format(Locale.ROOT,
+                "%s  %.1f ms\nThermal: %s  %s°C", cpu ? "CPU" : "GPU",
+                textureView.getLastPreviewNodesMs(), thermalStatusName(status), temperature));
+        cameraFragmentBinding.layoutViewfinder.bguProcessorSwitch.setText(cpu ? "Use GPU" : "Use CPU");
+    }
+
+    private static String thermalStatusName(int status) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return "n/a";
+        switch (status) {
+            case PowerManager.THERMAL_STATUS_NONE: return "none";
+            case PowerManager.THERMAL_STATUS_LIGHT: return "light";
+            case PowerManager.THERMAL_STATUS_MODERATE: return "moderate";
+            case PowerManager.THERMAL_STATUS_SEVERE: return "severe";
+            case PowerManager.THERMAL_STATUS_CRITICAL: return "critical";
+            case PowerManager.THERMAL_STATUS_EMERGENCY: return "emergency";
+            case PowerManager.THERMAL_STATUS_SHUTDOWN: return "shutdown";
+            default: return "unknown";
+        }
     }
 
     private void initSettingsBar() {
@@ -340,6 +398,8 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     @Override
     public void onResume() {
         super.onResume();
+        thermalHudHandler.removeCallbacks(thermalHudUpdater);
+        thermalHudHandler.post(thermalHudUpdater);
         updateSettingsBar();
         mSwipe.init();
         this.mCameraUIView.refresh(CaptureController.isProcessing);
@@ -380,6 +440,7 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
 
     @Override
     public void onPause() {
+        thermalHudHandler.removeCallbacks(thermalHudUpdater);
         PhotonCamera.getGravity().unregister();
         PhotonCamera.getGyro().unregister();
         PhotonCamera.getSettings().saveID();

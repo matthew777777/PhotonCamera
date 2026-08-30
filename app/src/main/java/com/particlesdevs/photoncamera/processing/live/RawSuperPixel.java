@@ -6,6 +6,8 @@ import android.util.Rational;
 
 import com.particlesdevs.photoncamera.ui.camera.views.viewfinder.RawPreviewFrame;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
+import com.particlesdevs.photoncamera.processing.render.ColorCorrectionTransform;
+import com.particlesdevs.photoncamera.processing.render.Parameters;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -27,6 +29,19 @@ public final class RawSuperPixel {
     private static final ByteBuffer[] TONE_CURVES = new ByteBuffer[BUFFER_COUNT];
     private static final boolean[] IN_USE = new boolean[BUFFER_COUNT];
     private static final Runnable[] RELEASERS = new Runnable[BUFFER_COUNT];
+    private static final float[] IDENTITY_GAIN_MAP = {1.f, 1.f, 1.f, 1.f};
+    private static final ThreadLocal<CpuGainCache> CPU_GAIN_CACHE =
+            ThreadLocal.withInitial(CpuGainCache::new);
+
+    private static final class CpuGainCache {
+        float[] map;
+        int mapWidth;
+        int mapHeight;
+        int frameWidth;
+        int frameHeight;
+        float cropScaleX;
+        float cropScaleY;
+    }
 
     static {
         System.loadLibrary("rawSuperPixel");
@@ -114,6 +129,84 @@ public final class RawSuperPixel {
                                        float whiteR, float whiteG, float whiteB,
                                        float gainR, float gainG, float gainB,
                                        float exposureCompensation, float compressor);
+
+    /** Native CPU equivalent of the streamed preview's color and tone nodes. */
+    public static void postProcessCpu(ByteBuffer pixels, int width, int height,
+                                      float[] fallbackGains, ByteBuffer toneCurve,
+                                      Parameters parameters) {
+        float[] sensor = identityMatrix();
+        float[] output = identityMatrix();
+        float[] neutral = fallbackGains != null && fallbackGains.length >= 3
+                ? fallbackGains : new float[]{1.f, 1.f, 1.f};
+        float[] whiteScale = {1.f, 1.f, 1.f};
+        float[] gainMap = IDENTITY_GAIN_MAP;
+        int gainWidth = 1;
+        int gainHeight = 1;
+        float cropScaleX = 1.f;
+        float cropScaleY = 1.f;
+        if (parameters != null) {
+            if (parameters.whitePoint != null && parameters.whitePoint.length == 3) {
+                float minimum = Float.MAX_VALUE;
+                for (float value : parameters.whitePoint)
+                    if (value > 0.f && value < minimum) minimum = value;
+                if (minimum != Float.MAX_VALUE) for (int i = 0; i < 3; i++)
+                    whiteScale[i] = parameters.whitePoint[i] > 0.f
+                            ? parameters.whitePoint[i] / minimum : 1.f;
+            }
+            if (parameters.CCT != null && parameters.sensorToProPhoto != null) {
+                sensor = parameters.sensorToProPhoto;
+                output = parameters.CCT.correctionMode
+                        == ColorCorrectionTransform.CorrectionMode.MATRIXES
+                        ? parameters.CCT.combineMatrix(parameters.whitePoint)
+                        : parameters.CCT.matrix;
+                neutral = new float[]{1.f, 1.f, 1.f};
+            }
+            if (parameters.hasGainMap && parameters.gainMap != null
+                    && parameters.mapSize != null && parameters.gainMap.length >= 4) {
+                gainMap = parameters.gainMap;
+                gainWidth = parameters.mapSize.x;
+                gainHeight = parameters.mapSize.y;
+            }
+            if (parameters.rawSize != null && parameters.rawSize.x > 0 && parameters.rawSize.y > 0) {
+                int cropWidth = Math.min(parameters.rawSize.x, parameters.rawSize.y * 4 / 3) & ~1;
+                int cropHeight = Math.min(parameters.rawSize.y, parameters.rawSize.x * 3 / 4) & ~1;
+                cropScaleX = (float) cropWidth / parameters.rawSize.x;
+                cropScaleY = (float) cropHeight / parameters.rawSize.y;
+            }
+        }
+        CpuGainCache cache = CPU_GAIN_CACHE.get();
+        boolean gainChanged = cache.map != gainMap || cache.mapWidth != gainWidth
+                || cache.mapHeight != gainHeight || cache.frameWidth != width
+                || cache.frameHeight != height || cache.cropScaleX != cropScaleX
+                || cache.cropScaleY != cropScaleY;
+        float[] gainMapUpdate = gainChanged ? gainMap : null;
+        if (gainChanged) {
+            cache.map = gainMap;
+            cache.mapWidth = gainWidth;
+            cache.mapHeight = gainHeight;
+            cache.frameWidth = width;
+            cache.frameHeight = height;
+            cache.cropScaleX = cropScaleX;
+            cache.cropScaleY = cropScaleY;
+        }
+        postProcessCpuNative(pixels, toneCurve, width, height, sensor, output, neutral,
+                whiteScale, gainMapUpdate, gainWidth, gainHeight, cropScaleX, cropScaleY,
+                (float) PhotonCamera.getSettings().saturation,
+                (float) PhotonCamera.getSettings().contrastMpy,
+                (float) PhotonCamera.getSettings().shadows);
+        pixels.position(0);
+    }
+
+    private static float[] identityMatrix() {
+        return new float[]{1.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 1.f};
+    }
+
+    private static native void postProcessCpuNative(
+            ByteBuffer pixels, ByteBuffer toneCurve, int width, int height,
+            float[] sensorToIntermediate, float[] intermediateToSrgb,
+            float[] neutralPoint, float[] whitePointScale, float[] gainMap,
+            int gainWidth, int gainHeight, float cropScaleX, float cropScaleY,
+            float saturation, float contrast, float shadows);
 
     private static float neutralGain(Rational[] neutral, int channel) {
         if (neutral == null || neutral.length <= channel || neutral[channel] == null) return 1.0f;

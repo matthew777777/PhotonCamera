@@ -235,6 +235,10 @@ target_link_libraries(flacRecorder PRIVATE
 target_link_libraries(rawSuperPixel PRIVATE
     log
 )
+# The live CPU preview runs from this library even in debug APKs. Without an
+# explicit optimization level Gradle's debug CMake variant compiles the
+# per-pixel loop at -O0, making the CPU/GPU timing comparison meaningless.
+target_compile_options(rawSuperPixel PRIVATE -O3 -ffp-contract=fast)
 
 target_link_libraries(
         camera2native

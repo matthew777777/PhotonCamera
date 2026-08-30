@@ -238,6 +238,18 @@ public class GLPreview extends GLSurfaceView {
         return mRenderer != null && mRenderer.shouldProcessRawPreviewFrame();
     }
 
+    public void setUseCpuPreviewNodes(boolean enabled) {
+        if (mRenderer != null) mRenderer.setUseCpuPreviewNodes(enabled);
+    }
+
+    public boolean usesCpuPreviewNodes() {
+        return mRenderer != null && mRenderer.usesCpuPreviewNodes();
+    }
+
+    public float getLastPreviewNodesMs() {
+        return mRenderer == null ? 0f : mRenderer.getLastPreviewNodesMs();
+    }
+
     public void clearRawPreviewFrame() {
         setRawPreviewFrame(null);
     }
