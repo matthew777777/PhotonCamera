@@ -36,6 +36,8 @@ import java.util.HashMap;
 
 public class HdrxProcessor extends ProcessorBase {
     private static final String TAG = "HdrxProcessor";
+    // Ignore small HAL rounding differences when assigning an exposure layer.
+    private static final double EXPOSURE_LAYER_TOLERANCE = 0.05;
     private ArrayList<ImageFrame> mImageFramesToProcess;
     private HashMap<Long, Double> exposures;
     private int imageFormat;
@@ -125,9 +127,25 @@ public class HdrxProcessor extends ProcessorBase {
         for (int i = 1; i < mImageFramesToProcess.size(); i++) {
             minExpo = Math.min(minExpo, exposures.get(mImageFramesToProcess.get(i).getTimestamp()));
         }
+        // fullpairs retains the requested bracket multiplier. Locate the 0 EV
+        // request and use its measured exposure energy as the semantic base.
+        // The merger still normalizes layerMpy against minExpo because its
+        // shaders require every radiometric multiplier to be >= 1.
+        int baseExposureIndex = 0;
+        float closestToBase = Float.MAX_VALUE;
+        int pairedFrameCount = Math.min(mImageFramesToProcess.size(), IsoExpoSelector.fullpairs.size());
+        for (int i = 0; i < pairedFrameCount; i++) {
+            float distance = Math.abs(IsoExpoSelector.fullpairs.get(i).layerMpy - 1.f);
+            if (distance < closestToBase) {
+                closestToBase = distance;
+                baseExposureIndex = i;
+            }
+        }
+        double baseExpo = exposures.get(mImageFramesToProcess.get(baseExposureIndex).getTimestamp());
         Log.d(TAG, "Wrapper.init");
         ArrayList<ImageFrame> images = new ArrayList<>();
         int ISO = 0;
+        int lowFrames = 0;
         int normalFrames = 0;
         int shadowFrames = 0;
         if(BurstShakiness.size() < mImageFramesToProcess.size()){
@@ -141,8 +159,13 @@ public class HdrxProcessor extends ProcessorBase {
             //frame.pair = IsoExpoSelector.pairs.get(i % IsoExpoSelector.patternSize);
             frame.pair = IsoExpoSelector.fullpairs.get(i);
             frame.number = i;
-            frame.pair.layerMpy = (float) (exposures.get(mImageFramesToProcess.get(i).getTimestamp()) / minExpo);
-            if (frame.pair.layerMpy > 1.0) {
+            double measuredExpo = exposures.get(frame.getTimestamp());
+            frame.pair.layerMpy = (float) (measuredExpo / minExpo);
+            double baseRelativeExposure = measuredExpo / baseExpo;
+            if (baseRelativeExposure < 1.0 - EXPOSURE_LAYER_TOLERANCE) {
+                frame.pair.curlayer = IsoExpoSelector.ExpoPair.exposureLayer.Low;
+                lowFrames++;
+            } else if (baseRelativeExposure > 1.0 + EXPOSURE_LAYER_TOLERANCE) {
                 frame.pair.curlayer = IsoExpoSelector.ExpoPair.exposureLayer.High;
                 shadowFrames++;
             } else {
@@ -153,7 +176,8 @@ public class HdrxProcessor extends ProcessorBase {
                 int ind = Math.max(0,mImageFramesToProcess.size()-2);
                 frame.frameGyro = BurstShakiness.get(ind);
             }*/
-            Log.d(TAG, "Mpy:" + frame.pair.layerMpy);
+            Log.d(TAG, "Mpy:" + frame.pair.layerMpy + " baseRelative:"
+                    + baseRelativeExposure + " layer:" + frame.pair.curlayer);
             images.add(frame);
             ISO += frame.pair.iso;
         }
@@ -208,13 +232,22 @@ public class HdrxProcessor extends ProcessorBase {
                     if(normalFrames == 1 && cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.Normal) {
                         continue;
                     }
+                    if(lowFrames == 1 && cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.Low) {
+                        continue;
+                    }
                     if(shadowFrames == 1 && cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.High) {
                         continue;
                     }
-                    if(cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.Normal){
-                        normalFrames--;
-                    } else if (cur.pair.curlayer == IsoExpoSelector.ExpoPair.exposureLayer.High) {
-                        shadowFrames--;
+                    switch (cur.pair.curlayer) {
+                        case Low:
+                            lowFrames--;
+                            break;
+                        case Normal:
+                            normalFrames--;
+                            break;
+                        case High:
+                            shadowFrames--;
+                            break;
                     }
                     Log.d(TAG, "Removing unlucky:" + curunlucky + " number:" + images.get(images.size() - 1).number);
                     images.get(images.size() - 1).close();
