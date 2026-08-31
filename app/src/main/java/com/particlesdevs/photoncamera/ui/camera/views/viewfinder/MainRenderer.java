@@ -39,12 +39,11 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private boolean mGLInit = false;
     private boolean mUpdateST = false;
     private volatile boolean mMirrorPreview;
-    private BilateralGrid pendingGrid;
-    private boolean bilateralGridUpdatePending;
-    private BilateralGrid currentGrid;
-    private final int[] bilateralTextures = new int[3];
-    private final FloatBuffer[] bilateralUploadBuffers = new FloatBuffer[3];
-    private int bguBlend;
+    private ColorLut pendingLut;
+    private boolean colorLutUpdatePending;
+    private ColorLut currentLut;
+    private int colorLutTexture;
+    private FloatBuffer colorLutUploadBuffer;
     private RawPreviewFrame pendingRawFrame;
     private boolean rawFrameUpdatePending;
     private int hProgram;
@@ -62,7 +61,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private ByteBuffer estimatorInput;
     private final AtomicBoolean estimatorBusy = new AtomicBoolean();
     private final ExecutorService estimatorExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "BguEstimator");
+        Thread thread = new Thread(runnable, "ColorLutEstimator");
         thread.setPriority(Thread.NORM_PRIORITY - 1);
         return thread;
     });
@@ -71,17 +70,12 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private static final boolean DEBUG_ISP_PREVIEW = false;
     private int ispPreviewTexture;
     private int enableIspPreview;
-    private final BilateralGridEstimator bilateralGridEstimator = new BilateralGridEstimator(
-            BilateralGridEstimator.Options.previewDefaults());
+    private final ColorLutEstimator colorLutEstimator = new ColorLutEstimator();
     private final StreamedPostPipeline streamedPostPipeline = new StreamedPostPipeline();
-    private volatile boolean useCpuPreviewNodes = true;
     private volatile float lastPreviewNodesMs;
-    private long bguTimingWindowStartedNs;
-    private long bguSplatUs;
-    private long bguBlurUs;
-    private long bguSolveUs;
-    private long bguTotalUs;
-    private int bguTimingSamples;
+    private long lutTimingWindowStartedNs;
+    private long lutTotalUs;
+    private int lutTimingSamples;
 
     private final GLPreview mView;
     private ManualModeConsole mManualModeConsole;
@@ -115,8 +109,8 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             }
         }
         estimatePendingRawFrame();
-        uploadPendingGrid();
-        bindBilateralGrid();
+        uploadPendingLut();
+        bindColorLut();
         GLES20.glUniformMatrix4fv(uTexRotateMatrix, 1, false, mTexRotateMatrix, 0);
         int peakEnabled = getPeakEnabled();
         GLES20.glUniform1i(enablePeak, peakEnabled);
@@ -133,12 +127,11 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int vTexCoord;
     private int enablePeak;
     private int mirror;
-    private int enableBilateralGrid;
-    private int bilateralGridSize;
+    private int enableColorLut;
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        deleteBilateralTextures();
+        deleteColorLutTexture();
         streamedPostPipeline.reset();
         downsampleProgram = 0;
         downsampleFramebuffer = 0;
@@ -160,17 +153,10 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         vTexCoord = GLES20.glGetAttribLocation(hProgram, "vTexCoord");
         enablePeak = GLES20.glGetUniformLocation(hProgram, "enablePeak");
         mirror = GLES20.glGetUniformLocation(hProgram, "mirror");
-        enableBilateralGrid = GLES20.glGetUniformLocation(hProgram, "enableBilateralGrid");
-        bilateralGridSize = GLES20.glGetUniformLocation(hProgram, "bilateralGridSize");
+        enableColorLut = GLES20.glGetUniformLocation(hProgram, "enableColorLut");
         enableIspPreview = GLES20.glGetUniformLocation(hProgram, "enableIspPreview");
         GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "sTexture"), 0);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridR"), 1);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridG"), 2);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridB"), 3);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridRPrev"), 5);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridGPrev"), 6);
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "bilateralGridBPrev"), 7);
-        bguBlend = GLES20.glGetUniformLocation(hProgram, "bguBlend");
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "colorLut"), 1);
         GLES20.glUniform1i(GLES20.glGetUniformLocation(hProgram, "ispPreview"), 4);
         GLES20.glVertexAttribPointer(vPosition, 2, GLES20.GL_FLOAT, false, 4 * 2, pVertex);
         GLES20.glVertexAttribPointer(vTexCoord, 2, GLES20.GL_FLOAT, false, 4 * 2, pTexCoord);
@@ -179,7 +165,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glUniform2f(GLES20.glGetUniformLocation(hProgram, "resolution"), mView.getWidth(), mView.getHeight());
         mGLInit = true;
         // A context recreation invalidates texture names, but not the CPU model.
-        setBilateralGrid(currentGrid);
+        setColorLut(currentLut);
         mView.fireOnSurfaceTextureAvailable(mSTexture, 0, 0);
     }
 
@@ -204,64 +190,37 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
     }
 
-    public synchronized void setBilateralGrid(BilateralGrid grid) {
-        pendingGrid = grid;
-        bilateralGridUpdatePending = true;
+    private synchronized void setColorLut(ColorLut lut) {
+        pendingLut = lut;
+        colorLutUpdatePending = true;
     }
 
-    private synchronized void uploadPendingGrid() {
-        if (!bilateralGridUpdatePending) {
-            return;
+    private synchronized void uploadPendingLut() {
+        if (!colorLutUpdatePending) return;
+        ColorLut lut = pendingLut;
+        pendingLut = null;
+        colorLutUpdatePending = false;
+        if (lut == null) { currentLut = null; deleteColorLutTexture(); return; }
+        if (colorLutTexture == 0) {
+            int[] name = new int[1]; GLES30.glGenTextures(1, name, 0); colorLutTexture = name[0];
         }
-        BilateralGrid grid = pendingGrid;
-        pendingGrid = null;
-        bilateralGridUpdatePending = false;
-        if (grid == null) {
-            currentGrid = null;
-            deleteBilateralTextures();
-            return;
-        }
-
-        boolean allocateTextures = bilateralTextures[0] == 0 || currentGrid == null
-                || currentGrid.getWidth() != grid.getWidth()
-                || currentGrid.getHeight() != grid.getHeight()
-                || currentGrid.getDepth() != grid.getDepth();
-        if (allocateTextures) {
-            deleteBilateralTextures();
-            GLES30.glGenTextures(3, bilateralTextures, 0);
-        }
-        int rowValues = grid.getWidth() * grid.getHeight() * grid.getDepth()
-                * BilateralGrid.COEFFICIENTS_PER_ROW;
-        for (int row = 0; row < 3; row++) {
-            if (bilateralUploadBuffers[row] == null
-                    || bilateralUploadBuffers[row].capacity() != rowValues) {
-                bilateralUploadBuffers[row] = ByteBuffer.allocateDirect(rowValues * Float.BYTES)
-                        .order(ByteOrder.nativeOrder()).asFloatBuffer();
-            }
-            FloatBuffer data = bilateralUploadBuffers[row];
-            grid.writeRow(row, data);
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE1 + row);
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
-            if (allocateTextures) {
-                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
-                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
-                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
-                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
-                GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE);
-                GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGBA16F,
-                        grid.getWidth(), grid.getHeight(), grid.getDepth(), 0,
-                        GLES30.GL_RGBA, GLES30.GL_FLOAT, data);
-            } else {
-                GLES30.glTexSubImage3D(GLES30.GL_TEXTURE_3D, 0, 0, 0, 0,
-                        grid.getWidth(), grid.getHeight(), grid.getDepth(),
-                        GLES30.GL_RGBA, GLES30.GL_FLOAT, data);
-            }
-        }
+        if (colorLutUploadBuffer == null) colorLutUploadBuffer = ByteBuffer
+                .allocateDirect(lut.rgb.length * Float.BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer();
+        colorLutUploadBuffer.clear(); colorLutUploadBuffer.put(lut.rgb).flip();
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, colorLutTexture);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGB16F, ColorLut.SIZE,
+                ColorLut.SIZE, ColorLut.SIZE, 0, GLES30.GL_RGB, GLES30.GL_FLOAT, colorLutUploadBuffer);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        currentGrid = grid;
+        currentLut = lut;
     }
 
-    private void bindBilateralGrid() {
+    private void bindColorLut() {
         GLES20.glUniform1i(enableIspPreview,
                 DEBUG_ISP_PREVIEW && ispPreviewTexture != 0 ? 1 : 0);
         if (DEBUG_ISP_PREVIEW && ispPreviewTexture != 0) {
@@ -269,31 +228,18 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ispPreviewTexture);
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         }
-        boolean enabled = currentGrid != null && bilateralTextures[0] != 0;
-        GLES20.glUniform1i(enableBilateralGrid, enabled ? 1 : 0);
-        if (!enabled) {
-            return;
-        }
-        GLES20.glUniform3f(bilateralGridSize, currentGrid.getWidth(),
-                currentGrid.getHeight(), currentGrid.getDepth());
-        GLES20.glUniform1f(bguBlend, 1.0f);
-        for (int row = 0; row < 3; row++) {
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE1 + row);
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
-            // Interpolation is disabled; the prev samplers alias the current grid
-            // so the shader's mix() is a no-op.
-            GLES20.glActiveTexture(GLES20.GL_TEXTURE5 + row);
-            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, bilateralTextures[row]);
-        }
+        boolean enabled = currentLut != null && colorLutTexture != 0;
+        GLES20.glUniform1i(enableColorLut, enabled ? 1 : 0);
+        if (!enabled) return;
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, colorLutTexture);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
     }
 
-    private void deleteBilateralTextures() {
-        if (bilateralTextures[0] != 0) {
-            GLES30.glDeleteTextures(3, bilateralTextures, 0);
-            Arrays.fill(bilateralTextures, 0);
-        }
+    private void deleteColorLutTexture() {
+        if (colorLutTexture != 0) GLES30.glDeleteTextures(1, new int[]{colorLutTexture}, 0);
+        colorLutTexture = 0;
     }
 
     public synchronized void setRawPreviewFrame(RawPreviewFrame frame) {
@@ -316,7 +262,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         if (target == null) {
             pendingRawFrame = null;
             rawFrameUpdatePending = false;
-            setBilateralGrid(null);
+            setColorLut(null);
             return;
         }
         long previewTimestamp = mSTexture.getTimestamp();
@@ -338,14 +284,11 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
                 estimatorInput = ByteBuffer.allocateDirect(bytes);
             }
             ByteBuffer output = target.pixels();
-            final boolean cpuNodes = useCpuPreviewNodes;
             long gpuNodesStarted = System.nanoTime();
-            if (!cpuNodes) {
-                streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
-                        surfaceWidth, surfaceHeight, target.getGains(), target.getToneCurve(),
-                        target.getParameters());
-                lastPreviewNodesMs = (System.nanoTime() - gpuNodesStarted) / 1_000_000f;
-            }
+            streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
+                    surfaceWidth, surfaceHeight, target.getGains(), target.getToneCurve(),
+                    target.getParameters());
+            lastPreviewNodesMs = (System.nanoTime() - gpuNodesStarted) / 1_000_000f;
             ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight(), estimatorInput);
             if (DEBUG_ISP_PREVIEW) {
                 uploadIspPreview(output, target.getWidth(), target.getHeight());
@@ -358,18 +301,11 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             final int fitHeight = target.getHeight();
             estimatorExecutor.execute(() -> {
                 try {
-                    if (cpuNodes) {
-                        long nodesStarted = System.nanoTime();
-                        RawSuperPixel.postProcessCpu(fitTarget, fitWidth, fitHeight,
-                                target.getGains(), target.getToneCurve(), target.getParameters());
-                        lastPreviewNodesMs = (System.nanoTime() - nodesStarted) / 1_000_000f;
-                    }
-                    BilateralGrid grid = bilateralGridEstimator.estimateRgba8(
-                            fitInput, fitTarget, fitWidth, fitHeight);
-                    recordBguTiming(bilateralGridEstimator.getLastTiming());
-                    setBilateralGrid(grid);
+                    ColorLut lut = colorLutEstimator.estimate(fitInput, fitTarget, fitWidth, fitHeight);
+                    recordLutTiming(colorLutEstimator.getLastTimeUs());
+                    setColorLut(lut);
                 } catch (Exception error) {
-                    Log.w("MainRenderer", "BGU worker failed: " + error.getMessage());
+                    Log.w("MainRenderer", "3D LUT worker failed: " + error.getMessage());
                 } finally {
                     target.close();
                     estimatorBusy.set(false);
@@ -381,41 +317,28 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         } catch (Exception error) {
             target.close();
             estimatorBusy.set(false);
-            Log.w("MainRenderer", "BGU preview estimate failed: " + error.getMessage());
+            Log.w("MainRenderer", "3D LUT preview estimate failed: " + error.getMessage());
         }
-    }
-
-    void setUseCpuPreviewNodes(boolean enabled) {
-        useCpuPreviewNodes = enabled;
-    }
-
-    boolean usesCpuPreviewNodes() {
-        return useCpuPreviewNodes;
     }
 
     float getLastPreviewNodesMs() {
         return lastPreviewNodesMs;
     }
 
-    private void recordBguTiming(BilateralGridEstimator.Timing timing) {
+    private void recordLutTiming(long timeUs) {
         long now = System.nanoTime();
-        if (bguTimingWindowStartedNs == 0) bguTimingWindowStartedNs = now;
-        bguSplatUs += timing.splatUs;
-        bguBlurUs += timing.blurUs;
-        bguSolveUs += timing.solveUs;
-        bguTotalUs += timing.totalUs;
-        bguTimingSamples++;
-        if (now - bguTimingWindowStartedNs < 1_000_000_000L) return;
-        float divisor = 1000.0f * bguTimingSamples;
+        if (lutTimingWindowStartedNs == 0) lutTimingWindowStartedNs = now;
+        lutTotalUs += timeUs;
+        lutTimingSamples++;
+        if (now - lutTimingWindowStartedNs < 1_000_000_000L) return;
         Log.d("MainRenderer", String.format(java.util.Locale.US,
-                "BGU %dx%d avg %.2f ms (splat %.2f, blur %.2f, solve %.2f), %.1f fits/s",
+                "3D LUT 17^3 from %dx%d avg %.2f ms, %.1f fits/s",
                 RawSuperPixel.OUTPUT_WIDTH, RawSuperPixel.OUTPUT_HEIGHT,
-                bguTotalUs / divisor, bguSplatUs / divisor, bguBlurUs / divisor,
-                bguSolveUs / divisor, bguTimingSamples * 1.0e9f /
-                        (now - bguTimingWindowStartedNs)));
-        bguTimingWindowStartedNs = now;
-        bguSplatUs = bguBlurUs = bguSolveUs = bguTotalUs = 0;
-        bguTimingSamples = 0;
+                lutTotalUs / (1000.0f * lutTimingSamples),
+                lutTimingSamples * 1.0e9f / (now - lutTimingWindowStartedNs)));
+        lutTimingWindowStartedNs = now;
+        lutTotalUs = 0;
+        lutTimingSamples = 0;
     }
 
     /** Debug: pushes the exact read-back pixels the estimator receives on screen. */

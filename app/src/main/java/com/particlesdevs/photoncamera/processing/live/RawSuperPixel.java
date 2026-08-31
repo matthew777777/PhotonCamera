@@ -22,8 +22,8 @@ import java.nio.ByteOrder;
  * later by StreamedPostPipeline.
  */
 public final class RawSuperPixel {
-    public static final int OUTPUT_WIDTH = 512;
-    public static final int OUTPUT_HEIGHT = 384;
+    public static final int OUTPUT_WIDTH = 320;
+    public static final int OUTPUT_HEIGHT = 240;
     private static final int BUFFER_COUNT = 3;
     private static final ByteBuffer[] OUTPUTS = new ByteBuffer[BUFFER_COUNT];
     private static final ByteBuffer[] TONE_CURVES = new ByteBuffer[BUFFER_COUNT];

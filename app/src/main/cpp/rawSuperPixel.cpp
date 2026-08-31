@@ -24,8 +24,8 @@
 #include <arm_neon.h>
 #endif
 
-#define OUTPUT_WIDTH 512
-#define OUTPUT_HEIGHT 384
+#define OUTPUT_WIDTH 320
+#define OUTPUT_HEIGHT 240
 #define HISTOGRAM_BINS 256
 #define HISTOGRAM_THREADS 4
 

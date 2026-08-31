@@ -65,9 +65,9 @@
                     android:background="#00000000"
                     tools:visibility="visible" />
 
-            <!-- Temporary BGU CPU/GPU power-comparison controls. -->
+            <!-- Temporary RAW-preview thermal HUD. -->
             <TextView
-                    android:id="@+id/bgu_thermal_hud"
+                    android:id="@+id/preview_thermal_hud"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_margin="12dp"
@@ -80,20 +80,6 @@
                     android:textSize="11sp"
                     app:layout_constraintEnd_toEndOf="@id/texture"
                     app:layout_constraintTop_toTopOf="@id/texture" />
-
-            <Button
-                    android:id="@+id/bgu_processor_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginTop="6dp"
-                    android:minWidth="0dp"
-                    android:minHeight="0dp"
-                    android:paddingHorizontal="12dp"
-                    android:text="Use GPU"
-                    android:textAllCaps="false"
-                    android:textSize="11sp"
-                    app:layout_constraintEnd_toEndOf="@id/bgu_thermal_hud"
-                    app:layout_constraintTop_toBottomOf="@id/bgu_thermal_hud" />
 
             <com.particlesdevs.photoncamera.ui.camera.views.viewfinder.HorizonIndicatorView
                 android:id="@+id/horizon_indicator_view"

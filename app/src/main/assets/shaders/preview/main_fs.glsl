@@ -4,15 +4,8 @@ uniform samplerExternalOES sTexture;
 uniform vec2 resolution;
 uniform bool enablePeak;
 uniform bool mirror;
-uniform bool enableBilateralGrid;
-uniform vec3 bilateralGridSize;
-uniform highp sampler3D bilateralGridR;
-uniform highp sampler3D bilateralGridG;
-uniform highp sampler3D bilateralGridB;
-uniform highp sampler3D bilateralGridRPrev;
-uniform highp sampler3D bilateralGridGPrev;
-uniform highp sampler3D bilateralGridBPrev;
-uniform float bguBlend;
+uniform bool enableColorLut;
+uniform highp sampler3D colorLut;
 uniform bool enableIspPreview;
 uniform sampler2D ispPreview;
 out vec4 Output;
@@ -27,25 +20,10 @@ void main() {
     }
     vec4 sourceColor = texture(sTexture, uv);
     vec4 color = sourceColor;
-    if (enableBilateralGrid) {
-        float guide = clamp(dot(sourceColor.rgb, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
-        // Address texel centers while making uv=0/1 select the first/last cell.
-        vec3 gridPosition = (vec3(uv, guide) * (bilateralGridSize - 1.0) + 0.5)
-                / bilateralGridSize;
-        vec4 affineInput = vec4(sourceColor.rgb, 1.0);
-        //vec4 rowR = mix(texture(bilateralGridRPrev, gridPosition),
-        //                texture(bilateralGridR, gridPosition), bguBlend);
-        //vec4 rowG = mix(texture(bilateralGridGPrev, gridPosition),
-        //                texture(bilateralGridG, gridPosition), bguBlend);
-        //vec4 rowB = mix(texture(bilateralGridBPrev, gridPosition),
-        //                texture(bilateralGridB, gridPosition), bguBlend);
-        vec4 rowR = texture(bilateralGridR, gridPosition);
-        vec4 rowG = texture(bilateralGridG, gridPosition);
-        vec4 rowB = texture(bilateralGridB, gridPosition);
-        color.rgb = clamp(vec3(
-                dot(rowR, affineInput),
-                dot(rowG, affineInput),
-                dot(rowB, affineInput)), 0.0, 1.0);
+    if (enableColorLut) {
+        // Map [0,1] onto the centers of the first/last 17^3 texels.
+        vec3 lutUv = (clamp(sourceColor.rgb, 0.0, 1.0) * 16.0 + 0.5) / 17.0;
+        color.rgb = texture(colorLut, lutUv).rgb;
     }
     vec2 size = resolution;
     // focus peaking

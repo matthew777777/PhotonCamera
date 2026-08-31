@@ -310,18 +310,12 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
     }
 
     private void initBguThermalHud() {
-        cameraFragmentBinding.layoutViewfinder.bguProcessorSwitch.setOnClickListener(view -> {
-            boolean cpu = !textureView.usesCpuPreviewNodes();
-            textureView.setUseCpuPreviewNodes(cpu);
-            updateThermalHud();
-        });
         thermalHudHandler.removeCallbacks(thermalHudUpdater);
         thermalHudHandler.post(thermalHudUpdater);
     }
 
     private void updateThermalHud() {
         if (cameraFragmentBinding == null || textureView == null || activity == null) return;
-        boolean cpu = textureView.usesCpuPreviewNodes();
         int status = -1;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             PowerManager power = (PowerManager) activity.getSystemService(android.content.Context.POWER_SERVICE);
@@ -334,10 +328,9 @@ public class CameraFragment extends Fragment implements BaseActivity.BackPressed
             if (raw != Integer.MIN_VALUE) batteryC = raw / 10f;
         }
         String temperature = Float.isNaN(batteryC) ? "--.-" : String.format(Locale.ROOT, "%.1f", batteryC);
-        cameraFragmentBinding.layoutViewfinder.bguThermalHud.setText(String.format(Locale.ROOT,
-                "%s  %.1f ms\nThermal: %s  %s°C", cpu ? "CPU" : "GPU",
+        cameraFragmentBinding.layoutViewfinder.previewThermalHud.setText(String.format(Locale.ROOT,
+                "RAW nodes GPU  %.1f ms\n3D LUT 17³ / 320×240\nThermal: %s  %s°C",
                 textureView.getLastPreviewNodesMs(), thermalStatusName(status), temperature));
-        cameraFragmentBinding.layoutViewfinder.bguProcessorSwitch.setText(cpu ? "Use GPU" : "Use CPU");
     }
 
     private static String thermalStatusName(int status) {
