@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Storage: read for gallery (system camera images). Write only via SAF on Android 11+. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+            android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+            android:maxSdkVersion="29" />
+
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" tools:ignore="HighSamplingRate" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    
+    <!-- Removed MANAGE_EXTERNAL_STORAGE - now using Storage Access Framework (SAF)
+         for folder access on Android 11+. This is better for Play Store compliance. -->
+
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus"
+        android:required="true"
+        tools:ignore="UnnecessaryRequiredFeature" />
+    <uses-feature android:name="android.hardware.camera.capability.raw" />
+
+    <application
+        android:name="com.particlesdevs.photoncamera.app.PhotonCamera"
+        android:launchMode="singleTask"
+        android:taskAffinity=""
+        android:hardwareAccelerated="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:largeHeap="true"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Photon.BaseApp"
+        tools:targetApi="q">
+        <activity
+            android:name="com.particlesdevs.photoncamera.ui.settings.SettingsActivity"
+            android:theme="@style/Theme.Photon.SettingsActivity" />
+        <activity
+            android:name="com.particlesdevs.photoncamera.ui.SplashActivity"
+            android:theme="@style/Theme.Photon.Splash"
+                android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.action.IMAGE_CAPTURE" />
+                <action android:name="android.media.action.STILL_IMAGE_CAMERA_SECURE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.media.action.STILL_IMAGE_CAMERA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+                android:name="com.particlesdevs.photoncamera.gallery.ui.GalleryActivity"
+                android:label="@string/gallery_name"
+                android:taskAffinity=""
+                android:theme="@style/Theme.Photon.BaseApp"
+                android:icon="@mipmap/ic_gallery_launcher"
+                android:exported="true">
+            <!-- REVIEW intent - Camera apps use this to review captured images -->
+            <intent-filter>
+                <action android:name="com.android.camera.action.REVIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.android.camera.action.REVIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            
+            <!-- PICK intent - For selecting images/videos -->
+            <intent-filter>
+                <action android:name="android.intent.action.PICK" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PICK" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            
+            <!-- VIEW intent - View specific images/videos from other apps -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            
+            <!-- GET_CONTENT intent - Select content from gallery -->
+            <intent-filter>
+                <action android:name="android.intent.action.GET_CONTENT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.GET_CONTENT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            
+            <!-- Gallery app intent - Registers as a gallery app -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.dir/image" />
+            </intent-filter>
+        </activity>
+
+        <!-- Activity alias for launcher icon - can be enabled/disabled programmatically -->
+        <activity-alias
+                android:name="com.particlesdevs.photoncamera.gallery.ui.GalleryActivityLauncher"
+                android:targetActivity="com.particlesdevs.photoncamera.gallery.ui.GalleryActivity"
+                android:label="@string/gallery_name"
+                android:icon="@mipmap/ic_gallery_launcher"
+                android:enabled="true"
+                android:exported="true">
+            <!-- Launcher intent - Shows PGallery in app drawer -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity
+            android:name="com.particlesdevs.photoncamera.ui.camera.CameraActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize" />
+        <!-- <activity android:name="com.particlesdevs.photoncamera.gallery.ui.GalleryActivity" /> -->
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepaths" />
+        </provider>
+
+        <meta-data
+            android:name="firebase_performance_logcat_enabled"
+            android:value="false" />
+    </application>
+</manifest>

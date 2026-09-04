@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <data>
+
+        <import type="android.view.View" />
+
+        <variable
+                name="galleryitemclickedlistener"
+                type="com.particlesdevs.photoncamera.gallery.interfaces.GalleryItemClickedListener" />
+
+        <variable
+                name="galleryitem"
+                type="com.particlesdevs.photoncamera.gallery.model.GalleryItem" />
+
+    </data>
+
+    <FrameLayout
+            android:id="@+id/square_image_card_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="1dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:animateLayoutChanges="true">
+
+        <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:cardCornerRadius="@dimen/standard_0"
+                android:id="@+id/image_card"
+                app:strokeWidth="@dimen/standard_0"
+                android:onClick="@{(v)-> galleryitemclickedlistener.onItemClicked(v,galleryitem)}"
+                android:onLongClickListener="@{(v)-> galleryitemclickedlistener.onItemLongClicked(v,galleryitem)}">
+
+            <com.particlesdevs.photoncamera.gallery.views.SquareImageView
+                    android:id="@+id/square_image_view"
+                    android:background="@color/grid_thumbnail_background"
+                    android:scaleType="centerCrop"
+                    android:layout_width="match_parent"
+                    app:loadImage="@{galleryitem}"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center" />
+
+            <TextView
+                    android:id="@+id/thumb_caption_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:visibility="gone"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:textAlignment="center"
+                    tools:text="CAMERA"
+                    android:text="@{galleryitem.displayName}"
+                    android:padding="5dp"
+                    android:textSize="12sp"
+                    android:textAppearance="@style/BoldTextWithShadow" />
+        </com.google.android.material.card.MaterialCardView>
+
+
+        <TextView
+                android:id="@+id/thumb_tag_text"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_gravity="end"
+                android:textAlignment="textEnd"
+                tools:text="JPG"
+                android:text="@{galleryitem.mediaTypeTag}"
+                android:padding="5dp"
+                android:textSize="12sp"
+                android:textAppearance="@style/BoldTextWithShadow"
+                />
+
+        <ImageView
+                android:id="@+id/selection_circle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_thumbnail_selected_radio"
+                android:visibility="gone"
+                android:selected="@{galleryitem.checked}"
+                tools:visibility="visible"
+                >
+
+        </ImageView>
+    </FrameLayout>
+
+</layout>

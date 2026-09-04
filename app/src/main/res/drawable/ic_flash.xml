@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<inset android:inset="@dimen/topbar_button_inset"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <selector>
+        <item android:drawable="@drawable/ic_flash_auto" app:flash_auto="true" />
+        <item android:drawable="@drawable/ic_flash_off" app:flash_off="true" />
+        <item android:drawable="@drawable/ic_flash_on" app:flash_on="true" />
+        <item android:drawable="@drawable/ic_torch" app:flash_torch="true" />
+        <item android:drawable="@drawable/ic_flash_off" />
+    </selector>
+</inset>

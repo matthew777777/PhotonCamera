@@ -1,0 +1,15 @@
+sensor_0
+NoiseModelA = { 4.9889366e-07, 4.9889366e-07, 4.9889366e-07, 4.9889366e-07 }
+NoiseModelB = { 1.0785347e-05, 1.0785347e-05, 1.0785347e-05, 1.0785347e-05 }
+NoiseModelC = { 1.9878738e-12, 1.9878738e-12, 1.9878738e-12, 1.9878738e-12 }
+NoiseModelD = { -8.484603e-08, -8.484603e-08, -8.484603e-08, -8.484603e-08 }
+captureSharpeningS = 1.1
+captureSharpeningIntense = 1.0
+
+sensor_1
+NoiseModelA = { 3.0713472e-07, 3.2225109e-07, 3.2232280e-07, 3.0122168e-07 }
+NoiseModelB = { 1.8906527e-05, 1.8055744e-05, 1.7891396e-05, 2.5690638e-05 }
+NoiseModelC = { 2.8797853e-13, 2.6964156e-13, 2.6413135e-13, 3.0998058e-13 }
+NoiseModelD = { 1.9206132e-07, 1.3059985e-07, 1.3975737e-07, 8.5242348e-08 }
+captureSharpeningS = 1.3
+captureSharpeningIntense = 1.5

@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="cfapat_entries">
+        <item>AUTO</item>
+        <item>RGGB</item>
+        <item>BGGR</item>
+        <item>GRBG</item>
+        <item>GBRG</item>
+        <item>MONO</item>
+        <item>QUAD</item>
+    </string-array>
+    <string-array name="cfapat_entryValues">
+        <item>-1</item>
+        <item>0</item>
+        <item>3</item>
+        <item>1</item>
+        <item>2</item>
+        <item>4</item>
+        <item>-2</item>
+    </string-array>
+    <string-array name="alignset_entries">
+        <item>PCam New</item>
+    </string-array>
+    <string-array name="colorset_entries">
+        <item>Auto</item>
+        <item>Characteristics</item>
+        <item>Capture</item>
+    </string-array>
+
+    <string-array name="focuspeakset_entries">
+        <item>Off</item>
+        <item>On</item>
+        <item>@string/focus_peaking_auto</item>
+    </string-array>
+    <string-array name="preview_format_entries">
+        <item>YUV_420_888</item>
+        <item>JPEG</item>
+        <item>HEIC</item>
+        <item>None</item>
+    </string-array>
+    <string-array name="location_geotag_entryValues">
+        <item>Off</item>
+        <item>High Accuracy</item>
+        <item>Network</item>
+    </string-array>
+    <string-array name="alignset_entryValues">
+        <item>1</item>
+    </string-array>
+    <string-array name="colorset_entryValues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+    <string-array name="focuspeakset_entryValues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+    <string-array name="preview_format_entryValues">
+        <item>35</item>
+        <item>256</item>
+        <item>1212500294</item>
+        <item>0</item>
+    </string-array>
+    <string-array name="theme_entries">
+        <item>@string/theme_follow_system</item>
+        <item>@string/theme_light</item>
+        <item>@string/theme_dark</item>
+    </string-array>
+    <string-array name="theme_entryValues">
+        <item>-1</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+    <string-array name="theme_accent_entries">
+        <item>@string/Default</item>
+        <item>Eszdman</item>
+        <item>@string/theme_accent_blue</item>
+        <item>@string/theme_accent_red</item>
+        <item>@string/theme_accent_orange</item>
+        <item>@string/theme_accent_green</item>
+        <item>@string/theme_accent_pink</item>
+        <item>@string/theme_accent_cyan</item>
+        <item>@string/theme_accent_teal</item>
+        <item>@string/theme_accent_white</item>
+    </string-array>
+    <string-array name="theme_accent_entryValues">
+        <item>default</item>
+        <item>eszdman</item>
+        <item>blue</item>
+        <item>red</item>
+        <item>orange</item>
+        <item>green</item>
+        <item>pink</item>
+        <item>cyan</item>
+        <item>teal</item>
+        <item>white</item>
+    </string-array>
+    <string-array name="af_mode_entries">
+        <item>Continuous Picture</item>
+        <item>Continuous Video</item>
+        <item>Auto</item>
+    </string-array>
+    <string-array name="af_mode_entryvalues">
+        <item>4</item>
+        <item>3</item>
+        <item>1</item>
+    </string-array>
+    <string-array name="raw_mode_entries">
+        <item>JPEG</item>
+        <item>RAW + JPEG</item>
+        <item>RAW</item>
+    </string-array>
+    <string-array name="raw_mode_entryvalues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+    <string-array name="vf_grid_entries">
+        <item>@string/off</item>
+        <item>@string/three_x3</item>
+        <item>@string/four_x4</item>
+        <item>@string/golden_ratio</item>
+        <item>@string/diag_triangle</item>
+    </string-array>
+    <string-array name="vf_grid_entryvalues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+    </string-array>
+    <integer-array name="countdowntimer_entryvalues">
+        <item>0</item>
+        <item>3</item>
+        <item>10</item>
+    </integer-array>
+    <string-array name="video_resolution_entries">
+        <item>@string/video_res_4k</item>
+        <item>@string/video_res_fhd</item>
+        <item>@string/video_res_hd</item>
+    </string-array>
+    <string-array name="video_resolution_entryvalues">
+        <item>3840x2160</item>
+        <item>1920x1080</item>
+        <item>1280x720</item>
+    </string-array>
+    <string-array name="afdata_entries">
+        <item>Off</item>
+        <item>HUD</item>
+        <item>HUD + Histogram</item>
+        <item>Full Debug</item>
+    </string-array>
+    <string-array name="afdata_entryValues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+    <string-array name="mfsr_output_entries">
+        <item>Standard merged RAW</item>
+        <item>Mosaic SR DNG (experimental)</item>
+    </string-array>
+    <string-array name="mfsr_output_entryvalues">
+        <item>standard</item>
+        <item>mosaic_sr</item>
+    </string-array>
+</resources>

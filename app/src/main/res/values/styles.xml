@@ -1,0 +1,88 @@
+<resources>
+    <!--Activity Themes-->
+
+    <!-- Base application theme. -->
+    <style name="Theme.Photon.BaseApp" parent="@style/Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="iconTint">?android:textColorPrimary</item>
+        <item name="colorPrimary">@color/colorAccent</item>
+        <item name="colorPrimaryContainer">@color/colorPrimaryContainer</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="cameraFragmentBackground">@android:color/black</item>
+        <item name="modeSelectedTextColor">?attr/colorControlActivated</item>
+        <item name="processingProgressColor">?attr/colorAccent</item>
+        <item name="alertDialogTheme">@style/AlertDialogTheme</item>
+        <item name="android:fontFamily">@font/open_sans</item>
+    </style>
+
+    <style name="Theme.Photon.Splash" parent="Theme.Photon.BaseApp">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+
+    <style name="Theme.Photon.SettingsActivity" parent="Theme.Photon.BaseApp">
+
+    </style>
+
+    <!--    <style name="Theme.Photon.CameraActivity" parent="Theme.AppCompat.NoActionBar">-->
+    <!--        <item name="android:windowNoTitle">true</item>-->
+    <!--        <item name="android:windowActionBar">false</item>-->
+    <!--        <item name="android:windowFullscreen">true</item>-->
+    <!--        <item name="android:windowContentOverlay">@null</item>-->
+    <!--        <item name="colorPrimary">@color/colorPrimary</item>-->
+    <!--        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>-->
+    <!--        <item name="colorAccent">@color/colorAccent</item>-->
+    <!--    </style>-->
+
+    <!--Other Styles-->
+    <style name="BoldTextWithShadow">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:shadowColor">@android:color/black</item>
+        <item name="android:shadowDx">1</item>
+        <item name="android:shadowDy">1</item>
+        <item name="android:shadowRadius">1</item>
+    </style>
+    <style name="TextWithShadow" parent="BoldTextWithShadow">
+        <item name="android:textStyle">normal</item>
+        <item name="android:shadowRadius">2</item>
+    </style>
+
+    <style name="AuxButtonText">
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/black_white_selectable</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="PreferenceActionBarStyle">
+        <item name="titleTextAppearance">@style/SettingsTitleTextAppearance</item>
+    </style>
+
+    <style name="SettingsTitleTextAppearance">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textColor">?android:textColorPrimary</item>
+    </style>
+
+    <style name="AlertDialogTheme" parent="ThemeOverlay.Material3.Dialog.Alert">
+        <item name="dialogCornerRadius">16dp</item>
+        <item name="buttonBarNegativeButtonStyle">@style/NegativeButtonStyle</item>
+        <item name="buttonBarPositiveButtonStyle">@style/PositiveButtonStyle</item>
+    </style>
+
+    <style name="NegativeButtonStyle" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="strokeColor">?colorOnSurface</item>
+        <item name="strokeWidth">1dp</item>
+
+    </style>
+
+    <style name="PositiveButtonStyle" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:textColor">?colorOnPrimary</item>
+        <item name="backgroundTint">?colorPrimary</item>
+    </style>
+
+</resources>

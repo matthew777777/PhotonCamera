@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:tools="http://schemas.android.com/tools"
+        tools:context=".gallery.ui.fragments.ImageViewerFragment"
+        >
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_height="match_parent"
+            android:layout_width="match_parent"
+            android:animateLayoutChanges="true">
+
+        <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#000"
+                android:onClickListener="@{onclickempty}"
+                tools:visibility="gone" />
+
+        <androidx.viewpager.widget.ViewPager
+                android:id="@+id/view_pager"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#000"
+                tools:visibility="gone">
+
+        </androidx.viewpager.widget.ViewPager>
+        <include
+                layout="@layout/gallery_viewer_top_buttons"
+                android:layout_width="0dp"
+                android:layout_height="100dp"
+                android:id="@+id/top_controls_container"
+                android:visibility='@{buttons_visible ? View.VISIBLE : View.INVISIBLE, default="invisible"}'
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintVertical_bias="0"
+                tools:visibility="visible"
+                />
+        <include
+                layout="@layout/exif_dialog"
+                android:id="@+id/exif_layout"
+                android:layout_width="@dimen/exif_dialog_width"
+                android:layout_height="wrap_content"
+                android:visibility='@{exif_dialog_visible ? View.VISIBLE : View.INVISIBLE, default="invisible"}'
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.15"
+                app:layout_constraintHorizontal_bias="0.05"
+                tools:visibility="visible"/>
+
+        <include
+                layout="@layout/gallery_viewer_bottom_buttons"
+                android:id="@+id/bottom_controls_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility='@{buttons_visible ? View.VISIBLE : View.INVISIBLE, default="invisible"}'
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="1"
+                tools:visibility="visible"
+                />
+        <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:id="@+id/mini_exif_tv"
+                android:textSize="13sp"
+                android:padding="5dp"
+                android:textAppearance="@style/TextWithShadow"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/scale_percent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="1"
+                android:text="@{exifmodel.miniText}"
+                android:visibility='@{mini_exif_visible ? View.VISIBLE : View.INVISIBLE, default="invisible"}'
+
+                />
+        <TextView
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:id="@+id/scale_percent"
+                android:textSize="13sp"
+                android:padding="5dp"
+                android:textAppearance="@style/TextWithShadow"
+                app:layout_constraintStart_toEndOf="@id/mini_exif_tv"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="1"
+                android:text="@{scale}"
+                android:visibility='@{mini_exif_visible ? View.VISIBLE : View.INVISIBLE, default="invisible"}'
+                />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</layout>

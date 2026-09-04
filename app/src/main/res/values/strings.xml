@@ -1,0 +1,205 @@
+<resources>
+    <string name="version_summary" translatable="false">v%1$s\n%2$s</string>
+    <string name="iso" translatable="false">"ISO "</string>
+    <string name="icon_string" translatable="false">Icon</string>
+    <string name="backup_file_name" translatable="false">PCAM_BKP_%1$s</string>
+    <string name="app_name" translatable="false">PhotonCamera</string>
+    <string name="gallery_name" translatable="false">PGallery</string>
+    <string name="device_support" translatable="false">PhotonCamera Pro</string>
+    <string name="request_permission">This app needs camera permission.</string>
+    <string name="camera_error">This device doesn\'t support Camera2 API.</string>
+    <string name="luma_nr_count">Luminance Noise Reduction Strength</string>
+    <string name="frame_count">HDR Frame Count</string>
+    <string name="disable_aligning">Disable Aligning</string>
+    <string name="chroma_nr_count">Chroma NR Count</string>
+    <string name="enhanced_processing">Enhanced Processing</string>
+    <string name="settings">Settings</string>
+
+    <string name="comp">Compressor</string>
+    <string name="gain">Gain</string>
+    <string name="shadows">Shadows</string>
+    <string name="contrmul">Contrast Multiply</string>
+    <string name="contrast">Contrast</string>
+    <string name="contrconst">Constant</string>
+    <string name="saturation">Saturation</string>
+    <string name="expocompensation">Exposure Compensation</string>
+    <string name="jpg" translatable="false">JPEG</string>
+    <string name="hdrx" translatable="false">HDRX</string>
+    <string name="ultrahdr">Ultra HDR</string>
+    <string name="ultrahdr_summary">Encode JPEGs with an Ultra HDR gain map (requires a second, lightweight tone pass)</string>
+    <string name="sharpness">Sharpness</string>
+    <string name="turn_on_grid">Show Grid</string>
+    <string name="noise_reduction_str">Noise Reduction Strength</string>
+    <string name="noise_merge_str">Noise Merge Strength</string>
+    <string name="raw">Save</string>
+    <string name="turn_on_round_edges">Enable Round Edges</string>
+    <string name="enable_remosaic">Enable Remosaic</string>
+    <string name="general">General</string>
+    <string name="telegram">Telegram Group ↗</string>
+    <string name="hdrxNR">Noise Reduction</string>
+    <string name="turn_on_watermark">Watermark</string>
+    <string name="sure_delete">Are you sure to delete this image?</string>
+    <string name="sure_delete_multiple">Are you sure to delete %1$s image(s)? %2$s will be cleared.</string>
+    <string name="cancel">Cancel</string>
+    <string name="yes" translatable="false">Yes</string>
+    <string name="image_deleted">Image Deleted</string>
+    <string name="close">Close</string>
+    <string name="unknown">Unknown</string>
+    <string name="resolution">"Resolution "</string>
+    <string name="size">"File Size "</string>
+    <string name="device">"Device "</string>
+    <string name="date">"Date "</string>
+    <string name="exposure_time">"Exposure "</string>
+    <string name="aperture">"Aperture "</string>
+    <string name="flength">"Focal Length "</string>
+    <string name="info">Info</string>
+    <string name="filename">"File Name "</string>
+    <string name="turn_on_afdata">Viewfinder HUD / Debug</string>
+    <string name="afdata_summary">Viewfinder overlay: HUD, live histogram, or full raw sensor debug data</string>
+    <string name="histogram">Histogram</string>
+    <string name="export_settings">Export Settings</string>
+    <string name="import_settings">Import Settings</string>
+    <string name="pref_show_grid_title">Show Grid</string>
+    <string name="cfa">Bayer Filter Pattern</string>
+    <string name="align_method">Align Method</string>
+    <string name="color_method">Color Method</string>
+    <string name="focus_peaking">Focus Peaking</string>
+    <string name="focus_peaking_auto">Auto</string>
+    <string name="show_horizon_on_preview">Show horizon on preview</string>
+    <string name="preview_format">Preview Format</string>
+    <string name="pref_save_per_lens_string">Per Lens Settings</string>
+    <string name="compressor">Compressor</string>
+    <string name="about">About</string>
+    <string name="camera_sounds">Camera Sounds</string>
+    <string name="energy_saving">Battery Saver</string>
+    <string name="hide_gallery_icon">Hide Gallery Icon</string>
+    <string name="theme">Theme</string>
+    <string name="theme_follow_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_accent">Theme Color</string>
+    <string name="Default">Default</string>
+    <string name="theme_accent_blue">Blue</string>
+    <string name="theme_accent_red">Red</string>
+    <string name="theme_accent_orange">Orange</string>
+    <string name="theme_accent_green">Green</string>
+    <string name="theme_accent_pink">Pink</string>
+    <string name="theme_accent_cyan">Cyan</string>
+    <string name="theme_accent_teal">Teal</string>
+    <string name="theme_accent_white">White</string>
+    <string name="show_gradient">Show Gradient Background</string>
+    <string name="unprocessed_raw">Unprocessed RAW</string>
+    <string name="frame_count_summary">Number of image frames to be stacked</string>
+    <string name="photon_camera_summary">An Open-Source Android Camera with Enhanced Image Processing</string>
+    <string name="version_title">Version</string>
+    <string name="contributors_title">Contributors ↗</string>
+    <string name="eis_toggle_text">Image Stabilization</string>
+    <string name="fps_60_toggle_text">Frame rate</string>
+    <string name="fps_auto" translatable="false">AUTO</string>
+    <string name="fps_24" translatable="false">24fps</string>
+    <string name="fps_30" translatable="false">30fps</string>
+    <string name="fps_60" translatable="false">60fps</string>
+    <string name="quad_bayer_toggle_text">Quad Bayer Res. (48/64 MP)</string>
+    <string name="backup_restore">Backup/Restore Settings</string>
+    <string name="reset">Reset All</string>
+    <string name="reset_preferences_warning">This will reset all settings to their default values. Continue?</string>
+    <string name="backup">Backup</string>
+    <string name="backup_summary_json">Export all settings to JSON (includes per-lens settings)</string>
+    <string name="app_will_restart">App Will Restart</string>
+    <string name="restore">Restore</string>
+    <string name="restore_summary_json">Import settings from JSON or XML file</string>
+    <string name="empty_file_name_error">File name cannot be an empty string</string>
+    <string name="device_unsupport">Warning: Uncalibrated device</string>
+    <string name="af_mode">Auto Focus Mode</string>
+    <string name="long_press_to_deselect">Long press button to deselect all</string>
+    <string name="multiple_deleted_success">%1$s file(s) deleted! %2$s cleared.</string>
+    <string name="supported_devices">Supported Devices</string>
+    <string name="list_not_loaded" translatable="false"><![CDATA[<list not loaded>]]></string>
+    <string name="fetch_configurations">Fetch Configurations</string>
+    <string name="fetch_configurations_summary">Download device-specific tuning from the network and update cached settings</string>
+    <string name="advanced">Advanced</string>
+    <string name="sensor_configurations">Sensor Configurations</string>
+    <string name="sensor_configurations_summary">Per-sensor tuning parameters (physical camera id)</string>
+    <string name="pref_category_device_key_title">Device</string>
+    <string name="this_device">Your Device - %1$s</string>
+    <string name="sync_on">Sync. On</string>
+    <string name="sync_off">Sync. Off</string>
+    <string name="mode_unlimited">Unlimited</string>
+    <string name="mode_rawvideo">RAW Video</string>
+    <string name="mode_motion">Motion</string>
+    <string name="mode_photo">Photo</string>
+    <string name="mode_night">Night</string>
+    <string name="mode_video">Video</string>
+    <string name="countdown_timer">Countdown Timer</string>
+    <string name="flash">Flash</string>
+    <string name="torch">Torch</string>
+    <string name="on">On</string>
+    <string name="auto">Auto</string>
+    <string name="t_3s">3s</string>
+    <string name="t_10s">10s</string>
+    <string name="raw_string" translatable="false">RAW</string>
+    <string name="raw_plus_jpg" translatable="false">RAW + JPEG</string>
+    <string name="jpg_only" translatable="false">JPEG</string>
+    <string name="off">Off</string>
+    <string name="golden_ratio">Golden Ratio</string>
+    <string name="diag_triangle">Diag. Triangles</string>
+    <string name="three_x3" translatable="false">3x3</string>
+    <string name="four_x4" translatable="false">4x4</string>
+    <string name="processing_processname">Processing %1$s...</string>
+    <string name="turn_on_system_nr">System Noise Reduction</string>
+    <string name="wide169" translatable="false">16:9</string>
+    <string name="binning">Process 4x lower resolution</string>
+    <string name="gallery_folders">Gallery Folders</string>
+    <string name="options">Options</string>
+    <string name="session_on_configure_failed">System session configuration failed try changing preview format</string>
+
+  <!-- Metering mode strings -->
+    <string name="ae_metering_off">Auto</string>
+    <string name="ae_metering_center">Center Weighted</string>
+    <string name="ae_metering_average">Frame Average</string>
+    <string name="ae_metering_spot">Spot Metering</string>
+    <string name="ae_metering_std">AE Metering</string>
+    <string name="pref_ae_metering_std_key" translatable="false">pref_ae_metering_std_mode_key</string>
+
+    <!-- Bracketing mode strings -->
+    <string name="exposure_bracketing">Exposure Bracketing</string>
+    <string name="bracketing_off">Off (1x)</string>
+    <string name="bracketing_normal">Normal (1x, 4x)</string>
+    <string name="bracketing_high">High (1x, 8x)</string>
+    <string name="pref_bracketing_key" translatable="false">pref_bracketing_mode_key</string>
+
+    <!-- Video Settings -->
+    <string name="video_settings">Video Settings</string>
+    <string name="raw_video_settings">Raw Video Settings</string>
+    <string name="rawvideo_downscale_4x">Downscale 4x</string>
+    <string name="rawvideo_write_zip">Write ZIP</string>
+    <string name="rawvideo_crop_169">Crop to 16:9</string>
+    <string name="photo_settings">Photo Settings</string>
+    <string name="video_resolution">Video Resolution</string>
+    <string name="pref_video_resolution_key" translatable="false">pref_video_resolution_key</string>
+    <string name="pref_video_resolution_default" translatable="false">1920x1080</string>
+    <string name="video_res_4k" translatable="false">3840x2160 (4K)</string>
+    <string name="video_res_fhd" translatable="false">1920x1080 (Full HD)</string>
+    <string name="video_res_hd" translatable="false">1280x720 (HD)</string>
+
+    <!-- Storage Access Framework folder picker -->
+    <string name="select_dcim_folder_hint">Select the DCIM folder for saving photos</string>
+
+    <!-- Permission rationale dialogs -->
+    <string name="ok">OK</string>
+    <string name="perm_open_settings">Open Settings</string>
+    <string name="perm_rationale_camera_title">Camera &amp; Microphone Access</string>
+    <string name="perm_rationale_camera_message">PhotonCamera needs access to the camera and microphone to capture photos and record video.</string>
+    <string name="perm_rationale_storage_title">Storage Access</string>
+    <string name="perm_rationale_storage_message">Storage access is required to save your photos and videos.</string>
+    <string name="perm_rationale_media_title">Photo &amp; Video Library Access</string>
+    <string name="perm_rationale_media_message">Access to photos and videos is required to display your media in the gallery.\n\nPlease grant full access — partial selection is not supported by this app.</string>
+    <string name="perm_rationale_media_settings">Full access to photos and videos is required for the gallery. Please open app settings and grant full access.</string>
+    <string name="perm_rationale_audio_title">Microphone Access</string>
+    <string name="perm_rationale_audio_message">Microphone access is required for video recording with audio.</string>
+    <string name="perm_rationale_dcim_title">DCIM Folder Access</string>
+    <string name="perm_rationale_dcim_message">Access to the DCIM folder is required for saving RAW video files and reading device custom configs.</string>
+    <string name="mfsr_output_title">RAW burst reconstruction</string>
+    <string name="mfsr_keep_burst_title">Keep source RAW burst</string>
+    <string name="mfsr_keep_burst_summary">Save the original Bayer frames next to the reconstructed DNG</string>
+</resources>

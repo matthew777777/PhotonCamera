@@ -1,0 +1,560 @@
+package com.particlesdevs.photoncamera.settings;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.res.Resources;
+import com.particlesdevs.photoncamera.util.Log;
+
+import androidx.annotation.StringRes;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.particlesdevs.photoncamera.R;
+import com.particlesdevs.photoncamera.app.PhotonCamera;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Created by Vibhor 06/09/2020
+ */
+public class PreferenceKeys {
+    public static final String SCOPE_GLOBAL = SettingsManager.SCOPE_GLOBAL;
+    private static final String TAG = "PreferenceKeys";
+    private static final Set<String> COMMON_KEYS = new HashSet<>();
+    private static final String PER_LENS_KEY_PREFIX = "settings_for_camera_";
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static PreferenceKeys preferenceKeys;
+
+    static {
+        COMMON_KEYS.add(Key.CAMERA_ID.mValue);
+        COMMON_KEYS.add(Key.KEY_SAVE_PER_LENS_SETTINGS.mValue);
+        COMMON_KEYS.add(Key.KEY_SHOW_AF_DATA.mValue);
+        COMMON_KEYS.add(Key.KEY_THEME_ACCENT.mValue);
+        COMMON_KEYS.add(Key.KEY_THEME.mValue);
+        COMMON_KEYS.add(Key.KEY_SHOW_GRID.mValue);
+        COMMON_KEYS.add(Key.KEY_SHOW_WATERMARK.mValue);
+        COMMON_KEYS.add(Key.KEY_SHOW_ROUND_EDGE.mValue);
+        COMMON_KEYS.add(Key.KEY_CAMERA_SOUNDS.mValue);
+        COMMON_KEYS.add(Key.KEY_SHOW_GRADIENT.mValue);
+        COMMON_KEYS.add(Key.KEY_AF_MODE.mValue);
+        COMMON_KEYS.add(Key.KEY_FOCUS_PEAK.mValue);
+        COMMON_KEYS.add(Key.KEY_AE_MODE.mValue);
+        COMMON_KEYS.add(Key.CAMERA_MODE.mValue);
+        COMMON_KEYS.add(Key.KEY_SAVE_RAW.mValue);
+    }
+
+    private final SettingsManager settingsManager;
+
+    private PreferenceKeys(SettingsManager settingsManager) {
+        this.settingsManager = settingsManager;
+    }
+
+    public static void initialise(SettingsManager settingsManager) {
+        preferenceKeys = new PreferenceKeys(settingsManager);
+    }
+    public static void setDefaults(Context context) {
+        SettingsManager settingsManager = preferenceKeys.settingsManager;
+        Resources resources = context.getResources();
+
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_HDRX, resources.getBoolean(R.bool.pref_hdrx_mode_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_EIS_PHOTO, resources.getBoolean(R.bool.pref_eis_photo_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_QUAD_BAYER, resources.getBoolean(R.bool.pref_quad_bayer_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_REMOSAIC, resources.getBoolean(R.bool.pref_remosaic_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_ULTRAHDR, resources.getBoolean(R.bool.pref_ultrahdr_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_FPS_PREVIEW, 0);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_MODE, resources.getString(R.string.pref_ae_mode_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.CAMERA_MODE, resources.getString(R.string.pref_camera_mode_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_COUNTDOWN_TIMER, 0);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_BRACKETING_MODE, 0); // Default to disable bracketing
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD, -1); // Default to Off
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, resources.getString(R.string.pref_video_resolution_default));
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_DOWNSCALE_4X, false);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_WRITE_ZIP, true);
+        settingsManager.setInitial(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_CROP_169, true);
+
+        settingsManager.setDefaults(Key.CAMERA_ID, resources.getString(R.string.camera_id_default), new String[]{"0", "1"});
+        settingsManager.setDefaults(Key.TONEMAP, resources.getString(R.string.tonemap_default), new String[]{resources.getString(R.string.tonemap_default)});
+        settingsManager.setDefaults(Key.GAMMA, resources.getString(R.string.gamma_default), new String[]{resources.getString(R.string.gamma_default)});
+        settingsManager.setDefaults(Key.KEY_SHOW_AF_DATA, "0", new String[]{"0", "1", "2", "3"});
+
+
+        settingsManager.addListener((settingsManager1, key) -> {
+            // Guard against null key (can happen during preference restore)
+            if (key == null) {
+                return;
+            }
+            
+            if (isPerLensSettingsOn()) {
+                if (key.equals(Key.CAMERA_ID.mValue)) {
+                    loadSettingsForCamera(getCameraID());
+                }
+                if (!COMMON_KEYS.contains(key)) {
+                    saveJsonForCamera(getCameraID());
+                }
+            }
+            PhotonCamera.getSettings().loadCache();
+            //Log.d(TAG, key + " : changed!");
+        });
+    }
+    public static void addIds(String[] ids){
+        if(ids != null) {
+            SettingsManager settingsManager = preferenceKeys.settingsManager;
+            Log.d(TAG, "Added IDS:" + Arrays.toString(ids));
+            settingsManager.setDefaults(Key.CAMERA_ID, ids[0], ids);
+            Map<String, ?> map = settingsManager.getDefaultPreferences().getAll();
+            map.keySet().removeAll(COMMON_KEYS);
+            // Exclude tunable and sensor config preferences - they manage their own scope
+            map.keySet().removeIf(key -> key != null && (key.startsWith("pref_tunable_") || key.startsWith("pref_sensorconfig_")));
+            String json = GSON.toJson(map);
+            for (String cameraId : ids) { //Makes a copy of default settings for each camera
+                settingsManager.setInitial(Key.PER_LENS_FILE_NAME.mValue, PER_LENS_KEY_PREFIX + cameraId, json);
+            }
+        }
+    }
+
+    private static void saveJsonForCamera(String cameraID) {
+        SettingsManager settingsManager = preferenceKeys.settingsManager;
+        Map<String, ?> map = settingsManager.getDefaultPreferences().getAll();
+        map.keySet().removeAll(COMMON_KEYS);
+        // Exclude tunable and sensor config preferences - they manage their own scope
+        map.keySet().removeIf(key -> key != null && (key.startsWith("pref_tunable_") || key.startsWith("pref_sensorconfig_")));
+        String hashmapAsJson = GSON.toJson(map);
+        String alreadySavedJSON = settingsManager.getString(Key.PER_LENS_FILE_NAME.mValue, PER_LENS_KEY_PREFIX + cameraID, "");
+        if (!alreadySavedJSON.equals(hashmapAsJson)) {
+            settingsManager.set(Key.PER_LENS_FILE_NAME.mValue, PER_LENS_KEY_PREFIX + getCameraID(), hashmapAsJson);
+//            Log.d(TAG, PER_LENS_KEY_PREFIX + getCameraID() + " : JSON : " + hashmapAsJson);
+        }
+    }
+
+    public static void loadSettingsForCamera(String cameraID) {
+        SettingsManager settingsManager = preferenceKeys.settingsManager;
+        String alreadySavedJSON = settingsManager.getString(Key.PER_LENS_FILE_NAME.mValue, PER_LENS_KEY_PREFIX + cameraID, null);
+        if (alreadySavedJSON == null) {
+            return;
+        }
+        HashMap<String, ?> map = GSON.fromJson(alreadySavedJSON, HashMap.class);
+        if (map == null) {
+            return;
+        }
+        for (Map.Entry<String, ?> e : map.entrySet()) {
+            String key = e.getKey();
+            // Skip tunable and sensor config preferences - they manage their own scope
+            if (key != null && (key.startsWith("pref_tunable_") || key.startsWith("pref_sensorconfig_"))) {
+                continue;
+            }
+            Object value = e.getValue();
+            // Normalize boolean values to the "1"/"0" String convention used by
+            // SettingsManager/ManagedSwitchPreference. This also fixes up legacy
+            // data that may have been serialized as a raw Boolean ("true"/"false").
+            if (value instanceof Boolean) {
+                value = ((Boolean) value) ? "1" : "0";
+            }
+            settingsManager.set(SCOPE_GLOBAL, key, value.toString());
+        }
+    }
+
+    public static void setActivityTheme(Activity activity) {
+        Map<String, Integer> map = new HashMap<>();
+        map.put("default", 0);
+        map.put("red", R.style.RedTheme);
+        map.put("blue", R.style.BlueTheme);
+        map.put("orange", R.style.OrangeTheme);
+        map.put("green", R.style.GreenTheme);
+        map.put("eszdman", R.style.EszdmanTheme);
+        map.put("pink", R.style.PinkTheme);
+        map.put("cyan", R.style.CyanTheme);
+        map.put("teal", R.style.TealTheme);
+        map.put("white", R.style.WhiteTheme);
+
+        SettingsManager sm = preferenceKeys.settingsManager;
+
+        String theme = sm.getString(SCOPE_GLOBAL, Key.KEY_THEME_ACCENT, activity.getResources().getString(R.string.pref_theme_accent_default_value));
+        boolean showGradient = sm.getBoolean(SCOPE_GLOBAL, Key.KEY_SHOW_GRADIENT, activity.getResources().getBoolean(R.bool.pref_show_gradient_def_value));
+
+        if (showGradient) {
+            activity.getTheme().applyStyle(R.style.GradientBackgroundTheme, true);
+        }
+        if (theme != null) {
+            Integer themeRes = map.get(theme.toLowerCase());
+            activity.getTheme().applyStyle(themeRes == null ? 0 : themeRes, true);
+        }
+
+    }
+
+    /**
+     * Helper functions for some keys defined in PreferenceFragment.
+     */
+    public static int getAfDataValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_SHOW_AF_DATA);
+    }
+
+    public static boolean isAfDataOn() {
+        return getAfDataValue() > 0;
+    }
+
+    public static boolean isFullDebugOn() {
+        return getAfDataValue() == 3;
+    }
+
+    public static boolean isHorizonOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_SHOW_HORIZON);
+    }
+
+    public static int isSystemNrOn() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_ENABLE_SYSTEM_NR);
+    }
+
+    public static boolean isRemosaicOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_REMOSAIC);
+    }
+
+    public static boolean isDisableAligningOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_DISABLE_ALIGNINIG);
+    }
+
+    public static boolean isShowWatermarkOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_SHOW_WATERMARK);
+    }
+
+    public static boolean isPerLensSettingsOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_SAVE_PER_LENS_SETTINGS);
+    }
+
+    public static boolean isEnhancedProcessionOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_ENHANCED_PROCESSING);
+    }
+
+    public static boolean isHdrxNrOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_HDRX_NR);
+    }
+
+    public static int isSaveRaw() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_SAVE_RAW);
+    }
+
+    public static boolean isBatterySaverOn(){
+        return getBool(PreferenceKeys.Key.KEY_ENERGY_SAVING);
+    }
+    public static boolean isAspect169On(){
+        return getBool(Key.KEY_WIDE169);
+    }
+
+    public static boolean isBinningOn(){
+        return getBool(Key.KEY_BINNING);
+    }
+
+    public static void setBatterySaver(boolean value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_ENERGY_SAVING,value);
+    }
+    public static void setSaveRaw(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_SAVE_RAW,value);
+    }
+
+    public static String getMfsrOutputMode() {
+        return preferenceKeys.settingsManager.getString(SCOPE_GLOBAL, Key.KEY_MFSR_OUTPUT, "standard");
+    }
+
+    public static boolean isMfsrKeepBurst() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_MFSR_KEEP_BURST);
+    }
+
+    public static boolean isRoundEdgeOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_SHOW_ROUND_EDGE);
+    }
+
+    public static int getGridValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_SHOW_GRID);
+    }
+
+    public static void setGridValue(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_SHOW_GRID, value);
+    }
+
+    public static boolean isCameraSoundsOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_CAMERA_SOUNDS);
+    }
+
+    public static int getChromaNrValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_CHROMA_NR_SEEKBAR);
+    }
+
+    public static int getLumaNrValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_LUMA_NR_SEEKBAR);
+    }
+
+    public static int getFrameCountValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_FRAME_COUNT);
+    }
+
+    public static float getSharpnessValue() {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_SHARPNESS_SEEKBAR);
+    }
+
+    public static float getCompressorValue() {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_COMPRESSOR_SEEKBAR);
+    }
+
+    public static float getGainValue() {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_GAIN_SEEKBAR);
+    }
+
+    public static float getSaturationValue() {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_SATURATION_SEEKBAR);
+    }
+
+    public static float getContrastValue() {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, Key.KEY_CONTRAST_SEEKBAR);
+    }
+
+    public static int getAlignMethodValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_ALIGN_METHOD);
+    }
+
+    public static int getColorMethodValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_COLOR_METHOD);
+    }
+
+    public static int getFocusPeakValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_FOCUS_PEAK);
+    }
+
+    public static int getPreviewFormatValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_PREVIEW_FORMAT);
+    }
+
+    public static int getCFAValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_CFA);
+    }
+
+    public static int getThemeValue() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_THEME);
+    }
+
+    /**
+     * Helper functions for other keys such as viewfinder buttons, etc.
+     */
+    public static boolean isHdrXOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_HDRX);
+    }
+
+    public static void setHdrX(boolean value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_HDRX, value);
+    }
+
+    public static boolean isEisPhotoOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_EIS_PHOTO);
+    }
+
+    public static void setEisPhoto(boolean value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_EIS_PHOTO, value);
+    }
+
+    public static int getFpsMode() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_FPS_PREVIEW);
+    }
+
+    public static void setFpsMode(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_FPS_PREVIEW, value);
+    }
+
+    public static boolean isQuadBayerOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_QUAD_BAYER);
+    }
+    public static boolean isUltraHdrOn() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_ULTRAHDR);
+    }
+
+    public static void setQuadBayer(boolean value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_QUAD_BAYER, value);
+    }
+
+    public static String getCameraID() {
+        return preferenceKeys.settingsManager.getString(Key.CAMERAS_PREFERENCE_FILE_NAME.mValue, Key.CAMERA_ID);
+    }
+
+    public static int getCountdownTimerIndex() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_COUNTDOWN_TIMER);
+    }
+
+    public static void setCountdownTimerIndex(int valueMS) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_COUNTDOWN_TIMER, valueMS);
+    }
+    
+    public static int getBracketingMode() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_BRACKETING_MODE);
+    }
+    
+    public static void setBracketingMode(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_BRACKETING_MODE, value);
+    }
+
+    public static int getAeMeteringStd() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD);
+    }
+
+    public static void setAeMeteringStd(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_AE_METERING_STD, value);
+    }
+
+    public static void setCameraID(String value) {
+        preferenceKeys.settingsManager.set(Key.CAMERAS_PREFERENCE_FILE_NAME.mValue, Key.CAMERA_ID, value);
+    }
+
+    public static int getAfMode() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_AF_MODE);
+    }
+
+    public static int getAeMode() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.KEY_AE_MODE);
+    }
+
+    public static void setAeMode(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_AE_MODE, value);
+    }
+
+    public static int getCameraModeOrdinal() {
+        return preferenceKeys.settingsManager.getInteger(SCOPE_GLOBAL, Key.CAMERA_MODE);
+    }
+
+    public static void setCameraModeOrdinal(int value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.CAMERA_MODE, value);
+    }
+
+    public static String getToneMap() {
+        return preferenceKeys.settingsManager.getString(SCOPE_GLOBAL, Key.TONEMAP);
+    }
+
+    public static String getPref(Key key) {
+        return preferenceKeys.settingsManager.getString(SCOPE_GLOBAL, key);
+    }
+
+    public static Set<String> getStringSet(Key key) {
+        return preferenceKeys.settingsManager.getStringSet(SCOPE_GLOBAL, key,new HashSet<>(0));
+    }
+
+    public static boolean getBool(Key key) {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, key);
+    }
+
+    public static float getFloat(Key key) {
+        return preferenceKeys.settingsManager.getFloat(SCOPE_GLOBAL, key);
+    }
+
+    public static String getVideoResolution() {
+        return preferenceKeys.settingsManager.getString(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, "1920x1080");
+    }
+
+    public static void setVideoResolution(String value) {
+        preferenceKeys.settingsManager.set(SCOPE_GLOBAL, Key.KEY_VIDEO_RESOLUTION, value);
+    }
+
+    public static boolean isRawVideoDownscale4x() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_DOWNSCALE_4X);
+    }
+
+    public static boolean isRawVideoWriteZip() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_WRITE_ZIP);
+    }
+
+    public static boolean isRawVideoCrop169() {
+        return preferenceKeys.settingsManager.getBoolean(SCOPE_GLOBAL, Key.KEY_RAWVIDEO_CROP_169);
+    }
+
+    public enum Key {
+        KEY_PREF_VERSION(R.string._pref_version),
+
+        KEY_ENABLE_SYSTEM_NR(R.string.pref_enable_system_nr_key),
+        KEY_SAVE_PER_LENS_SETTINGS(R.string.pref_save_per_lens_settings),
+        KEY_DISABLE_ALIGNINIG(R.string.pref_disable_aligning_key),
+        KEY_SHOW_WATERMARK(R.string.pref_show_watermark_key),
+        KEY_ENERGY_SAVING(R.string.pref_energy_safe_key),
+        KEY_WIDE169(R.string.pref_wide169_key),
+        KEY_BINNING(R.string.pref_binning_key),
+        KEY_ENHANCED_PROCESSING(R.string.pref_enhanced_processing_key),
+        KEY_HDRX_NR(R.string.pref_hdrx_nr_key),
+        KEY_SHOW_ROUND_EDGE(R.string.pref_show_roundedge_key),
+        KEY_SHOW_GRID(R.string.pref_show_grid_key),
+        KEY_CAMERA_SOUNDS(R.string.pref_camera_sounds_key),
+        KEY_CHROMA_NR_SEEKBAR(R.string.pref_chroma_nr_seekbar_key),
+        KEY_LUMA_NR_SEEKBAR(R.string.pref_luma_nr_seekbar_key),
+        KEY_COMPRESSOR_SEEKBAR(R.string.pref_compressor_seekbar_key),
+        KEY_NOISESTR_SEEKBAR(R.string.pref_noise_seekbar_key),
+        KEY_MERGE_SEEKBAR(R.string.pref_merge_seekbar_key),
+        KEY_GAIN_SEEKBAR(R.string.pref_gain_seekbar_key),
+        KEY_SHADOWS_SEEKBAR(R.string.pref_shadows_seekbar_key),
+        KEY_FRAME_COUNT(R.string.pref_frame_count_key),
+        KEY_CONTRAST_SEEKBAR(R.string.pref_contrast_seekbar_key),
+        KEY_SHARPNESS_SEEKBAR(R.string.pref_sharpness_seekbar_key),
+        KEY_EXPOCOMPENSATE_SEEKBAR(R.string.pref_expocompensation_seekbar_key),
+        KEY_SATURATION_SEEKBAR(R.string.pref_saturation_seekbar_key),
+        KEY_ALIGN_METHOD(R.string.pref_align_method_key),
+        KEY_COLOR_METHOD(R.string.pref_color_method_key),
+        KEY_FOCUS_PEAK(R.string.pref_peak_method_key),
+        KEY_PREVIEW_FORMAT(R.string.pref_preview_format_key),
+        KEY_TELEGRAM(R.string.pref_telegram_channel_key),
+        KEY_CONTRIBUTORS(R.string.pref_contributors_key),
+        KEY_THEME(R.string.pref_theme_key),
+        KEY_THEME_ACCENT(R.string.pref_theme_accent_key),
+        KEY_SHOW_GRADIENT(R.string.pref_show_gradient_key),
+        KEY_HIDE_GALLERY_ICON(R.string.pref_hide_gallery_icon_key),
+        KEY_AF_MODE(R.string.pref_af_mode_key),
+        KEY_AE_MODE(R.string.pref_ae_mode_key),
+        KEY_AE_METERING_STD(R.string.pref_ae_metering_std_key),
+        KEY_BRACKETING_MODE(R.string.pref_bracketing_key),
+        KEY_COUNTDOWN_TIMER(R.string.pref_countdown_timer_key),
+        /**
+         * Enhanced settings keys
+         */
+        KEY_PREVIEW_RESOLUTION(R.string.pref_preview_resolution_key),////TODO add preview resolution selector
+        KEY_VIDEO_RESOLUTION(R.string.pref_video_resolution_key),
+        KEY_RAWVIDEO_DOWNSCALE_4X(R.string.pref_rawvideo_downscale_4x_key),
+        KEY_RAWVIDEO_WRITE_ZIP(R.string.pref_rawvideo_write_zip_key),
+        KEY_RAWVIDEO_CROP_169(R.string.pref_rawvideo_crop_169_key),
+        KEY_SHOW_AF_DATA(R.string.pref_show_afdata_key),
+        KEY_SHOW_HORIZON(R.string.pref_horizon),
+        KEY_SAVE_RAW(R.string.pref_save_raw_key),
+        KEY_MFSR_OUTPUT(R.string.pref_mfsr_output_key),
+        KEY_MFSR_KEEP_BURST(R.string.pref_mfsr_keep_burst_key),
+        KEY_CFA(R.string.pref_cfa_key),
+        KEY_REMOSAIC(R.string.pref_remosaic_key),////TODO
+
+        /**
+         * Other Keys
+         */
+        KEY_HDRX(R.string.pref_hdrx_key),
+        KEY_EIS_PHOTO(R.string.pref_eis_photo_key),
+        KEY_QUAD_BAYER(R.string.pref_quad_bayer_key),
+        KEY_FPS_PREVIEW(R.string.pref_fps_preview_key),
+        KEY_ULTRAHDR(R.string.pref_ultrahdr_key),
+        CAMERA_ID(R.string.camera_id),
+        TONEMAP(R.string.tonemap_key),
+        GAMMA(R.string.gamma_key),
+        CAMERA_MODE(R.string.pref_camera_mode_key),
+
+        /* CameraManager 2 keys */
+        CAMERAS_PREFERENCE_FILE_NAME(R.string._cameras),
+        ALL_CAMERA_IDS_KEY(R.string.all_camera_ids),
+        FRONT_IDS_KEY(R.string.front_camera_ids),
+        BACK_IDS_KEY(R.string.back_camera_ids),
+        ALL_CAMERA_LENS_KEY(R.string.all_camera_lens),
+        CAMERA_COUNT_KEY(R.string.all_camera_count),
+
+        /* SupportedDevice keys */
+        DEVICES_PREFERENCE_FILE_NAME(R.string._devices),
+        ALL_DEVICES_NAMES_KEY(R.string.all_devices_names),
+        /**
+         * Per Lens File
+         */
+        PER_LENS_FILE_NAME(R.string._per_lens),
+        FOLDERS_LIST(R.string.pref_folders_list);
+        public final String mValue;
+
+        Key(@StringRes int stringId) {
+            mValue = PhotonCamera.getStringStatic(stringId);
+        }
+    }
+}

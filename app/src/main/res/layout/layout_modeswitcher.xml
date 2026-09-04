@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="5dp"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            >
+
+        <com.particlesdevs.photoncamera.ui.camera.views.modeswitcher.wefika.horizontalpicker.HorizontalPicker
+                android:layout_width="match_parent"
+                android:padding="@dimen/mode_switcher_padding"
+                android:layout_height="wrap_content"
+                android:textColor="@color/White"
+                app:selectedColor="?attr/modeSelectedTextColor"
+                android:textSize="@dimen/mode_chip_text_size"
+                app:sideItems="2"
+                android:marqueeRepeatLimit="-1"
+                android:id="@+id/mode_picker_view"
+                android:ellipsize="end"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:background="@android:color/black"/>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</layout>

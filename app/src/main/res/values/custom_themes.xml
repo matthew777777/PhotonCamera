@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="EszdmanTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorAccent">#9F39B9</item>
+        <item name="colorPrimary">#9F39B9</item>
+        <item name="colorPrimaryContainer">#7B2D8F</item>
+        <item name="cameraFragmentBackground">@drawable/updatetheme</item>
+    </style>
+
+
+
+    <style name="BlueTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/md_blue_600</item>
+        <item name="colorPrimary">@color/md_blue_400</item>
+        <item name="colorAccent">@color/md_blue_400</item>
+    </style>
+
+    <style name="RedTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/md_red_400_dark</item>
+        <item name="colorPrimary">@color/md_red_400</item>
+        <item name="colorAccent">@color/md_red_400</item>
+    </style>
+
+    <style name="OrangeTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/md_orange_400_dark</item>
+        <item name="colorPrimary">@color/md_orange_400</item>
+        <item name="colorAccent">@color/md_orange_400</item>
+    </style>
+
+    <style name="GreenTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/md_light_green_500_dark</item>
+        <item name="colorPrimary">@color/md_light_green_500</item>
+        <item name="colorAccent">@color/md_light_green_500</item>
+    </style>
+
+    <style name="PinkTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/md_pink_400_dark</item>
+        <item name="colorPrimary">@color/md_pink_400</item>
+        <item name="colorAccent">@color/md_pink_400</item>
+    </style>
+
+    <style name="CyanTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/md_cyan_400_dark</item>
+        <item name="colorPrimary">@color/md_cyan_400</item>
+        <item name="colorAccent">@color/md_cyan_400</item>
+    </style>
+
+    <style name="TealTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/md_teal_400_dark</item>
+        <item name="colorPrimary">@color/md_teal_400</item>
+        <item name="colorAccent">@color/md_teal_400</item>
+    </style>
+
+    <style name="WhiteTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="colorPrimaryContainer">@color/white_theme_background</item>
+        <item name="colorPrimary">@color/white_theme_background</item>
+        <item name="colorAccent">@color/white_theme_background</item>
+        <item name="colorOnPrimary">@android:color/black</item>
+        <item name="processingProgressColor">@android:color/black</item>
+        <item name="modeSelectedTextColor">@android:color/black</item>
+    </style>
+
+    <style name="GradientBackgroundTheme" parent="ThemeOverlay.Material3.DynamicColors.DayNight">
+        <item name="cameraFragmentBackground">@drawable/gradient_vector</item>
+    </style>
+</resources>

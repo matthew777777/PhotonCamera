@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<inset android:inset="@dimen/topbar_button_inset"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <selector>
+        <item android:drawable="@drawable/ic_timer3s" app:timer_3s="true" />
+        <item android:drawable="@drawable/ic_timer10s" app:timer_10s="true" />
+        <item android:drawable="@drawable/ic_timeroff" />
+    </selector>
+</inset>
