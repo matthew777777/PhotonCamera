@@ -198,9 +198,6 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
 add_library(allocator SHARED
     ${SRC_DIR}/allocator.cpp
 )
-add_library(previewLut SHARED
-    ${SRC_DIR}/preview_lut.cpp
-)
 add_library(flacRecorder SHARED
     ${SRC_DIR}/flacRecorder.cpp
 )
@@ -224,8 +221,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 target_link_libraries(allocator PRIVATE
         log
 )
-
-target_compile_options(previewLut PRIVATE -O3)
 
 target_link_libraries(flacRecorder PRIVATE
     log

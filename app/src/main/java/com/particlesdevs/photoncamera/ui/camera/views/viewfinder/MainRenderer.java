@@ -13,16 +13,15 @@ import androidx.annotation.NonNull;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 import com.particlesdevs.photoncamera.capture.CaptureController;
 import com.particlesdevs.photoncamera.circularbarlib.api.ManualModeConsole;
+import com.particlesdevs.photoncamera.processing.live.ColorLutGpuEstimator;
 import com.particlesdevs.photoncamera.processing.live.RawSuperPixel;
 import com.particlesdevs.photoncamera.processing.live.StreamedPostPipeline;
+import com.particlesdevs.photoncamera.processing.opengl.GLTexture;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -39,11 +38,7 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private boolean mGLInit = false;
     private boolean mUpdateST = false;
     private volatile boolean mMirrorPreview;
-    private ColorLut pendingLut;
-    private boolean colorLutUpdatePending;
-    private ColorLut currentLut;
-    private int colorLutTexture;
-    private FloatBuffer colorLutUploadBuffer;
+    private final ColorLutGpuEstimator lutEstimator = new ColorLutGpuEstimator();
     private RawPreviewFrame pendingRawFrame;
     private boolean rawFrameUpdatePending;
     private int hProgram;
@@ -58,19 +53,10 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
     private int downsampleHeight;
     private int surfaceWidth;
     private int surfaceHeight;
-    private ByteBuffer estimatorInput;
-    private final AtomicBoolean estimatorBusy = new AtomicBoolean();
-    private final ExecutorService estimatorExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "ColorLutEstimator");
-        thread.setPriority(Thread.NORM_PRIORITY - 1);
-        return thread;
-    });
     private static final long TIMESTAMP_TOLERANCE_NS = 3_000_000L;
-    /** Debug: render the read-back ISP preview pixels instead of the camera preview. */
+    /** Debug: show the GPU-side ISP downsample (the fit input) instead of the camera preview. */
     private static final boolean DEBUG_ISP_PREVIEW = false;
-    private int ispPreviewTexture;
     private int enableIspPreview;
-    private final ColorLutEstimator colorLutEstimator = new ColorLutEstimator();
     private final StreamedPostPipeline streamedPostPipeline = new StreamedPostPipeline();
     private volatile float lastPreviewNodesMs;
     private long lutTimingWindowStartedNs;
@@ -109,7 +95,6 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             }
         }
         estimatePendingRawFrame();
-        uploadPendingLut();
         bindColorLut();
         GLES20.glUniformMatrix4fv(uTexRotateMatrix, 1, false, mTexRotateMatrix, 0);
         int peakEnabled = getPeakEnabled();
@@ -131,14 +116,13 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
-        deleteColorLutTexture();
+        lutEstimator.reset();
         streamedPostPipeline.reset();
         downsampleProgram = 0;
         downsampleFramebuffer = 0;
         downsampleTexture = 0;
         downsampleWidth = 0;
         downsampleHeight = 0;
-        ispPreviewTexture = 0;
         initTex();
         mSTexture = new SurfaceTexture(hTex[0]);
         mSTexture.setOnFrameAvailableListener(this);
@@ -164,8 +148,8 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glEnableVertexAttribArray(vTexCoord);
         GLES20.glUniform2f(GLES20.glGetUniformLocation(hProgram, "resolution"), mView.getWidth(), mView.getHeight());
         mGLInit = true;
-        // A context recreation invalidates texture names, but not the CPU model.
-        setColorLut(currentLut);
+        // A context recreation invalidates the GPU LUT; the next paired RAW
+        // frame refits it from scratch.
         mView.fireOnSurfaceTextureAvailable(mSTexture, 0, 0);
     }
 
@@ -190,56 +174,22 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
     }
 
-    private synchronized void setColorLut(ColorLut lut) {
-        pendingLut = lut;
-        colorLutUpdatePending = true;
-    }
-
-    private synchronized void uploadPendingLut() {
-        if (!colorLutUpdatePending) return;
-        ColorLut lut = pendingLut;
-        pendingLut = null;
-        colorLutUpdatePending = false;
-        if (lut == null) { currentLut = null; deleteColorLutTexture(); return; }
-        if (colorLutTexture == 0) {
-            int[] name = new int[1]; GLES30.glGenTextures(1, name, 0); colorLutTexture = name[0];
-        }
-        if (colorLutUploadBuffer == null) colorLutUploadBuffer = ByteBuffer
-                .allocateDirect(lut.rgb.length * Float.BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer();
-        colorLutUploadBuffer.clear(); colorLutUploadBuffer.put(lut.rgb).flip();
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, colorLutTexture);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
-        GLES30.glTexParameteri(GLES30.GL_TEXTURE_3D, GLES30.GL_TEXTURE_WRAP_R, GLES30.GL_CLAMP_TO_EDGE);
-        GLES30.glTexImage3D(GLES30.GL_TEXTURE_3D, 0, GLES30.GL_RGB16F, ColorLut.SIZE,
-                ColorLut.SIZE, ColorLut.SIZE, 0, GLES30.GL_RGB, GLES30.GL_FLOAT, colorLutUploadBuffer);
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        currentLut = lut;
-    }
-
     private void bindColorLut() {
-        GLES20.glUniform1i(enableIspPreview,
-                DEBUG_ISP_PREVIEW && ispPreviewTexture != 0 ? 1 : 0);
-        if (DEBUG_ISP_PREVIEW && ispPreviewTexture != 0) {
+        boolean showIspDebug = DEBUG_ISP_PREVIEW && downsampleTexture != 0;
+        GLES20.glUniform1i(enableIspPreview, showIspDebug ? 1 : 0);
+        if (showIspDebug) {
             GLES20.glActiveTexture(GLES20.GL_TEXTURE4);
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ispPreviewTexture);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, downsampleTexture);
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         }
-        boolean enabled = currentLut != null && colorLutTexture != 0;
+        boolean enabled = lutEstimator.hasLut();
         GLES20.glUniform1i(enableColorLut, enabled ? 1 : 0);
-        if (!enabled) return;
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, colorLutTexture);
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        if (enabled) {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_3D, lutEstimator.getLutTexture());
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        }
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, hTex[0]);
-    }
-
-    private void deleteColorLutTexture() {
-        if (colorLutTexture != 0) GLES30.glDeleteTextures(1, new int[]{colorLutTexture}, 0);
-        colorLutTexture = 0;
     }
 
     public synchronized void setRawPreviewFrame(RawPreviewFrame frame) {
@@ -248,21 +198,28 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         rawFrameUpdatePending = true;
     }
 
+    private int rawFrameStrideToggle = 1;
+
     synchronized boolean shouldProcessRawPreviewFrame() {
-        // No artificial frequency limit: accept every RAW frame whenever the
-        // previous model has completed. Never queue an unpaired RAW target,
-        // because its matching SurfaceTexture frame would be gone by then.
-        return !estimatorBusy.get() && !rawFrameUpdatePending;
+        if (rawFrameUpdatePending) return false;
+        // Half-rate RAW processing, matching the GPU finalize cadence: the
+        // native SuperPixel pass, the streamed nodes and the splat run on
+        // every second RAW frame, while interleaved preview frames keep
+        // sampling the current LUT, so the whole fit pipeline runs at half
+        // the preview rate (15fps at a 30fps stream) with no visible latency.
+        // Never queue an unpaired RAW target, because its matching ISP frame
+        // would be gone by then.
+        rawFrameStrideToggle ^= 1;
+        return rawFrameStrideToggle == 0;
     }
 
     private synchronized void estimatePendingRawFrame() {
         if (!rawFrameUpdatePending) return;
-        if (estimatorBusy.get()) return;
         RawPreviewFrame target = pendingRawFrame;
         if (target == null) {
             pendingRawFrame = null;
             rawFrameUpdatePending = false;
-            setColorLut(null);
+            lutEstimator.invalidate();
             return;
         }
         long previewTimestamp = mSTexture.getTimestamp();
@@ -279,45 +236,30 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         pendingRawFrame = null;
         rawFrameUpdatePending = false;
         try {
-            int bytes = target.getWidth() * target.getHeight() * 4;
-            if (estimatorInput == null || estimatorInput.capacity() != bytes) {
-                estimatorInput = ByteBuffer.allocateDirect(bytes);
-            }
-            ByteBuffer output = target.pixels();
             long gpuNodesStarted = System.nanoTime();
-            streamedPostPipeline.process(output, target.getWidth(), target.getHeight(),
-                    surfaceWidth, surfaceHeight, target.getGains(), target.getToneCurve(),
-                    target.getParameters());
+            GLTexture fitTarget = streamedPostPipeline.processGpu(target.pixels(),
+                    target.getWidth(), target.getHeight(), surfaceWidth, surfaceHeight,
+                    target.getGains(), target.getToneCurve(), target.getParameters());
+            int fitInput = captureIspPreview(target.getWidth(), target.getHeight());
             lastPreviewNodesMs = (System.nanoTime() - gpuNodesStarted) / 1_000_000f;
-            ByteBuffer input = captureIspPreview(target.getWidth(), target.getHeight(), estimatorInput);
-            if (DEBUG_ISP_PREVIEW) {
-                uploadIspPreview(output, target.getWidth(), target.getHeight());
-            }
-
-            estimatorBusy.set(true);
-            final ByteBuffer fitInput = estimatorInput;
-            final ByteBuffer fitTarget = output;
-            final int fitWidth = target.getWidth();
-            final int fitHeight = target.getHeight();
-            estimatorExecutor.execute(() -> {
-                try {
-                    ColorLut lut = colorLutEstimator.estimate(fitInput, fitTarget, fitWidth, fitHeight);
-                    recordLutTiming(colorLutEstimator.getLastTimeUs());
-                    setColorLut(lut);
-                } catch (Exception error) {
-                    Log.w("MainRenderer", "3D LUT worker failed: " + error.getMessage());
-                } finally {
-                    target.close();
-                    estimatorBusy.set(false);
-                    // Publish immediately; the next RAW callback may now start
-                    // another timestamp-matched model.
-                    mView.requestRender();
-                }
-            });
+            // The whole fit stays on the GPU: two compute dispatches writing
+            // straight into the sampled 3D texture, no readback, no worker.
+            // Finishing first keeps the node draws out of the fit's timing.
+            GLES20.glFinish();
+            long fitStarted = System.nanoTime();
+            lutEstimator.fit(fitInput, fitTarget, target.getWidth(), target.getHeight());
+            GLES20.glFinish();
+            recordLutTiming((System.nanoTime() - fitStarted) / 1000L);
         } catch (Exception error) {
-            target.close();
-            estimatorBusy.set(false);
             Log.w("MainRenderer", "3D LUT preview estimate failed: " + error.getMessage());
+        } finally {
+            target.close();
+            // The pipeline nodes and the fit leave their own programs current;
+            // the preview draw below never calls glUseProgram itself (it used
+            // to rely on captureIspPreview's restore being the final word),
+            // so re-establish the render state unconditionally here.
+            GLES20.glUseProgram(hProgram);
+            GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
         }
     }
 
@@ -341,25 +283,6 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         lutTimingSamples = 0;
     }
 
-    /** Debug: pushes the exact read-back pixels the estimator receives on screen. */
-    private void uploadIspPreview(ByteBuffer pixels, int width, int height) {
-        if (ispPreviewTexture == 0) {
-            int[] texture = new int[1];
-            GLES20.glGenTextures(1, texture, 0);
-            ispPreviewTexture = texture[0];
-        }
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE4);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ispPreviewTexture);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
-        pixels.position(0);
-        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8,
-                width, height, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels);
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-    }
-
     /**
      * Central-crop scales mapping the preview buffer's field of view onto the
      * RAW frame's aspect ratio. The wider dimension of the buffer is cropped so
@@ -378,7 +301,10 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         else frameCropScaleY = bufferAspect / frameAspect;
     }
 
-    private ByteBuffer captureIspPreview(int width, int height, ByteBuffer destination) {
+    /** Renders the ISP SurfaceTexture into the {@code width x height} RGBA8
+     *  downsample texture; the LUT fit consumes it directly as a compute
+     *  image, so nothing is read back. */
+    private int captureIspPreview(int width, int height) {
         ensureDownsampleTarget(width, height);
         computeFrameCrop(width, height);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, downsampleFramebuffer);
@@ -398,14 +324,10 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
         GLES20.glUniform2f(downsampleSampleStep,
                 frameCropScaleX / width / 4.0f, frameCropScaleY / height / 4.0f);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-        destination.position(0);
-        GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE,
-                destination);
-        destination.position(0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
         GLES20.glUseProgram(hProgram);
-        return destination;
+        return downsampleTexture;
     }
 
     private void ensureDownsampleTarget(int width, int height) {
@@ -416,10 +338,10 @@ public class MainRenderer implements GLSurfaceView.Renderer, SurfaceTexture.OnFr
             // Samples the SurfaceTexture in plain sensor orientation (the display
             // path's 90-degree coordinate rotation must NOT be applied here).
             // OES textures sample with the image vertically flipped under identity
-            // sampling; undoing it (instead of glReadPixels' bottom-up rows) makes
-            // the readback buffer line up with the sensor-oriented RAW frame's
-            // row/column order. uvTransform crops the preview's field of view to
-            // the RAW frame's aspect ratio.
+            // sampling; undoing it makes the FBO's bottom-up row order line up
+            // with the sensor-oriented RAW frame's row/column order, so the fit
+            // pairs both images at identical coordinates. uvTransform crops the
+            // preview's field of view to the RAW frame's aspect ratio.
             String vertex = "in vec2 vPosition; in vec2 vTexCoord; out vec2 texCoord;"
                     + "uniform vec4 uvTransform;"
                     + "void main(){texCoord=vTexCoord.xy*uvTransform.xy+uvTransform.zw;"

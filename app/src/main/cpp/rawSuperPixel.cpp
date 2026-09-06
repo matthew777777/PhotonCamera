@@ -14,12 +14,15 @@
 #include <jni.h>
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <cmath>
 #include <mutex>
 #include <thread>
 #include <vector>
+#include <android/log.h>
 #if defined(__ARM_NEON) || defined(__aarch64__)
 #include <arm_neon.h>
 #endif
@@ -27,11 +30,52 @@
 #define OUTPUT_WIDTH 320
 #define OUTPUT_HEIGHT 240
 #define HISTOGRAM_BINS 256
-#define HISTOGRAM_THREADS 4
+// The vectorized histogram scan is tiny; running it inline avoids the
+// per-frame thread-spawn overhead that dominated its wall time.
+#define HISTOGRAM_THREADS 1
+// Output-row bands of the downscale; the main thread runs band 0.
+#define DOWNSCALE_THREADS 4
 
 static std::mutex gToneMutex;
 static std::array<float, 4> gPreviousToneParameters;
 static bool gToneInitialized = false;
+
+// Last histogram scan duration, published by buildToneParameters for the
+// caller's timing window.
+static std::atomic<int64_t> gHistogramScanUs{0};
+
+// Debug cadence: one summary line per second of wall time, mirroring the
+// GL-side "3D LUT ..." window in MainRenderer.
+static std::mutex gTimingMutex;
+static uint64_t gWindowSuperPixelUs = 0;
+static uint64_t gWindowHistogramUs = 0;
+static uint32_t gWindowFrames = 0;
+static std::chrono::steady_clock::time_point gWindowStarted{};
+static bool gWindowValid = false;
+
+static void logSuperPixelTiming(uint64_t superPixelUs, uint64_t histogramUs) {
+    std::lock_guard<std::mutex> lock(gTimingMutex);
+    const auto now = std::chrono::steady_clock::now();
+    if (!gWindowValid) {
+        gWindowStarted = now;
+        gWindowValid = true;
+    }
+    gWindowSuperPixelUs += superPixelUs;
+    gWindowHistogramUs += histogramUs;
+    gWindowFrames++;
+    const int64_t elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now - gWindowStarted).count();
+    if (elapsed < 1000000000LL) return;
+    __android_log_print(ANDROID_LOG_DEBUG, "RawSuperPixel",
+            "SuperPixel 320x240 avg %.2f ms, histogram avg %.2f ms, %.1f frames/s",
+            (double) gWindowSuperPixelUs / 1000.0 / gWindowFrames,
+            (double) gWindowHistogramUs / 1000.0 / gWindowFrames,
+            (double) gWindowFrames * 1.0e9 / (double) elapsed);
+    gWindowSuperPixelUs = 0;
+    gWindowHistogramUs = 0;
+    gWindowFrames = 0;
+    gWindowStarted = now;
+}
 
 static inline uint8_t toLinear8(float x) {
     if (x < 0.0f) x = 0.0f;
@@ -42,6 +86,27 @@ static inline uint8_t toLinear8(float x) {
 static inline float sourceForBin(int bin) {
     return exp2f(-12.0f + 14.0f * (float) bin / (HISTOGRAM_BINS - 1));
 }
+
+#if defined(__ARM_NEON) || defined(__aarch64__)
+// log2 via exponent bits plus a degree-3 Taylor of log2(mantissa) around 1.5.
+// Worst-case error ~0.006 stops; the 255-bin statistics only need ~1/500
+// absolute accuracy and are temporally smoothed afterwards anyway.
+static inline float32x4_t neonLog2(float32x4_t x) {
+    const int32x4_t bits = vreinterpretq_s32_f32(x);
+    const int32x4_t exponent = vsubq_s32(
+            vshrq_n_s32(vandq_s32(bits, vdupq_n_s32(0x7f800000)), 23),
+            vdupq_n_s32(127));
+    const float32x4_t mantissa = vreinterpretq_f32_s32(vorrq_s32(
+            vandq_s32(bits, vdupq_n_s32(0x007fffff)), vdupq_n_s32(0x3f800000)));
+    const float32x4_t u = vsubq_f32(mantissa, vdupq_n_f32(1.5f));
+    const float32x4_t u2 = vmulq_f32(u, u);
+    const float32x4_t poly = vmlaq_f32(
+            vmlaq_f32(vmlaq_f32(vdupq_n_f32(0.5849625f), u, vdupq_n_f32(0.9617967f)),
+                      u2, vdupq_n_f32(-0.3205994f)),
+            vmulq_f32(u2, u), vdupq_n_f32(0.1424885f));
+    return vaddq_f32(poly, vcvtq_f32_s32(exponent));
+}
+#endif
 
 static int percentileBin(const std::array<uint32_t, HISTOGRAM_BINS>& histogram,
                          uint32_t total, float percentile) {
@@ -57,13 +122,69 @@ static int percentileBin(const std::array<uint32_t, HISTOGRAM_BINS>& histogram,
 static void buildToneParameters(const uint8_t* rgba, float* parameters,
                            float gainR, float gainG, float gainB,
                            float exposureCompensation, float compressor) {
+    const auto scanStarted = std::chrono::steady_clock::now();
     std::array<std::array<uint32_t, HISTOGRAM_BINS>, HISTOGRAM_THREADS> local{};
     std::array<std::thread, HISTOGRAM_THREADS> workers;
-    for (int worker = 0; worker < HISTOGRAM_THREADS; ++worker) {
-        workers[worker] = std::thread([=, &local]() {
+    auto scanBand = [&](int worker) {
             const int beginY = worker * OUTPUT_HEIGHT / HISTOGRAM_THREADS;
             const int endY = (worker + 1) * OUTPUT_HEIGHT / HISTOGRAM_THREADS;
             auto& histogram = local[worker];
+#if defined(__ARM_NEON) || defined(__aarch64__)
+            const float32x4_t gainRv = vdupq_n_f32(gainR / 255.0f);
+            const float32x4_t gainGv = vdupq_n_f32(gainG / 255.0f);
+            const float32x4_t gainBv = vdupq_n_f32(gainB / 255.0f);
+            const float32x4_t lumaR = vdupq_n_f32(0.2126f);
+            const float32x4_t lumaG = vdupq_n_f32(0.7152f);
+            const float32x4_t lumaB = vdupq_n_f32(0.0722f);
+            const float32x4_t minLuma = vdupq_n_f32(0.000244140625f);
+            const float32x4_t domainScale = vdupq_n_f32(1.0f / 14.0f);
+            const float32x4_t zeroV = vdupq_n_f32(0.0f);
+            const float32x4_t oneV = vdupq_n_f32(1.0f);
+            const float32x4_t binScale = vdupq_n_f32((float) (HISTOGRAM_BINS - 1));
+            const float32x4_t halfV = vdupq_n_f32(0.5f);
+            const uint32x4_t channelMask = vdupq_n_u32(255u);
+            for (int y = beginY; y < endY; ++y) {
+                const uint8_t* pixel = rgba + (size_t) y * OUTPUT_WIDTH * 4;
+                int x = 0;
+                for (; x + 4 <= OUTPUT_WIDTH; x += 4, pixel += 16) {
+                    const uint32x4_t packed = vld1q_u32(
+                            reinterpret_cast<const uint32_t*>(pixel));
+                    const float32x4_t r = vmulq_f32(vcvtq_f32_u32(
+                            vandq_u32(packed, channelMask)), gainRv);
+                    const float32x4_t g = vmulq_f32(vcvtq_f32_u32(
+                            vandq_u32(vshrq_n_u32(packed, 8), channelMask)), gainGv);
+                    const float32x4_t b = vmulq_f32(vcvtq_f32_u32(
+                            vandq_u32(vshrq_n_u32(packed, 16), channelMask)), gainBv);
+                    float32x4_t luminance = vmlaq_f32(vmulq_f32(r, lumaR), g, lumaG);
+                    luminance = vmlaq_f32(luminance, b, lumaB);
+                    luminance = vmaxq_f32(luminance, minLuma);
+                    float32x4_t coordinate = vmulq_f32(
+                            vaddq_f32(neonLog2(luminance), vdupq_n_f32(12.0f)),
+                            domainScale);
+                    coordinate = vminq_f32(vmaxq_f32(coordinate, zeroV), oneV);
+                    const uint32x4_t bin = vcvtq_u32_f32(
+                            vmlaq_f32(halfV, coordinate, binScale));
+                    uint32_t bins[4];
+                    vst1q_u32(bins, bin);
+                    ++histogram[bins[0]];
+                    ++histogram[bins[1]];
+                    ++histogram[bins[2]];
+                    ++histogram[bins[3]];
+                }
+                for (; x < OUTPUT_WIDTH; ++x, pixel += 4) {
+                    const float r = pixel[0] * (gainR / 255.0f);
+                    const float g = pixel[1] * (gainG / 255.0f);
+                    const float b = pixel[2] * (gainB / 255.0f);
+                    const float luminance = std::max(
+                            0.2126f * r + 0.7152f * g + 0.0722f * b,
+                            0.000244140625f);
+                    const float coordinate = std::max(0.0f, std::min(
+                            (log2f(luminance) + 12.0f) / 14.0f, 1.0f));
+                    const int bin = (int) (coordinate * (HISTOGRAM_BINS - 1) + 0.5f);
+                    ++histogram[bin];
+                }
+            }
+#else
             for (int y = beginY; y < endY; ++y) {
                 const uint8_t* pixel = rgba + (size_t) y * OUTPUT_WIDTH * 4;
                 for (int x = 0; x < OUTPUT_WIDTH; ++x, pixel += 4) {
@@ -79,9 +200,16 @@ static void buildToneParameters(const uint8_t* rgba, float* parameters,
                     ++histogram[bin];
                 }
             }
-        });
-    }
-    for (auto& worker : workers) worker.join();
+#endif
+    };
+    for (int worker = 1; worker < HISTOGRAM_THREADS; ++worker)
+        workers[worker] = std::thread(scanBand, worker);
+    scanBand(0);
+    for (int worker = 1; worker < HISTOGRAM_THREADS; ++worker)
+        workers[worker].join();
+    gHistogramScanUs.store(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - scanStarted).count(),
+            std::memory_order_relaxed);
 
     std::array<uint32_t, HISTOGRAM_BINS> histogram{};
     for (const auto& localHistogram : local)
@@ -121,6 +249,49 @@ static void buildToneParameters(const uint8_t* rgba, float* parameters,
     for (int i = 0; i < 4; ++i) gPreviousToneParameters[i] = parameters[i];
     gToneInitialized = true;
 }
+
+#if defined(__ARM_NEON) || defined(__aarch64__)
+// One uint16 group of the Bayer downscale, 8 output pixels wide: subtract the
+// slot's black level, scale by its inverse range, clamp at zero and
+// accumulate into the two 4-lane halves.
+static inline void neonAccumulate(float32x4_t &lo, float32x4_t &hi,
+                                  const uint16_t *values,
+                                  float32x4_t black, float32x4_t range) {
+    const uint16x8_t packed = vld1q_u16(values);
+    const float32x4_t zero = vdupq_n_f32(0.0f);
+    lo = vaddq_f32(lo, vmaxq_f32(vmulq_f32(
+            vsubq_f32(vcvtq_f32_u32(vmovl_u16(vget_low_u16(packed))), black),
+            range), zero));
+    hi = vaddq_f32(hi, vmaxq_f32(vmulq_f32(
+            vsubq_f32(vcvtq_f32_u32(vmovl_u16(vget_high_u16(packed))), black),
+            range), zero));
+}
+
+// Paired-load variant for packed RAW16 (pixelStride 2): the tile's two
+// adjacent Bayer pixels arrive as one uint32, halving the load count and
+// doubling the bytes consumed per cache line.
+static inline void neonAccumulateU32(float32x4_t &lo, float32x4_t &hi,
+                                     uint32x4_t vLo, uint32x4_t vHi,
+                                     float32x4_t black, float32x4_t range) {
+    const float32x4_t zero = vdupq_n_f32(0.0f);
+    lo = vaddq_f32(lo, vmaxq_f32(vmulq_f32(
+            vsubq_f32(vcvtq_f32_u32(vLo), black), range), zero));
+    hi = vaddq_f32(hi, vmaxq_f32(vmulq_f32(
+            vsubq_f32(vcvtq_f32_u32(vHi), black), range), zero));
+}
+
+// toLinear8 for 8 lanes: clamp to [0,1], *255, +0.5, narrow to bytes.
+static inline uint8x8_t neonLinear8(float32x4_t lo, float32x4_t hi) {
+    const float32x4_t zero = vdupq_n_f32(0.0f);
+    const float32x4_t one = vdupq_n_f32(1.0f);
+    const float32x4_t scale = vdupq_n_f32(255.0f);
+    const float32x4_t half = vdupq_n_f32(0.5f);
+    const uint16x8_t narrowed = vcombine_u16(
+            vmovn_u32(vcvtq_u32_f32(vmlaq_f32(half, vmaxq_f32(vminq_f32(lo, one), zero), scale))),
+            vmovn_u32(vcvtq_u32_f32(vmlaq_f32(half, vmaxq_f32(vminq_f32(hi, one), zero), scale))));
+    return vmovn_u16(narrowed);
+}
+#endif
 
 extern "C"
 JNIEXPORT void JNICALL
@@ -171,17 +342,125 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
         invRange[i] = (minWhite / whiteBySlot[i]) / range;
     }
 
+    const auto downscaleStarted = std::chrono::steady_clock::now();
     const int tiles_x = cropWidth / 2;
     const int tiles_y = cropHeight / 2;
-    for (int oy = 0; oy < OUTPUT_HEIGHT; oy++) {
+#if defined(__ARM_NEON) || defined(__aarch64__)
+    // The NEON loop always sums four stratified samples per output pixel,
+    // duplicating a sample when the tile run holds only one: summing a tile
+    // twice under the fixed 1/4 weight reproduces the scalar single-sample
+    // average exactly, so both paths compute the same pixels. Byte offsets of
+    // each output column's two x-sample tiles are hoisted out of the loop.
+    int32_t tileOffsetX[2][OUTPUT_WIDTH];
+    for (int ox = 0; ox < OUTPUT_WIDTH; ox++) {
+        const int tile_x0 = ox * tiles_x / OUTPUT_WIDTH;
+        const int tile_x1 = std::max(tile_x0 + 1, (ox + 1) * tiles_x / OUTPUT_WIDTH);
+        const int tile_count_x = tile_x1 - tile_x0;
+        const int samples_x = std::min(tile_count_x, 2);
+        for (int s = 0; s < 2; s++) {
+            const int sample_x = samples_x == 2 ? s : 0;
+            const int tile_x = tile_x0
+                    + ((2 * sample_x + 1) * tile_count_x) / (2 * samples_x);
+            tileOffsetX[s][ox] = (int32_t) ((size_t) (cropLeft + tile_x * 2) * pixelStride);
+        }
+    }
+    const float32x4_t blackV[4] = {
+            vdupq_n_f32(black[0]), vdupq_n_f32(black[1]),
+            vdupq_n_f32(black[2]), vdupq_n_f32(black[3])};
+    const float32x4_t rangeV[4] = {
+            vdupq_n_f32(invRange[0]), vdupq_n_f32(invRange[1]),
+            vdupq_n_f32(invRange[2]), vdupq_n_f32(invRange[3])};
+    const float32x4_t quarterV = vdupq_n_f32(0.25f);
+    const float32x4_t eighthV = vdupq_n_f32(0.125f);
+    const uint8x8_t alphaV = vdup_n_u8(255);
+    const bool pairedLoads = pixelStride == 2;
+    const uint32x4_t halfMask = vdupq_n_u32(0xffffu);
+#endif
+    // Output-row bands are independent - shared tables are read-only and
+    // output rows are disjoint - so the downscale fans out over threads.
+    auto renderRows = [&](int yBegin, int yEnd) {
+    for (int oy = yBegin; oy < yEnd; oy++) {
         const int tile_y0 = oy * tiles_y / OUTPUT_HEIGHT;
         const int tile_y1 = std::max(tile_y0 + 1, (oy + 1) * tiles_y / OUTPUT_HEIGHT);
         const int tile_count_y = tile_y1 - tile_y0;
         // Four stratified Bayer tiles per output pixel provide a useful box
         // prefilter without spending the camera callback budget on 16 tiles.
         const int samples_y = std::min(tile_count_y, 2);
+        const uint8_t *sampleRow[2];
+        for (int s = 0; s < 2; s++) {
+            const int sample_y = samples_y == 2 ? s : 0;
+            const int tile_y = tile_y0
+                    + ((2 * sample_y + 1) * tile_count_y) / (2 * samples_y);
+            sampleRow[s] = base + (size_t) (cropTop + tile_y * 2) * rowStride;
+        }
         uint8_t *dst = out + (size_t) oy * OUTPUT_WIDTH * 4;
-        for (int ox = 0; ox < OUTPUT_WIDTH; ox++) {
+        int ox = 0;
+#if defined(__ARM_NEON) || defined(__aarch64__)
+        uint16_t loaded[8];
+        uint32_t pairs[8];
+        for (; ox + 8 <= OUTPUT_WIDTH; ox += 8) {
+            float32x4_t sumLo[4] = {vdupq_n_f32(0.0f), vdupq_n_f32(0.0f),
+                                    vdupq_n_f32(0.0f), vdupq_n_f32(0.0f)};
+            float32x4_t sumHi[4] = {vdupq_n_f32(0.0f), vdupq_n_f32(0.0f),
+                                    vdupq_n_f32(0.0f), vdupq_n_f32(0.0f)};
+            for (int sy = 0; sy < 2; sy++) {
+                const uint8_t *row0 = sampleRow[sy];
+                const uint8_t *row1 = row0 + rowStride;
+                for (int sx = 0; sx < 2; sx++) {
+                    const int32_t *offsets = tileOffsetX[sx];
+                    // Slot layout inside a 2x2 tile: 0/1 top row, 2/3 bottom.
+                    // Packed RAW16 makes the tile's two Bayer pixels one
+                    // aligned uint32; other strides keep the two-load form.
+                    if (pairedLoads) {
+                        if (ox + 16 <= OUTPUT_WIDTH) {
+                            __builtin_prefetch(row0 + offsets[ox + 8]);
+                            __builtin_prefetch(row1 + offsets[ox + 8]);
+                        }
+                        for (int row = 0; row < 2; row++) {
+                            const uint8_t *source = row == 0 ? row0 : row1;
+                            for (int i = 0; i < 8; ++i)
+                                pairs[i] = *(const uint32_t *) (source + offsets[ox + i]);
+                            const uint32x4_t packLow = vld1q_u32(pairs);
+                            const uint32x4_t packHigh = vld1q_u32(pairs + 4);
+                            neonAccumulateU32(sumLo[row * 2], sumHi[row * 2],
+                                              vandq_u32(packLow, halfMask),
+                                              vandq_u32(packHigh, halfMask),
+                                              blackV[row * 2], rangeV[row * 2]);
+                            neonAccumulateU32(sumLo[row * 2 + 1], sumHi[row * 2 + 1],
+                                              vshrq_n_u32(packLow, 16),
+                                              vshrq_n_u32(packHigh, 16),
+                                              blackV[row * 2 + 1], rangeV[row * 2 + 1]);
+                        }
+                    } else {
+                        for (int row = 0; row < 2; row++) {
+                            const uint8_t *source = row == 0 ? row0 : row1;
+                            for (int i = 0; i < 8; ++i)
+                                loaded[i] = *(const uint16_t *) (source + offsets[ox + i]);
+                            neonAccumulate(sumLo[row * 2], sumHi[row * 2], loaded,
+                                           blackV[row * 2], rangeV[row * 2]);
+                            for (int i = 0; i < 8; ++i)
+                                loaded[i] = *(const uint16_t *) (source + offsets[ox + i] + pixelStride);
+                            neonAccumulate(sumLo[row * 2 + 1], sumHi[row * 2 + 1], loaded,
+                                           blackV[row * 2 + 1], rangeV[row * 2 + 1]);
+                        }
+                    }
+                }
+            }
+            const float32x4_t rLo = vmulq_f32(sumLo[ir], quarterV);
+            const float32x4_t rHi = vmulq_f32(sumHi[ir], quarterV);
+            const float32x4_t gLo = vmulq_f32(vaddq_f32(sumLo[ig[0]], sumLo[ig[1]]), eighthV);
+            const float32x4_t gHi = vmulq_f32(vaddq_f32(sumHi[ig[0]], sumHi[ig[1]]), eighthV);
+            const float32x4_t bLo = vmulq_f32(sumLo[ib], quarterV);
+            const float32x4_t bHi = vmulq_f32(sumHi[ib], quarterV);
+            uint8x8x4_t rgba;
+            rgba.val[0] = neonLinear8(rLo, rHi);
+            rgba.val[1] = neonLinear8(gLo, gHi);
+            rgba.val[2] = neonLinear8(bLo, bHi);
+            rgba.val[3] = alphaV;
+            vst4_u8(dst + (size_t) ox * 4, rgba);
+        }
+#endif
+        for (; ox < OUTPUT_WIDTH; ox++) {
             const int tile_x0 = ox * tiles_x / OUTPUT_WIDTH;
             const int tile_x1 = std::max(tile_x0 + 1, (ox + 1) * tiles_x / OUTPUT_WIDTH);
             const int tile_count_x = tile_x1 - tile_x0;
@@ -215,6 +494,14 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
             dst += 4;
         }
     }
+    };
+    std::thread downWorkers[DOWNSCALE_THREADS > 1 ? DOWNSCALE_THREADS - 1 : 1];
+    for (int worker = 1; worker < DOWNSCALE_THREADS; ++worker)
+        downWorkers[worker - 1] = std::thread(renderRows,
+                worker * OUTPUT_HEIGHT / DOWNSCALE_THREADS,
+                (worker + 1) * OUTPUT_HEIGHT / DOWNSCALE_THREADS);
+    renderRows(0, OUTPUT_HEIGHT / DOWNSCALE_THREADS);
+    for (auto& worker : downWorkers) if (worker.joinable()) worker.join();
     // The stored pixels carry the minWhite/whitePoint encoding, so undo it in
     // the histogram gains to keep the curve anchored to the same luminances
     // the shader sees after reconstructing brightness.
@@ -223,6 +510,10 @@ Java_com_particlesdevs_photoncamera_processing_live_RawSuperPixel_process(
                    gainG * whiteG / minWhite,
                    gainB * whiteB / minWhite,
                    exposureCompensation, compressor);
+    logSuperPixelTiming(
+            (uint64_t) std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - downscaleStarted).count(),
+            (uint64_t) gHistogramScanUs.load(std::memory_order_relaxed));
 }
 
 namespace {

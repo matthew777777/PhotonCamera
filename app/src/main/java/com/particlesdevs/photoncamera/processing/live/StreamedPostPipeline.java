@@ -79,16 +79,17 @@ public final class StreamedPostPipeline extends GLBasePipeline {
     public void endTimeMeasure(String Name) {}
 
     /**
-     * Processes tightly packed linear SuperPixel RGBA8 and writes the
-     * gamma-encoded result back into that same buffer. {@code parameters} is
-     * the fully filled capture-style Parameters used for matrix color
-     * correction; may be null to fall back to plain white-balance gains.
-     * {@code toneCurve} contains the four histogram-derived AgX parameters
-     * produced by the native SuperPixel pass for this frame.
+     * Processes tightly packed linear SuperPixel RGBA8 and returns the
+     * gamma-encoded result as a GPU texture for the LUT fit's compute pass -
+     * nothing is read back. {@code parameters} is the fully filled
+     * capture-style Parameters used for matrix color correction; may be null
+     * to fall back to plain white-balance gains. {@code toneCurve} contains
+     * the four histogram-derived AgX parameters produced by the native
+     * SuperPixel pass for this frame.
      */
-    public ByteBuffer process(ByteBuffer pixels, int frameWidth, int frameHeight,
-                              int restoreWidth, int restoreHeight, float[] whiteBalanceGains,
-                              ByteBuffer toneCurve, Parameters parameters) {
+    public GLTexture processGpu(ByteBuffer pixels, int frameWidth, int frameHeight,
+                                int restoreWidth, int restoreHeight, float[] whiteBalanceGains,
+                                ByteBuffer toneCurve, Parameters parameters) {
         if (pixels == null || !pixels.isDirect()
                 || pixels.capacity() < frameWidth * frameHeight * 4
                 || toneCurve == null || !toneCurve.isDirect()
@@ -110,13 +111,12 @@ public final class StreamedPostPipeline extends GLBasePipeline {
         BuildDefaultPipeline();
         runStreamed();
 
-        // runStreamed left the result texture bound as the readback target.
-        pixels.position(0);
-        resultTexture.textureBuffer(new GLFormat(GLFormat.DataType.SIMPLE_8, 4), pixels);
-        pixels.position(0);
+        // runStreamed left the result texture attached to its readback FBO;
+        // release the framebuffer so the texture can be bound as a compute
+        // image by the LUT fit.
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glViewport(0, 0, restoreWidth, restoreHeight);
-        return pixels;
+        return resultTexture;
     }
 
     /**
