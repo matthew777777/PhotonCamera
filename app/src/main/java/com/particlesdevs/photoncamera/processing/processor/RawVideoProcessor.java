@@ -1,274 +1,414 @@
 package com.particlesdevs.photoncamera.processing.processor;
 
-import android.annotation.SuppressLint;
 import android.graphics.ImageFormat;
 import android.graphics.Point;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.media.Image;
+import android.os.ParcelFileDescriptor;
+import android.os.StatFs;
 
 import com.particlesdevs.photoncamera.api.ParseExif;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
-import com.particlesdevs.photoncamera.processing.DngCreator;
+import com.particlesdevs.photoncamera.control.Gyro;
 import com.particlesdevs.photoncamera.processing.ImageSaver;
 import com.particlesdevs.photoncamera.processing.ProcessingEventsListener;
+import com.particlesdevs.photoncamera.processing.mcraw.McrawEncoder;
+import com.particlesdevs.photoncamera.processing.mcraw.McrawMetadata;
+import com.particlesdevs.photoncamera.processing.mcraw.McrawWriter;
+import com.particlesdevs.photoncamera.processing.mcraw.ParallelFrameWorker;
+import com.particlesdevs.photoncamera.processing.render.Parameters;
 import com.particlesdevs.photoncamera.settings.PreferenceKeys;
-import com.particlesdevs.photoncamera.util.Allocator;
 import com.particlesdevs.photoncamera.util.FlacAudioRecorder;
 import com.particlesdevs.photoncamera.util.Log;
 import com.particlesdevs.photoncamera.util.SimpleStorageHelper;
-import com.particlesdevs.photoncamera.processing.render.Parameters;
 
-import android.os.StatFs;
-
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.TreeMap;
+import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.Semaphore;
 
 public class RawVideoProcessor extends ProcessorBase {
     private static final String TAG = "RawVideoProcessor";
-    public static int videoCounter = 1;
-
-    private final FlacAudioRecorder rawAudioRecorder = new FlacAudioRecorder();
-
-    private volatile boolean fillParams = false;
-    private Path outputFolder;
-    private int writeBufferSize = 16;
-    private int writeBufferCounter = 0;
-    private final AtomicInteger pendingWrites = new AtomicInteger(0);
-    private volatile ByteBuffer[] dngBuffers = null;
-    private volatile ByteBuffer[] rawBuffers = null;
-    private DngCreator dngCreator = null;
-    private ExecutorService writeExecutor = null;
-    private boolean isRecording = false;
-
-    private long recordingStartMs = 0;    private long availableBytesAtStart = 0;
-    private int frameWidth = 0;
-    private int frameHeight = 0;
-    private static final int BITS_PER_SAMPLE = 10;
-    private Parameters parameters;
+    // The tested camera HAL exposes five RAW buffers. Leave one available to the producer while
+    // three workers consume at most four queued Images.
+    private static final int ENCODER_THREADS = 2;
+    private static final int PIPELINE_CAPACITY = 4;
+    // pending includes both camera Images in the encoder stage and encoded buffers awaiting disk.
+    private static final int TOTAL_BUFFER_CAPACITY = PIPELINE_CAPACITY * 2;
+    public static volatile int videoCounter;
+    // Accessed under this processor's monitor. Workers only reference their own session.
+    private Session current;
 
     public static class RawVideoStats {
-        public final int pendingWrites;
-        public final long elapsedMs;
-        public final long estimatedBytes;
-        public final long availableBytes;
-
-        public RawVideoStats(int pendingWrites, long elapsedMs, long estimatedBytes, long availableBytes) {
-            this.pendingWrites = pendingWrites;
+        public final int bufferedFrames, bufferCapacity;
+        public final long elapsedMs, estimatedBytes, availableBytes;
+        public RawVideoStats(int bufferedFrames, int bufferCapacity, long elapsedMs,
+                             long estimatedBytes, long availableBytes) {
+            this.bufferedFrames = bufferedFrames;
+            this.bufferCapacity = bufferCapacity;
             this.elapsedMs = elapsedMs;
             this.estimatedBytes = estimatedBytes;
             this.availableBytes = availableBytes;
         }
     }
 
-    public RawVideoProcessor(ProcessingEventsListener processingEventsListener) {
-        super(processingEventsListener);
+    private static final class EncodedFrame {
+        final ByteBuffer data;
+        final long timestamp;
+        final long receivedTimestampMs;
+        final String metadata;
+        EncodedFrame(ByteBuffer data, long timestamp, long receivedTimestampMs, String metadata) {
+            this.data = data; this.timestamp = timestamp;
+            this.receivedTimestampMs = receivedTimestampMs; this.metadata = metadata;
+        }
+    }
+    private static final class AudioChunk {
+        final long timestampNs; final short[] samples;
+        AudioChunk(long timestampNs,short[] samples) { this.timestampNs=timestampNs; this.samples=samples; }
     }
 
-    @SuppressLint("DefaultLocale")
-    public void videoStart(Path outputFolder, ParseExif.ExifData exifData,
-                           CameraCharacteristics characteristics,
-                           CaptureResult captureResult,
-                           CaptureRequest captureRequest,
-                           int cameraRotation,
-                           ProcessingCallback callback) {
-        this.outputFolder = outputFolder;
-        this.exifData = exifData;
-        this.characteristics = characteristics;
-        this.captureResult = captureResult;
-        this.cameraRotation = cameraRotation;
-        this.captureRequest = captureRequest;
-        videoCounter = 0;
-        fillParams = false;
-        recordingStartMs = System.currentTimeMillis();
-        frameWidth = 0;
-        frameHeight = 0;
-        availableBytesAtStart = 0;
+    private static final class Session {
+        final Path folder;
+        final ParallelFrameWorker<EncodedFrame> pipeline =
+                new ParallelFrameWorker<>(ENCODER_THREADS,PIPELINE_CAPACITY);
+        final ExecutorService audioExecutor = Executors.newSingleThreadExecutor();
+        final FlacAudioRecorder audio = new FlacAudioRecorder();
+        final ArrayList<AudioChunk> audioChunks = new ArrayList<>();
+        final AtomicInteger pending = new AtomicInteger();
+        final AtomicInteger saved = new AtomicInteger();
+        final long startMs = System.currentTimeMillis();
+        final boolean bin = PreferenceKeys.isRawVideoDownscale4x();
+        final boolean crop = PreferenceKeys.isRawVideoCrop169();
+        final boolean topCrop = ImageSaver.SETTINGS.cropType;
+        final CameraCharacteristics characteristics;
+        final CaptureResult firstResult;
+        final CaptureRequest request;
+        final int rotation;
+        final double fps;
+        volatile boolean failed;
+        final TreeMap<Long, CaptureResult> results = new TreeMap<>();
+        boolean stopped;
+        volatile long bytes;
+        final AtomicLong encodeNs = new AtomicLong();
+        long writeNs, callbackNs, firstFrameNs, lastFrameNs, lastStatsMs;
+        long firstSavedNs, lastSavedNs;
+        volatile long monotonicToCameraOffsetNs = Long.MIN_VALUE;
+        int received;
+        int dropped;
+        long available;
+        Parameters parameters;
+        final ArrayBlockingQueue<ByteBuffer> freeEncoded =
+                new ArrayBlockingQueue<>(PIPELINE_CAPACITY);
+        final Semaphore encodedSlots = new Semaphore(PIPELINE_CAPACITY);
+        int encodedCapacity, width, height, stride, top, cropHeight, outWidth, outHeight;
+        boolean raw10;
+        FileOutputStream output;
+        volatile McrawWriter container;
+        Session(Path folder, CameraCharacteristics characteristics, CaptureResult result,
+                CaptureRequest request, int rotation, double fps) {
+            this.folder = folder; this.characteristics = characteristics; this.firstResult = result;
+            this.request = request; this.rotation = rotation; this.fps = fps;
+        }
+    }
+
+    public RawVideoProcessor(ProcessingEventsListener listener) { super(listener); }
+
+    public synchronized void videoStart(Path outputPath, ParseExif.ExifData exif,
+                                        CameraCharacteristics characteristics, CaptureResult result,
+                                        CaptureRequest request, int rotation, ProcessingCallback callback) {
+        if (current != null) videoEnd();
+        Path destination = outputPath;
         try {
-            StatFs statFs = new StatFs(outputFolder.getParent().toString());
-            availableBytesAtStart = statFs.getAvailableBlocksLong() * statFs.getBlockSizeLong();
-        } catch (Exception ignored) {}
-        this.callback = callback;
-        // Create output folder if not exists
-        try {
-            Files.createDirectories(outputFolder);
-            if(!PreferenceKeys.isRawVideoWriteZip())
-                Files.createDirectories(outputFolder.resolve(".dng"));
+            Files.createDirectories(outputPath.getParent());
+            // Names have second precision. Reserve a distinct filename for rapid restarts.
+            for (int suffix = 1; ; suffix++) {
+                if (!Files.exists(destination)) break;
+                String name = outputPath.getFileName().toString();
+                destination = outputPath.resolveSibling(name.substring(0,name.length()-6)
+                        + "_" + suffix + ".mcraw");
+            }
         } catch (IOException e) {
-            Log.d(TAG, "Failed to create output directory: " + outputFolder + ", error: " + Log.getStackTraceString(e));
+            reportError("Cannot start RAW video",e);
+            return;
         }
-        dngBuffers = new ByteBuffer[writeBufferSize];
-        writeBufferCounter = 0;
-        if (writeExecutor != null) {
-            writeExecutor.shutdown();
+        Session s = new Session(destination,characteristics,result,request,rotation,resolveFrameRate());
+        try {
+            // Opening a new file through Android storage can take hundreds of milliseconds.
+            // Do it before admitting camera frames so that storage setup cannot fill the RAW
+            // pipeline and stall the camera at the beginning of a recording.
+            int fd = SimpleStorageHelper.openFdForWrite(destination.toString());
+            s.output = fd >= 0
+                    ? new ParcelFileDescriptor.AutoCloseOutputStream(ParcelFileDescriptor.adoptFd(fd))
+                    : new FileOutputStream(destination.toFile());
+        } catch (IOException e) {
+            reportError("Cannot create MediaCinemaRAW output",e);
+            return;
         }
-        writeExecutor = Executors.newSingleThreadExecutor();
-        Thread th = new Thread( () -> {
-            // Always record the rear (away-from-user) microphone
-            rawAudioRecorder.start(
-                    outputFolder.resolve("RAW_MIC.flac").toString());
+        try { s.available = new StatFs(destination.getParent().toString()).getAvailableBytes(); }
+        catch (Exception e) { Log.w(TAG,"Storage statistics unavailable: " + e); }
+        current = s;
+        videoCounter = 0;
+        s.audioExecutor.execute(() -> {
+            try {
+                if (!s.audio.start((timestamp,samples,channels) -> {
+                    synchronized (s.audioChunks) {
+                        if (s.container == null) s.audioChunks.add(new AudioChunk(timestamp,samples));
+                        else try { s.container.writeAudio(samples,toCameraTime(s,timestamp)); }
+                        catch (IOException e) { s.failed=true; reportError("Embedded audio write failed",e); }
+                    }
+                }))
+                    Log.w(TAG,"RAW video microphone unavailable");
+            } catch (Exception e) { Log.e(TAG,"RAW audio start failed: " + e); }
         });
-        th.start();
-        parameters = new Parameters();
-        PhotonCamera.getGyro().startVideoRecording(outputFolder, resolveFrameRate());
-    }
-    int shift = 0;
-    @SuppressLint("DefaultLocale")
-    public void videoCycle(Image image) {
-        int format = image.getFormat();
-        int startCounter = videoCounter;
-
-        if(!fillParams){
-            // Sync gyroflow timestamps to this first camera frame.
-            PhotonCamera.getGyro().syncFirstFrame(image.getTimestamp());
-            Log.d(TAG, "videoCycle: " + this + " " + image + " " + startCounter);
-            int width = image.getWidth();
-            int height = image.getHeight();
-            if(format == ImageFormat.RAW_SENSOR){
-                width = image.getPlanes()[0].getRowStride() / image.getPlanes()[0].getPixelStride();
-                // Crop to 16:9
-                if(PreferenceKeys.isRawVideoCrop169()) {
-                    height = width * 9 / 16;
-                    if (ImageSaver.SETTINGS.cropType) {
-                        shift = 0;
-                    } else {
-                        shift = (image.getHeight() - height) / 2;
-                        shift -= shift % 2;
-                    }
-                    shift *= image.getPlanes()[0].getRowStride();
-                } else {
-                    height = image.getHeight();
-                }
-            }
-            if(format == ImageFormat.RAW10){
-                width = image.getPlanes()[0].getRowStride() * 8 / 10; // Include padding pixels into output DNG
-                height = image.getHeight();
-            }
-
-            frameWidth = width;
-            frameHeight = height;
-
-            parameters.rawSize = new Point(width, height);
-            parameters.FillConstParameters(characteristics, parameters.rawSize);
-            parameters.FillDynamicParameters(captureResult, captureRequest, 100);
-            parameters.cameraRotation = this.cameraRotation;
-            ParseExif.syncWithParameters(exifData, parameters);
-            fillParams = true;
-            dngCreator = new DngCreator();
-            dngCreator.setParameters(parameters);
-            dngCreator.setBinning(PreferenceKeys.isRawVideoDownscale4x());
-            dngCreator.setFrameRate(resolveFrameRate());
-            dngCreator.setCompression(false);
-            if(PreferenceKeys.isRawVideoWriteZip()) {
-                String archivePath = outputFolder.resolve("dng.zip").toString();
-                int archiveFd = SimpleStorageHelper.openFdForWrite(archivePath);
-                if (archiveFd >= 0) {
-                    dngCreator.openArchiveByFd(archiveFd);
-                } else {
-                    dngCreator.openArchive(archivePath);
-                }
-            }
-            /*if(format == ImageFormat.RAW_SENSOR) {
-                dngCreator.setBitsPerSample(16);
-            }
-            if (format == ImageFormat.RAW10) {
-                dngCreator.setBitsPerSample(10);
-            }*/
-            dngCreator.setBitsPerSample(10);
-            dngBuffers[0] = dngCreator.dngBuffer(image.getPlanes()[0].getBuffer(), parameters.rawSize.x, parameters.rawSize.y);
-            for (int i = 1; i < writeBufferSize; i++) {
-                dngBuffers[i] = Allocator.allocateAndCopy(dngBuffers[0].capacity(), dngBuffers[0], 0);
-                dngBuffers[i].put(dngBuffers[0]);
-                dngBuffers[i].position(0);
-            }
-            ByteBuffer firstPlane = image.getPlanes()[0].getBuffer();
-            int rawBufferCapacity = firstPlane.remaining();
-            rawBuffers = new ByteBuffer[writeBufferSize];
-            for (int i = 0; i < writeBufferSize; i++) {
-                rawBuffers[i] = ByteBuffer.allocateDirect(rawBufferCapacity);
-            }
-            Log.d(TAG, "DNG buffer allocated, size: " + dngBuffers[0].capacity());
-            image.close();
-            isRecording = true;
-        } else {
-            if (!isRecording || writeExecutor == null || dngBuffers[0] == null || rawBuffers == null) {
-                image.close();
-                return;
-            }
-            if (pendingWrites.get() >= writeBufferSize) {
-                image.close();
-                Log.d(TAG, "Dropped frame");
-                writeBufferCounter++;
-                videoCounter++;
-                processingEventsListener.onProcessingChanged(buildStats());
-                return;
-            }
-            final int slot = writeBufferCounter % writeBufferSize;
-            @SuppressLint("DefaultLocale")
-            String path = outputFolder.resolve(String.format(".dng/RAW_%05d.dng", startCounter)).toString();
-            if(PreferenceKeys.isRawVideoWriteZip()) {
-                path = String.format("RAW_%05d.dng", startCounter);
-            }
-            ByteBuffer rawSlot = rawBuffers[slot];
-            ByteBuffer planeBuffer = image.getPlanes()[0].getBuffer();
-            planeBuffer.rewind();
-            rawSlot.clear();
-            rawSlot.put(planeBuffer);
-            rawSlot.flip();
-            image.close();
-            pendingWrites.incrementAndGet();
-            final String selectedPath = path;
-            writeExecutor.execute(() -> {
-                try {
-                    if (fillParams && dngCreator != null) {
-                        dngCreator.writeFile(dngBuffers[slot], rawBuffers[slot], selectedPath, shift);
-                    }
-                } finally {
-                    pendingWrites.decrementAndGet();
-                }
-            });
-            writeBufferCounter++;
+        try {
+            PhotonCamera.getGyro().startVideoRecording(s.folder,s.fps);
         }
-
-        videoCounter++;
-        processingEventsListener.onProcessingChanged(buildStats());
+        catch (Exception e) { Log.e(TAG,"Gyro recording unavailable: " + e); }
     }
 
-    private RawVideoStats buildStats() {
-        long elapsedMs = System.currentTimeMillis() - recordingStartMs;
-        long bytesPerFrame = (long) frameWidth * frameHeight * BITS_PER_SAMPLE / 8;
-        long estimatedBytes = bytesPerFrame * videoCounter;
-        return new RawVideoStats(pendingWrites.get(), elapsedMs, estimatedBytes, availableBytesAtStart);
+    private void initialize(Session s, Image image) throws IOException {
+        int format = image.getFormat();
+        if (format != ImageFormat.RAW_SENSOR && format != ImageFormat.RAW10)
+            throw new IOException("Unsupported RAW video format: " + format);
+        s.raw10 = format == ImageFormat.RAW10;
+        s.width = image.getWidth(); s.height = image.getHeight();
+        s.stride = image.getPlanes()[0].getRowStride();
+        if (!s.raw10 && image.getPlanes()[0].getPixelStride() != 2)
+            throw new IOException("Unsupported RAW16 pixel stride");
+        int alignment = s.bin ? 8 : 4;
+        s.cropHeight = s.crop ? Math.min(s.height,s.width*9/16) : s.height;
+        // The supplied decoder always emits four rows at a time.
+        s.cropHeight -= s.cropHeight % alignment;
+        s.top = s.crop && !s.topCrop ? (s.height-s.cropHeight)/2 : 0;
+        s.top &= ~1; // Retain CFA phase.
+        s.outWidth = s.bin ? s.width/2 : s.width;
+        s.outHeight = s.bin ? s.cropHeight/2 : s.cropHeight;
+        if (s.outHeight <= 0 || (s.outWidth & 1) != 0)
+            throw new IOException("Unsupported RAW video dimensions");
+        long pixels = (long)((s.outWidth+63)/64*64)*s.outHeight;
+        s.encodedCapacity = Math.toIntExact(pixels*2+pixels/8+4096);
+        s.parameters = new Parameters();
+        s.parameters.rawSize = new Point(s.width,s.height);
+        s.parameters.FillConstParameters(s.characteristics,s.parameters.rawSize);
+        s.parameters.FillDynamicParameters(s.firstResult,s.request,100);
+        s.parameters.cameraRotation = s.rotation;
+        PhotonCamera.getGyro().syncFirstFrame(image.getTimestamp());
+    }
+
+    /** The Image is always closed, including late callbacks after stop and failed submissions. */
+    public synchronized void videoCycle(Image image) {
+        Session s = current;
+        boolean transferred = false;
+        long callbackStart = System.nanoTime();
+        try {
+            if (s == null || s.failed) return;
+            if (s.received++ == 0) {
+                s.firstFrameNs = image.getTimestamp();
+                s.monotonicToCameraOffsetNs = image.getTimestamp()-System.nanoTime();
+            }
+            s.lastFrameNs = image.getTimestamp();
+            if (s.parameters == null) initialize(s,image);
+            if (image.getWidth() != s.width || image.getHeight() != s.height
+                    || image.getPlanes()[0].getRowStride() != s.stride)
+                throw new IOException("RAW geometry changed during recording");
+            videoCounter++;
+            final long timestamp = image.getTimestamp();
+            final long receivedTimestampMs = System.currentTimeMillis();
+            s.pending.incrementAndGet();
+            transferred = s.pipeline.submit(() -> encodeFrame(s,image,timestamp,receivedTimestampMs),
+                    frame -> writeFrame(s,frame),
+                    frame -> {
+                        s.freeEncoded.offer(frame.data);
+                        s.encodedSlots.release();
+                        s.pending.decrementAndGet();
+                    },
+                    error -> {
+                        s.failed = true;
+                        s.pending.decrementAndGet();
+                        reportError("RAW video encoding failed",new IOException(error));
+                    });
+            if (!transferred) { s.pending.decrementAndGet(); s.dropped++; }
+        } catch (Exception e) {
+            if (s != null) s.failed = true;
+            reportError("RAW video recording failed",e);
+        } finally {
+            if (!transferred) image.close();
+            if (s != null) {
+                s.callbackNs += System.nanoTime()-callbackStart;
+                long now = System.currentTimeMillis();
+                if (now-s.lastStatsMs >= 100) {
+                    s.lastStatsMs = now;
+                    processingEventsListener.onProcessingChanged(new RawVideoStats(
+                            Math.min(s.pending.get(),TOTAL_BUFFER_CAPACITY),TOTAL_BUFFER_CAPACITY,
+                            now-s.startMs,s.bytes,s.available));
+                }
+            }
+        }
+    }
+
+    public synchronized void videoCaptureResult(CaptureResult result) {
+        Session s = current;
+        Long timestamp = result.get(CaptureResult.SENSOR_TIMESTAMP);
+        if (s == null || timestamp == null) return;
+        synchronized (s.results) {
+            s.results.put(timestamp,result);
+            while (s.results.size() > 128) s.results.pollFirstEntry();
+            s.results.notifyAll();
+        }
+    }
+
+    private CaptureResult frameResult(Session s, long timestamp) {
+        synchronized (s.results) {
+            CaptureResult result = s.results.remove(timestamp);
+            return result == null ? s.firstResult : result;
+        }
+    }
+
+    private EncodedFrame encodeFrame(Session s, Image image, long timestamp,
+                                     long receivedTimestampMs) throws Exception {
+        ByteBuffer encoded = null;
+        boolean slot = false;
+        try {
+            s.encodedSlots.acquire();
+            slot = true;
+            encoded = s.freeEncoded.poll();
+            if (encoded == null) encoded = ByteBuffer.allocateDirect(s.encodedCapacity);
+            long start = System.nanoTime();
+            ByteBuffer raw = image.getPlanes()[0].getBuffer().duplicate();
+            int length = McrawEncoder.encode(raw,raw.remaining(),s.width,s.height,s.stride,
+                    s.raw10,s.top,s.cropHeight,s.bin,encoded);
+            s.encodeNs.addAndGet(System.nanoTime()-start);
+            encoded.clear(); encoded.limit(length);
+        } catch (Exception e) {
+            if (encoded != null) s.freeEncoded.offer(encoded);
+            if (slot) s.encodedSlots.release();
+            throw e;
+        } catch (Error e) {
+            if (encoded != null) s.freeEncoded.offer(encoded);
+            if (slot) s.encodedSlots.release();
+            throw e;
+        } finally { image.close(); }
+        try {
+            return new EncodedFrame(encoded,timestamp,receivedTimestampMs,null);
+        } catch (Exception e) {
+            s.freeEncoded.offer(encoded);
+            throw e;
+        }
+    }
+
+    private void writeFrame(Session s, EncodedFrame frame) {
+        try {
+            if (s.failed) return;
+            if (s.container == null) {
+                String metadata = McrawMetadata.container(s.parameters,s.fps,
+                        s.audio.getSampleRate(),s.audio.getChannels());
+                s.container = new McrawWriter(s.output.getChannel(),s.output,metadata);
+                synchronized (s.audioChunks) {
+                    for (AudioChunk chunk : s.audioChunks)
+                        s.container.writeAudio(chunk.samples,toCameraTime(s,chunk.timestampNs));
+                    s.audioChunks.clear();
+                }
+            }
+            long start = System.nanoTime();
+            String frameMetadata = McrawMetadata.frame(s.parameters,frameResult(s,frame.timestamp),
+                    s.outWidth,s.outHeight,frame.timestamp,frame.receivedTimestampMs);
+            s.container.writeFrame(frame.data,frame.timestamp,frameMetadata);
+            s.writeNs += System.nanoTime()-start;
+            s.bytes = s.container.bytesWritten();
+            if (s.container.frameCount() == 1) s.firstSavedNs = frame.timestamp;
+            s.lastSavedNs = frame.timestamp;
+            s.saved.incrementAndGet();
+        } catch (Exception e) {
+            s.failed = true;
+            reportError("RAW video write failed",e);
+        }
+    }
+
+    public void videoEnd() { videoEnd(() -> {}); }
+
+    public synchronized void videoEnd(Runnable finalized) {
+        Session s = current;
+        if (s == null) { finalized.run(); return; }
+        current = null; // Stop admission before scheduling the finalizer.
+        synchronized (s.results) { s.stopped = true; s.results.notifyAll(); }
+        Gyro.MediaCinemaRawSamples gyro;
+        try { gyro = PhotonCamera.getGyro().stopVideoRecordingForContainer(); }
+        catch (Exception e) {
+            Log.e(TAG,"Gyro stop failed: " + e);
+            gyro = new Gyro.MediaCinemaRawSamples(new long[0],new float[0],new float[0],new float[0],0);
+        }
+        final Gyro.MediaCinemaRawSamples finalGyro = gyro;
+        s.audioExecutor.execute(() -> {
+            try { s.audio.stop(); }
+            catch (Exception e) { reportError("RAW audio finalization failed",e); }
+        });
+        s.audioExecutor.shutdown();
+        s.pipeline.finish(() -> {
+            try {
+                try {
+                    if (!s.audioExecutor.awaitTermination(10,java.util.concurrent.TimeUnit.SECONDS))
+                        Log.w(TAG,"Timed out while stopping MediaCinemaRAW audio");
+                }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                if (s.container != null) {
+                    synchronized (s.audioChunks) {
+                        for (AudioChunk chunk : s.audioChunks)
+                            s.container.writeAudio(chunk.samples,toCameraTime(s,chunk.timestampNs));
+                    }
+                    if (s.monotonicToCameraOffsetNs != Long.MIN_VALUE)
+                        for (int i=0;i<finalGyro.count;i++)
+                            finalGyro.timestampsNs[i] += s.monotonicToCameraOffsetNs;
+                    s.container.writeGyro(finalGyro.timestampsNs,finalGyro.x,finalGyro.y,finalGyro.z,finalGyro.count);
+                    s.container.close();
+                    s.output = null; // McrawWriter owns and closed it.
+                } else if (s.output != null) {
+                    s.output.close();
+                    s.output = null;
+                }
+                int saved = s.container == null ? 0 : s.container.frameCount();
+                Log.d(TAG,"RAW video finalized: " + s.folder + " saved=" + saved
+                        + " dropped=" + s.dropped + " encodeMsPerFrame=" + s.encodeNs.get()/1e6/Math.max(1,saved)
+                        + " writeMsPerFrame=" + s.writeNs/1e6/Math.max(1,saved)
+                        + " savedFps=" + ((saved-1)*1e9/Math.max(1,s.lastSavedNs-s.firstSavedNs))
+                        + " received=" + s.received
+                        + " inputFps=" + ((s.received-1)*1e9/Math.max(1,s.lastFrameNs-s.firstFrameNs))
+                        + " callbackMsPerFrame=" + s.callbackNs/1e6/Math.max(1,s.received));
+            } catch (Exception e) { reportError("MediaCinemaRAW finalization failed",e); }
+            finally {
+                s.freeEncoded.clear();
+                finalized.run();
+            }
+        });
+        // The queued finalizer owns and closes the file after all accepted writes.
+    }
+
+    private void reportError(String message, Exception e) {
+        Log.e(TAG,message + ": " + Log.getStackTraceString(e));
+        PhotonCamera.getMainHandler().post(() ->
+                processingEventsListener.onProcessingError(message + ": " + e.getMessage()));
+    }
+
+    private long toCameraTime(Session s,long monotonicTimestampNs) {
+        long offset=s.monotonicToCameraOffsetNs;
+        return offset==Long.MIN_VALUE ? monotonicTimestampNs : monotonicTimestampNs+offset;
     }
 
     private double resolveFrameRate() {
         switch (PreferenceKeys.getFpsMode()) {
             case 1: return 24.0;
-            case 2: return 30.0;
             case 3: return 60.0;
-            default: return 30.0; // auto
-        }
-    }
-
-    private void processVideo() {
-
-    }
-
-    public void videoEnd() {
-        isRecording = false;
-
-        PhotonCamera.getGyro().stopVideoRecording();
-        rawAudioRecorder.stop();
-        if (writeExecutor != null) {
-            writeExecutor.shutdown();
-            dngCreator.closeArchive();
-            writeExecutor = null;
+            default: return 30.0;
         }
     }
 }

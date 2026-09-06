@@ -227,3 +227,6 @@ target_link_libraries(
         camera2native
         log
 )
+
+add_library(mcrawEncoder SHARED mcraw/Encoder.cpp mcraw/Jni.cpp)
+target_compile_options(mcrawEncoder PRIVATE -O3)

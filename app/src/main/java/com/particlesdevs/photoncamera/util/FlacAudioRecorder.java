@@ -1,25 +1,13 @@
 package com.particlesdevs.photoncamera.util;
 
-import static androidx.core.content.ContextCompat.getSystemService;
-
 import android.annotation.SuppressLint;
-import android.content.Context;
-import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
-import android.os.Build;
-
-import androidx.core.content.ContextCompat;
-
-import com.particlesdevs.photoncamera.app.PhotonCamera;
-import com.particlesdevs.photoncamera.util.Log;
+import android.os.ParcelFileDescriptor;
 
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.FileOutputStream;
-import java.lang.reflect.Field;
 import java.util.Arrays;
 
 /**
@@ -35,6 +23,7 @@ import java.util.Arrays;
  * when the device supports simultaneous capture.
  */
 public class FlacAudioRecorder {
+    public interface PcmSink { void onPcm(long timestampNs, short[] samples, int channels); }
     private static final String TAG = "FlacAudioRecorder";
 
     private static final int SAMPLE_RATE = 44100;
@@ -53,10 +42,27 @@ public class FlacAudioRecorder {
 
     private AudioRecord audioRecord;
     private FileOutputStream outputFos;
+    private ParcelFileDescriptor outputPfd;
     private Thread recordThread;
     private volatile boolean recording = false;
     private long nativeCtx = 0;
     private int actualChannels = 2;
+    private PcmSink pcmSink;
+
+    public synchronized boolean start(PcmSink sink) {
+        if (recording || sink == null) return false;
+        audioRecord = createAudioRecord();
+        if (audioRecord == null || audioRecord.getState() != AudioRecord.STATE_INITIALIZED) return false;
+        pcmSink = sink;
+        recording = true;
+        recordThread = new Thread(this::recordLoop, "MediaCinemaRAW-Audio");
+        recordThread.setDaemon(true);
+        recordThread.start();
+        return true;
+    }
+
+    public int getSampleRate() { return SAMPLE_RATE; }
+    public int getChannels() { return actualChannels; }
 
     /**
      * Start recording to the given output path
@@ -64,7 +70,7 @@ public class FlacAudioRecorder {
      * @param outputPath  Destination .flac file path
      * @return true if recording started successfully
      */
-    public boolean start(String outputPath) {
+    public synchronized boolean start(String outputPath) {
         if (recording) {
             Log.w(TAG, "Already recording");
             return false;
@@ -113,7 +119,7 @@ public class FlacAudioRecorder {
     /**
      * Stop recording and flush the FLAC file to disk.
      */
-    public void stop() {
+    public synchronized void stop() {
         if (!recording && nativeCtx == 0) return;
 
         recording = false;
@@ -124,7 +130,13 @@ public class FlacAudioRecorder {
         }
 
         if (recordThread != null) {
-            try { recordThread.join(3000); } catch (InterruptedException ignored) {}
+            // Never close the native encoder while recordLoop may still use it.
+            boolean interrupted = false;
+            while (recordThread.isAlive()) {
+                try { recordThread.join(); }
+                catch (InterruptedException e) { interrupted = true; }
+            }
+            if (interrupted) Thread.currentThread().interrupt();
             recordThread = null;
         }
 
@@ -150,20 +162,24 @@ public class FlacAudioRecorder {
      * Primary: {@link SimpleStorageHelper#openFdForWrite} via SAF ContentResolver —
      * bypasses FUSE MediaProvider type restrictions on Android 11+ (EPERM for audio in DCIM).
      *
-     * Fallback: {@link FileOutputStream} + reflection (older APIs, app-specific paths).
+     * Fallback: {@link FileOutputStream} with a public ParcelFileDescriptor duplicate.
      */
     private int openOutputFile(String path) {
         int fd = SimpleStorageHelper.openFdForWrite(path);
-        if (fd >= 0) return fd;
+        if (fd >= 0) {
+            outputPfd = android.os.ParcelFileDescriptor.adoptFd(fd);
+            return fd;
+        }
 
         Log.w(TAG, "SAF open failed for " + path + ", falling back to FileOutputStream");
         try {
             File f = new File(path);
-            if (f.getParentFile() != null) f.getParentFile().mkdirs();
+            File parent = f.getParentFile();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs())
+                throw new java.io.IOException("Cannot create output directory " + parent);
             outputFos = new FileOutputStream(f);
-            Field field = FileDescriptor.class.getDeclaredField("descriptor");
-            field.setAccessible(true);
-            return (int) field.get(outputFos.getFD());
+            outputPfd = ParcelFileDescriptor.dup(outputFos.getFD());
+            return outputPfd.getFd();
         } catch (Exception e) {
             Log.e(TAG, "openOutputFile failed: " + e.getMessage());
             closeOutputFile();
@@ -172,6 +188,10 @@ public class FlacAudioRecorder {
     }
 
     private void closeOutputFile() {
+        if (outputPfd != null) {
+            try { outputPfd.close(); } catch (Exception ignored) {}
+            outputPfd = null;
+        }
         if (outputFos != null) {
             try { outputFos.close(); } catch (Exception ignored) {}
             outputFos = null;
@@ -192,10 +212,15 @@ public class FlacAudioRecorder {
             if (read <= 0) break;
             if (nativeCtx != 0) {
                 nativeWriteFrame(nativeCtx, buffer, read / actualChannels, actualChannels);
+            } else if (pcmSink != null) {
+                short[] copy = Arrays.copyOf(buffer,read);
+                long durationNs = (long)(read / actualChannels) * 1_000_000_000L / SAMPLE_RATE;
+                pcmSink.onPcm(System.nanoTime()-durationNs,copy,actualChannels);
             }
         }
 
         Log.d(TAG, "Record loop ended");
+        pcmSink = null;
     }
 
     /**
@@ -232,7 +257,7 @@ public class FlacAudioRecorder {
                 if (minBuf <= 0) continue;
                 int bufSize = Math.max(minBuf, BLOCK_SAMPLES * numCh * 8);
                 try {
-                    AudioFormat audioFormat = null;
+                    AudioFormat audioFormat;
                     if(legacy) {
                         audioFormat = new AudioFormat.Builder()
                                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT)

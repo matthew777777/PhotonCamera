@@ -43,6 +43,6 @@ public class ImagePath {
 
     public static Path getNewVideoFolderPath() {
         File dir = FileManager.sPHOTON_RAW_DIR;
-        return Paths.get(dir.getAbsolutePath(), generateNewFileName("VID"));
+        return Paths.get(dir.getAbsolutePath(), generateNewFileName("VID") + ".mcraw");
     }
 }

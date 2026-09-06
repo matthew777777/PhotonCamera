@@ -135,14 +135,25 @@ public class DefaultSaver extends SaverImplementation {
         }
     }
 
+    public void videoCaptureResult(CaptureResult result) {
+        mRawVideoProcessor.videoCaptureResult(result);
+    }
+
     public void processEnd() {
+        processEnd(() -> {});
+    }
+
+    public void processEnd(Runnable finalized) {
         switch (PhotonCamera.getSettings().selectedMode){
             case UNLIMITED:
                 mUnlimitedProcessor.unlimitedEnd();
+                finalized.run();
                 break;
             case RAWVIDEO:
-                mRawVideoProcessor.videoEnd();
+                mRawVideoProcessor.videoEnd(finalized);
                 break;
+            default:
+                finalized.run();
         }
     }
 }

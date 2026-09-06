@@ -621,7 +621,7 @@ public class SettingsActivity extends BaseActivity implements PreferenceFragment
                 String packageName = mContext.getPackageName();
                 ComponentName galleryLauncher = new ComponentName(
                         packageName,
-                        packageName + ".gallery.ui.GalleryActivityLauncher"
+                        "com.particlesdevs.photoncamera.gallery.ui.GalleryActivityLauncher"
                 );
                 
                 // Get the package manager

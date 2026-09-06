@@ -30,7 +30,7 @@ public class ImageSaverSelector {
 
             case ImageFormat.RAW10:
             case ImageFormat.RAW_SENSOR:
-                Log.d(TAG, "Selected RAW16Saver for format: " + format);
+
                 saverImplementation = RAW16Saver;
                 //saverImplementation = new RAW16Saver(saverImplementation.processingEventsListener);
                 break;

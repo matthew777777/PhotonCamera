@@ -71,6 +71,8 @@ android {
             signingConfig signingConfigs.debug
         }
         debug {
+            applicationIdSuffix ".test"
+            resValue "string", "app_name", "PhotonCamera Test"
             minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

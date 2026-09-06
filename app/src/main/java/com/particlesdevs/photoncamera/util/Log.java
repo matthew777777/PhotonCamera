@@ -67,7 +67,7 @@ public class Log {
         if (context != null) {
             logContext = context.getApplicationContext();
             logDir = null;
-            logHandler.post(() -> cleanupOldLogs());
+            logHandler.post(() -> { closeWriter(); currentDate = null; cleanupOldLogs(); });
         } else {
             logContext = null;
             closeWriter();
@@ -80,7 +80,7 @@ public class Log {
         if (folder != null && folder.isDirectory()) {
             logDir = folder;
             logContext = null;
-            logHandler.post(() -> cleanupOldLogs());
+            logHandler.post(() -> { closeWriter(); currentDate = null; cleanupOldLogs(); });
         } else {
             logDir = null;
             closeWriter();
@@ -200,26 +200,23 @@ public class Log {
     }
 
     private static void writeToFile(String level, String tag, String message) {
-        boolean useSimpleStorage = (logContext != null && SimpleStorageHelper.hasStorageAccess(logContext));
-        if (!logEnabled) return;
-        if (!useSimpleStorage && logDir == null) return;
-
+        if (!logEnabled || (logContext == null && logDir == null)) return;
         long timestamp = System.currentTimeMillis();
-
         logHandler.post(() -> {
             try {
-                if (useSimpleStorage) {
-                    DocumentFile file = getLogFileDocumentFile();
-                    if (file == null || !file.exists()) return;
-                    if (bufferedWriter == null) {
+                // Storage-provider calls belong on this thread, never the camera callback.
+                // Keep the open writer for the day instead of resolving SAF paths per message.
+                String today = dateFormatter.get().format(new java.util.Date(timestamp));
+                if (bufferedWriter == null || !today.equals(currentDate)) {
+                    if (logContext != null) {
+                        DocumentFile file = getLogFileDocumentFile();
+                        if (file == null) return;
                         java.io.OutputStream os = DocumentFileUtils.openOutputStream(file, logContext, true);
                         if (os == null) return;
                         bufferedWriter = new BufferedWriter(new OutputStreamWriter(os), 8192);
-                    }
-                } else {
-                    java.io.File file = getLogFile();
-                    if (file == null) return;
-                    if (bufferedWriter == null) {
+                    } else {
+                        java.io.File file = getLogFile();
+                        if (file == null) return;
                         bufferedWriter = new BufferedWriter(new FileWriter(file, true), 8192);
                     }
                 }

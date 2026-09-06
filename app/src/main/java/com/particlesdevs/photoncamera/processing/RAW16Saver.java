@@ -1,11 +1,8 @@
 package com.particlesdevs.photoncamera.processing;
 
 import android.media.Image;
-import android.os.AsyncTask;
 import com.particlesdevs.photoncamera.util.Log;
 
-import com.particlesdevs.photoncamera.R;
-import com.particlesdevs.photoncamera.api.CameraMode;
 import com.particlesdevs.photoncamera.app.PhotonCamera;
 
 public class RAW16Saver extends DefaultSaver{
@@ -17,7 +14,6 @@ public class RAW16Saver extends DefaultSaver{
     public void addImage(Image image) {
         switch (PhotonCamera.getSettings().selectedMode) {
             case RAWVIDEO:
-                Log.d(TAG, "rawvideoaddImage: " + this + " " + mRawVideoProcessor);
                 mRawVideoProcessor.videoCycle(image);
                 //image.close();
                 bufferLock = false;

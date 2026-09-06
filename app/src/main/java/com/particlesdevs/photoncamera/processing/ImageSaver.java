@@ -1,5 +1,7 @@
 package com.particlesdevs.photoncamera.processing;
 
+import com.particlesdevs.photoncamera.app.PhotonCamera;
+
 import android.graphics.Bitmap;
 import android.graphics.ImageFormat;
 import android.graphics.Point;
@@ -68,9 +70,10 @@ public class ImageSaver {
     }
 
     public void initProcess(ImageReader mReader) {
-        Log.v(TAG, "initProcess()");
+        boolean rawVideo = PhotonCamera.getSettings().selectedMode == com.particlesdevs.photoncamera.api.CameraMode.RAWVIDEO;
+        if (!rawVideo) Log.v(TAG, "initProcess()");
         if((frameCounter < desiredFrameCount) || desiredFrameCount == -1) {
-            Log.v(TAG, "initProcess() : called from \"" + Thread.currentThread().getName() + "\" Thread");
+            if (!rawVideo) Log.v(TAG, "initProcess() : called from \"" + Thread.currentThread().getName() + "\" Thread");
             Image mImage;
             try {
                 mImage = mReader.acquireNextImage();
@@ -82,7 +85,7 @@ public class ImageSaver {
             int format = mImage.getFormat();
             imageFormat = mReader.getImageFormat();
             implementation = getImageSaver(format, implementation);
-            Log.d(TAG,"Implementation:" + implementation);
+            if (!rawVideo) Log.d(TAG,"Implementation:" + implementation);
             implementation.frameCount = desiredFrameCount;
             implementation.newBurst = newBurst;
             implementation.addImage(mImage);
@@ -111,8 +114,22 @@ public class ImageSaver {
         implementation.processStart(imageFormat,characteristics,captureResult, captureRequest,cameraRotation);
     }
 
+    public void videoCaptureResult(CaptureResult result) {
+        if (implementation instanceof DefaultSaver)
+            ((DefaultSaver) implementation).videoCaptureResult(result);
+    }
+
     public void processEnd() {
         implementation.processEnd();
+    }
+
+    public void processEnd(Runnable finalized) {
+        if (implementation instanceof DefaultSaver)
+            ((DefaultSaver) implementation).processEnd(finalized);
+        else {
+            implementation.processEnd();
+            finalized.run();
+        }
     }
 
     public static class Util {

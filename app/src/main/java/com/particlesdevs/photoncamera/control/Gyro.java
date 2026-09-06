@@ -51,36 +51,38 @@ public class Gyro {
     private final SensorEventListener mVideoRecordingListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent event) {
-            if (!isVideoRecording) return;
-            switch (event.sensor.getType()) {
-                case Sensor.TYPE_GYROSCOPE: {
-                    int idx = recCount;
-                    if (idx < MAX_REC_SAMPLES) {
-                        recTimestamps[idx] = event.timestamp;
-                        recGx[idx] = event.values[0];
-                        recGy[idx] = event.values[1];
-                        recGz[idx] = event.values[2];
-                        recAx[idx] = latestAx;
-                        recAy[idx] = latestAy;
-                        recAz[idx] = latestAz;
-                        recMx[idx] = latestMx;
-                        recMy[idx] = latestMy;
-                        recMz[idx] = latestMz;
-                        recCount = idx + 1;
+            synchronized (Gyro.this) {
+                if (!isVideoRecording) return;
+                switch (event.sensor.getType()) {
+                    case Sensor.TYPE_GYROSCOPE: {
+                        int idx = recCount;
+                        if (idx < MAX_REC_SAMPLES) {
+                            recTimestamps[idx] = event.timestamp;
+                            recGx[idx] = event.values[0];
+                            recGy[idx] = event.values[1];
+                            recGz[idx] = event.values[2];
+                            recAx[idx] = latestAx;
+                            recAy[idx] = latestAy;
+                            recAz[idx] = latestAz;
+                            recMx[idx] = latestMx;
+                            recMy[idx] = latestMy;
+                            recMz[idx] = latestMz;
+                            recCount = idx + 1;
+                        }
+                        break;
                     }
-                    break;
+                    case Sensor.TYPE_ACCELEROMETER:
+                        latestAx = event.values[0];
+                        latestAy = event.values[1];
+                        latestAz = event.values[2];
+                        break;
+                    case Sensor.TYPE_MAGNETIC_FIELD:
+                        latestMx = event.values[0];
+                        latestMy = event.values[1];
+                        latestMz = event.values[2];
+                        recHasMag = true;
+                        break;
                 }
-                case Sensor.TYPE_ACCELEROMETER:
-                    latestAx = event.values[0];
-                    latestAy = event.values[1];
-                    latestAz = event.values[2];
-                    break;
-                case Sensor.TYPE_MAGNETIC_FIELD:
-                    latestMx = event.values[0];
-                    latestMy = event.values[1];
-                    latestMz = event.values[2];
-                    recHasMag = true;
-                    break;
             }
         }
         @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
@@ -440,9 +442,9 @@ public class Gyro {
      * Begin buffering IMU data for a Gyroscore sidecar file.
      * Call this when RAW video recording starts (before the first frame).
      */
-    public void startVideoRecording(Path outputFolder, double frameRate) {
+    public synchronized void startVideoRecording(Path outputPath, double frameRate) {
         if (isVideoRecording) return;
-        videoOutputPath      = outputFolder.resolve("GYROFLOW.gcsv");
+        videoOutputPath      = outputPath;
         videoFrameRate       = frameRate;
         videoFirstFrameTs    = Long.MIN_VALUE;
         videoStartWallTimeMs = System.currentTimeMillis();
@@ -487,7 +489,7 @@ public class Gyro {
      *
      * @param cameraTimestampNs {@code Image.getTimestamp()} of the first captured frame
      */
-    public void syncFirstFrame(long cameraTimestampNs) {
+    public synchronized void syncFirstFrame(long cameraTimestampNs) {
         if (videoFirstFrameTs == Long.MIN_VALUE)
             videoFirstFrameTs = cameraTimestampNs;
     }
@@ -495,7 +497,31 @@ public class Gyro {
     /**
      * Stop buffering and write the GCSV sidecar file on a background thread.
      */
-    public void stopVideoRecording() {
+    public static final class MediaCinemaRawSamples {
+        public final long[] timestampsNs;
+        public final float[] x, y, z;
+        public final int count;
+        public MediaCinemaRawSamples(long[] timestampsNs,float[] x,float[] y,float[] z,int count) {
+            this.timestampsNs=timestampsNs; this.x=x; this.y=y; this.z=z; this.count=count;
+        }
+    }
+
+    public synchronized MediaCinemaRawSamples stopVideoRecordingForContainer() {
+        if (!isVideoRecording) return new MediaCinemaRawSamples(new long[0],new float[0],new float[0],new float[0],0);
+        isVideoRecording = false;
+        mSensorManager.unregisterListener(mVideoRecordingListener,mGyroSensor);
+        if (mAccelSensor != null) mSensorManager.unregisterListener(mVideoRecordingListener,mAccelSensor);
+        if (mMagSensor != null) mSensorManager.unregisterListener(mVideoRecordingListener,mMagSensor);
+        MediaCinemaRawSamples samples = new MediaCinemaRawSamples(
+                recTimestamps,recGx,recGy,recGz,recCount);
+        recTimestamps=null;
+        recGx=recGy=recGz=null;
+        recAx=recAy=recAz=null;
+        recMx=recMy=recMz=null;
+        return samples;
+    }
+
+    public synchronized void stopVideoRecording() {
         if (!isVideoRecording) return;
         isVideoRecording = false;
 
@@ -572,7 +598,7 @@ public class Gyro {
             // XYZ = identity mapping; user may need to adjust in Gyroflow's
             // IMU Orientation field to match their specific device.
             p.println("orientation,XYZ");
-            p.println("note,PhotonCamera RAW Video");
+            p.println("note,PhotonCamera MediaCinemaRAW");
             p.println("fwversion," + PhotonCamera.getVersion());
             p.println("timestamp," + (wallTimeMs / 1000L));
             p.println("vendor,PhotonCamera");

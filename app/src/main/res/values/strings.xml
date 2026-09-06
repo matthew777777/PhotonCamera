@@ -125,7 +125,7 @@
     <string name="sync_on">Sync. On</string>
     <string name="sync_off">Sync. Off</string>
     <string name="mode_unlimited">Unlimited</string>
-    <string name="mode_rawvideo">RAW Video</string>
+    <string name="mode_rawvideo">MediaCinemaRAW</string>
     <string name="mode_motion">Motion</string>
     <string name="mode_photo">Photo</string>
     <string name="mode_night">Night</string>
@@ -170,9 +170,11 @@
 
     <!-- Video Settings -->
     <string name="video_settings">Video Settings</string>
-    <string name="raw_video_settings">Raw Video Settings</string>
+    <string name="raw_video_settings">MediaCinemaRAW Settings</string>
     <string name="rawvideo_downscale_4x">Downscale 4x</string>
     <string name="rawvideo_write_zip">Write ZIP</string>
+    <string name="rawvideo_format">Recording format</string>
+    <string name="rawvideo_format_summary">MediaCinemaRAW (.mcraw) with embedded audio and gyro</string>
     <string name="rawvideo_crop_169">Crop to 16:9</string>
     <string name="photo_settings">Photo Settings</string>
     <string name="video_resolution">Video Resolution</string>

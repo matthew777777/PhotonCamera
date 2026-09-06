@@ -273,7 +273,7 @@ public class PhotonCamera extends Application {
             String packageName = getPackageName();
             ComponentName galleryLauncher = new ComponentName(
                     packageName,
-                    packageName + ".gallery.ui.GalleryActivityLauncher"
+                    "com.particlesdevs.photoncamera.gallery.ui.GalleryActivityLauncher"
             );
             
             // Set the component enabled state based on the preference

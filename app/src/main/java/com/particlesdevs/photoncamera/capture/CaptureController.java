@@ -175,6 +175,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      * Max preview height that is guaranteed by Camera2 API
      */
     private static final int MAX_PREVIEW_HEIGHT = 1080;
+    private static final int RAW_VIDEO_MAX_IMAGES = 5;
     /**
      * Timeout for the pre-capture sequence.
      */
@@ -1500,6 +1501,8 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
         Size preview = getCameraOutputSize(map.getOutputSizes(mPreviewTargetFormat));
 
         int maxjpg = 3;
+        if (PhotonCamera.getSettings().selectedMode == CameraMode.RAWVIDEO)
+            maxjpg = RAW_VIDEO_MAX_IMAGES;
         if (mTargetFormat == mPreviewTargetFormat && isDualSession)
             maxjpg = PhotonCamera.getSettings().frameCount + 3;
         if (isZslMode())
@@ -2315,6 +2318,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
             }*/
             Log.d(TAG, "CaptureStarted!");
 
+            final boolean rawVideoCapture = PhotonCamera.getSettings().selectedMode == CameraMode.RAWVIDEO;
             final long[] baseFrameNumber = {0};
             final int[] maxFrameCount = {frameCount};
 
@@ -2330,6 +2334,10 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                              long timestamp,
                                              long frameNumber) {
 
+                    if (rawVideoCapture) {
+                        if (baseFrameNumber[0] == 0) baseFrameNumber[0] = frameNumber;
+                        return;
+                    }
                     if (baseFrameNumber[0] == 0) {
                         baseFrameNumber[0] = frameNumber;
                         if (maxFrameCount[0] != -1) PhotonCamera.getGyro().CaptureGyroBurst();
@@ -2344,6 +2352,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                 @Override
                 public void onCaptureProgressed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
                                                 @NonNull CaptureResult partialResult) {
+                    if (rawVideoCapture) return;
                     int frameCount = (int) (partialResult.getFrameNumber() - baseFrameNumber[0]);
                     Log.v("BurstCounter", "CaptureProgressed! FrameCount:" + frameCount);
                     if (mCaptureResult == null) {
@@ -2356,6 +2365,15 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                                                @NonNull CaptureRequest request,
                                                @NonNull TotalCaptureResult result) {
 
+                    if (rawVideoCapture) {
+                        if (onUnlimited && !unlimitedStarted) {
+                            mImageSaver.processStart(mCameraCharacteristics, result, request, cameraRotation);
+                            unlimitedStarted = true;
+                        }
+                        if (onUnlimited) mImageSaver.videoCaptureResult(result);
+                        mCaptureResult = result;
+                        return;
+                    }
                     int frameCount = (int) (result.getFrameNumber() - baseFrameNumber[0]);
                     Log.v("BurstCounter", "CaptureCompleted! FrameCount:" + frameCount);
                     Object time = result.get(CaptureResult.SENSOR_TIMESTAMP);
@@ -2378,6 +2396,7 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
                         mImageSaver.processStart(mCameraCharacteristics, result, request, cameraRotation);
                         unlimitedStarted = true;
                     }
+                    if (onUnlimited) mImageSaver.videoCaptureResult(result);
                     //if(frameCount == 0)
                         mCaptureResult = result;
                     if (maxFrameCount[0] != -1) PhotonCamera.getGyro().CaptureGyroBurst();
@@ -2654,11 +2673,12 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
 
     public void callUnlimitedEnd() {
         onUnlimited = false;
-        //mImageSaver.unlimitedEnd();
-        mBackgroundHandler.post(() -> mImageSaver.processEnd());
         abortCaptures();
-        createCameraPreviewSession(false);
         unlimitedStarted = false;
+        // Retained RAW Images must finish encoding before their ImageReader is closed and the
+        // preview session is rebuilt.
+        mBackgroundHandler.post(() -> mImageSaver.processEnd(() ->
+                mBackgroundHandler.post(() -> createCameraPreviewSession(false))));
     }
 
     public void callUnlimitedStart() {
