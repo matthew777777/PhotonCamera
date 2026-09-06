@@ -175,7 +175,9 @@ public class CaptureController implements MediaRecorder.OnInfoListener {
      * Max preview height that is guaranteed by Camera2 API
      */
     private static final int MAX_PREVIEW_HEIGHT = 1080;
-    private static final int RAW_VIDEO_MAX_IMAGES = 5;
+    // MediaCinemaRAW gets a deeper HAL-side queue so file startup and short encoder/write
+    // stalls do not immediately starve the camera capture pipeline.
+    private static final int RAW_VIDEO_MAX_IMAGES = 16;
     /**
      * Timeout for the pre-capture sequence.
      */

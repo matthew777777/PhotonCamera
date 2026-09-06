@@ -104,6 +104,7 @@ public class RawVideoProcessor extends ProcessorBase {
         long writeNs, callbackNs, firstFrameNs, lastFrameNs, lastStatsMs;
         long firstSavedNs, lastSavedNs;
         volatile long monotonicToCameraOffsetNs = Long.MIN_VALUE;
+        long acceptAfterTimestampNs = Long.MIN_VALUE;
         int received;
         int dropped;
         long available;
@@ -203,7 +204,6 @@ public class RawVideoProcessor extends ProcessorBase {
         s.parameters.FillConstParameters(s.characteristics,s.parameters.rawSize);
         s.parameters.FillDynamicParameters(s.firstResult,s.request,100);
         s.parameters.cameraRotation = s.rotation;
-        PhotonCamera.getGyro().syncFirstFrame(image.getTimestamp());
     }
 
     /** The Image is always closed, including late callbacks after stop and failed submissions. */
@@ -213,12 +213,21 @@ public class RawVideoProcessor extends ProcessorBase {
         long callbackStart = System.nanoTime();
         try {
             if (s == null || s.failed) return;
+            if (s.parameters == null) {
+                s.monotonicToCameraOffsetNs = image.getTimestamp()-System.nanoTime();
+                initialize(s,image);
+                // Parameter/JNI/storage initialization can outlast the ImageReader queue.
+                // Reject this frame and all frames captured while initialization ran. The
+                // recording timeline therefore starts on a fresh, evenly timed camera frame.
+                s.acceptAfterTimestampNs = System.nanoTime()+s.monotonicToCameraOffsetNs;
+                return;
+            }
+            if (image.getTimestamp() <= s.acceptAfterTimestampNs) return;
             if (s.received++ == 0) {
                 s.firstFrameNs = image.getTimestamp();
-                s.monotonicToCameraOffsetNs = image.getTimestamp()-System.nanoTime();
+                PhotonCamera.getGyro().syncFirstFrame(image.getTimestamp());
             }
             s.lastFrameNs = image.getTimestamp();
-            if (s.parameters == null) initialize(s,image);
             if (image.getWidth() != s.width || image.getHeight() != s.height
                     || image.getPlanes()[0].getRowStride() != s.stride)
                 throw new IOException("RAW geometry changed during recording");
