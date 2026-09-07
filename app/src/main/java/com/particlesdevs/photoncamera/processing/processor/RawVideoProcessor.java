@@ -40,8 +40,8 @@ import java.util.concurrent.Semaphore;
 
 public class RawVideoProcessor extends ProcessorBase {
     private static final String TAG = "RawVideoProcessor";
-    // The tested camera HAL exposes five RAW buffers. Leave one available to the producer while
-    // three workers consume at most four queued Images.
+    // Keep application-owned RAW Images bounded and reject admission instead of blocking the
+    // ImageReader callback. The HAL-side ImageReader queue is configured separately.
     private static final int ENCODER_THREADS = 2;
     private static final int PIPELINE_CAPACITY = 4;
     // pending includes both camera Images in the encoder stage and encoded buffers awaiting disk.

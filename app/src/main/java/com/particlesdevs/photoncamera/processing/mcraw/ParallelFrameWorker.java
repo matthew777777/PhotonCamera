@@ -29,9 +29,10 @@ public final class ParallelFrameWorker<T> {
     public synchronized boolean submit(Callable<T> encode, Consumer<T> write,
                                         Consumer<T> release, Consumer<Throwable> error) {
         if (!accepting) return false;
-        // Camera producers must not discard a frame merely because encoders complete in a burst.
-        // Waiting here applies bounded backpressure; the ImageReader/HAL owns the upstream bound.
-        slots.acquireUninterruptibly();
+        // Never block the ImageReader callback. Blocking it fills the HAL queue and produces one
+        // long timestamp gap when encoding falls behind. A rejected frame is closed by the caller,
+        // allowing subsequent camera frames to retain their real capture cadence.
+        if (!slots.tryAcquire()) return false;
         Future<T> encoded;
         try {
             encoded = encoders.submit(() -> {
